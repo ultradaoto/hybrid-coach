@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %></title>
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: #f9fafb;
+        flex-direction: column;
+      }
+      video {
+        width: 45%;
+        max-width: 480px;
+        border: 2px solid #2d3748;
+        margin: 0.5rem;
+      }
+      #messages { height:120px; overflow:auto; width:90%; margin-top:1rem; background:#fff; padding:0.5rem; border:1px solid #ccc; }
+    </style>
+  </head>
+  <body>
+    <h2>Hybrid Coaching Call</h2>
+    <div>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <video id="remoteVideo" autoplay playsinline></video>
+      <div style="display:flex; width:100%; justify-content:center;">
+        <span id="localLabel" style="width:45%; text-align:center;"></span>
+        <span id="remoteLabel" style="width:45%; text-align:center;"></span>
+      </div>
+    </div>
+    <div id="messages"></div>
+    <div style="margin-top:0.5rem; width:90%; display:flex;">
+      <input id="msgInput" style="flex:1; padding:0.5rem" placeholder="Type a message to Hybrid AI..." />
+      <button id="sendBtn">Send</button>
+    </div>
+    <div style="margin-top:0.5rem; font-weight:bold;" id="callTimer">00:00</div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script>
+      const roomId = "<%= roomId %>";
+      const userName = "<%= user.displayName || user.email %>";
+      const jwtToken = "<%= jwt %>";
+      const sessionId = "<%= sessionId %>";
+      localStorage.setItem('jwt', jwtToken);
+      const socket = io();
+      const messages = document.getElementById('messages');
+
+      function log(msg){ messages.innerHTML += msg + '<br>'; }
+
+      socket.emit('join-room', { roomId, name: userName });
+
+      let peer;
+      let localStream;
+      const localVideo = document.getElementById('localVideo');
+      const remoteVideo = document.getElementById('remoteVideo');
+
+      document.getElementById('localLabel').innerText = userName + ' (You)';
+
+      async function initMedia(){
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+          localVideo.srcObject = localStream;
+        } catch(err){ alert('Could not access camera/mic'); console.error(err); }
+      }
+      initMedia();
+
+      function createPeer(initiator, targetSocketId){
+        peer = new SimplePeer({ initiator, trickle:false, stream: localStream });
+
+        peer.on('signal', data => {
+          const payload = { target: targetSocketId, sdp: data };
+          if (initiator) socket.emit('offer', payload); else socket.emit('answer', payload);
+        });
+
+        peer.on('stream', stream => { remoteVideo.srcObject = stream; });
+        peer.on('error', err => console.error(err));
+      }
+
+      socket.on('offer-request', (otherId) => {
+        log('Creating initiator peer');
+        createPeer(true, otherId);
+      });
+
+      socket.on('other-user', ({ socketId, name }) => {
+        log(name + ' joined the call');
+        document.getElementById('remoteLabel').innerText = name;
+      });
+
+      socket.on('offer', ({ sdp, caller }) => {
+        log('Received offer, answering...');
+        createPeer(false, caller);
+        peer.signal(sdp);
+      });
+
+      socket.on('answer', ({ sdp }) => {
+        log('Received answer');
+        peer.signal(sdp);
+      });
+
+      socket.on('ice-candidate', payload => {
+        peer.signal(payload.sdp);
+      });
+
+      // Exchange ICE candidates
+      peer && peer.on('signal', data => {
+        if(data.type === 'candidate'){
+          socket.emit('ice-candidate', { target: null, sdp: data });
+        }
+      });
+
+      socket.on('room-full', () => { alert('Room is full'); });
+
+      socket.on('participant-name', ({ socketId, name }) => {
+        document.getElementById('remoteLabel').innerText = name;
+      });
+
+      async function logMessage(sender, content){
+        await fetch('/api/message', {
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'Authorization':'Bearer '+localStorage.getItem('jwt')
+          },
+          body: JSON.stringify({ sessionId, sender, content })
+        });
+      }
+
+      /* ---------- TTS queue utility ---------- */
+      const ttsQueue = [];
+      let ttsPlaying = false;
+
+      async function playTTS(text){
+        ttsQueue.push(text);
+        if(!ttsPlaying) processTTSQueue();
+      }
+
+      async function processTTSQueue(){
+        if(ttsQueue.length === 0){ ttsPlaying = false; return; }
+        ttsPlaying = true;
+        const nextText = ttsQueue.shift();
+
+        try {
+          const res = await fetch('/api/tts', {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              'Authorization':'Bearer '+localStorage.getItem('jwt')
+            },
+            body: JSON.stringify({ text: nextText })
+          });
+          if(res.ok){
+            const blob = await res.blob();
+            const audio = new Audio(URL.createObjectURL(blob));
+            audio.onended = processTTSQueue;
+            audio.play();
+          } else {
+            const errText = await res.text();
+            console.error('ElevenLabs error', res.status, errText);
+            throw new Error('TTS request failed');
+          }
+        } catch(err){
+          console.error(err);
+          processTTSQueue();
+        }
+      }
+
+      // AI greeting on join
+      async function aiGreeting(){
+        const greetingPrompt = `Say: Hello ${userName}. Welcome to the session! How are things going with Ultra so far?`;
+        const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: greetingPrompt, userId:'<%= user.id %>', sessionId }) });
+        const data = await res.json();
+        log('AI: '+data.reply);
+        await logMessage('ai', data.reply);
+        playTTS(data.reply);
+      }
+
+      // trigger greeting once media initialized
+      initMedia().then(aiGreeting);
+
+      // Chat with AI
+      const inputEl = document.getElementById('msgInput');
+      document.getElementById('sendBtn').onclick = async () => {
+        const text = inputEl.value.trim();
+        if(!text) return;
+        log('You: ' + text);
+        inputEl.value='';
+        await logMessage('client', text);
+        const res  = await fetch('/api/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ message: text, userId: '<%= user.id %>', sessionId }) });
+        const data = await res.json();
+        log('AI: ' + data.reply);
+        await logMessage('ai', data.reply);
+        // enqueue TTS
+        playTTS(data.reply);
+      };
+
+      // Call timer & 15-minute callback
+      const timerEl = document.getElementById('callTimer');
+      const startTs = Date.now();
+      let fifteenFired = false;
+      setInterval(async () => {
+        const elapsed = Math.floor((Date.now() - startTs)/1000);
+        const mm = String(Math.floor(elapsed/60)).padStart(2,'0');
+        const ss = String(elapsed%60).padStart(2,'0');
+        timerEl.textContent = `${mm}:${ss}`;
+
+        if (!fifteenFired && elapsed >= 900){
+          fifteenFired = true;
+          const note = 'System: The coach has another call in 5 minutes and will step away soon. Please provide any final recommendations for the next week of Ultra use.';
+          await logMessage('system', note);
+          const res = await fetch('/api/chat', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ message: note, userId:'<%= user.id %>', sessionId }) });
+          const data = await res.json();
+          log('AI: '+data.reply);
+          await logMessage('ai', data.reply);
+          playTTS(data.reply);
+        }
+      },1000);
+    </script>
+  </body>
+</html> 

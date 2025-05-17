@@ -1,0 +1,44 @@
+<section>
+  <h2>Welcome, <%= user.displayName %></h2>
+  <p>Your email: <%= user.email ?? 'N/A' %></p>
+
+  <% if (user.role === 'coach') { %>
+    <h3>Coach Tools</h3>
+    <% if (!user.googleTokens) { %>
+      <a href="/coach/calendar/connect" class="btn">Connect Calendar</a>
+    <% } else { %>
+      <p>Calendar connected ✔️</p>
+    <% } %>
+    <h4>Upcoming Meetings</h4>
+    <% if (meetings && meetings.length) { %>
+      <ul>
+        <% meetings.forEach(m => { %>
+          <li><%= m.start %> – <%= m.summary %></li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p>No upcoming meetings.</p>
+    <% } %>
+  <% } else { %>
+    <h3>Schedule Your Hybrid Coaching Call</h3>
+    <% if (slots && slots.length) { %>
+      <form method="post" action="/schedule">
+        <label for="slot">Choose a slot:</label>
+        <select name="slot" id="slot">
+          <% slots.forEach(s => { %>
+            <option value="<%= s.iso %>"><%= s.label %></option>
+          <% }) %>
+        </select>
+        <button type="submit">Book</button>
+      </form>
+    <% } else { %>
+      <p>Loading available slots...</p>
+    <% } %>
+  <% } %>
+
+  <div style="margin-top:1rem">
+    <a href="/room/create" class="btn">Launch Video Room Now</a>
+  </div>
+
+  <p style="margin-top:2rem"><a href="/auth/logout">Logout</a></p>
+</section> 

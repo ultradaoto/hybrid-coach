@@ -1,0 +1,74 @@
+# Hybrid-Coach Project Cursor Rules
+
+## Purpose
+This file captures the high-level vision, requirements, and working guidelines for the **Hybrid-Coach** application so that team members (and the AI pair-programming assistant) can reference them at any time.
+
+---
+
+## Core Product Idea
+1. Paid clients schedule a *Weekly Coaching Call* that includes:
+   • The human coach.
+   • The AI hybrid coach (local LLM + tools).
+   • The client.
+2. Calls are a 3-way video conference.
+3. Client selects a slot from the human coach's calendar.
+4. Before the call, client completes an intake form (incl. favorite song).
+5. Client's song plays in the waiting room and again at the 20-minute mark (commercial-break effect).
+6. During the call, the human coach can "switch" control so either the human or AI speaks.
+7. The AI listens, ingests client data (supplements, goals, mood, etc.), and actively coaches.
+8. The AI should run **locally** on our DigitalOcean GPU droplet whenever possible.
+
+---
+
+## Technical Stack & Conventions
+• Node.js + Express in an MVC architecture.
+• View layer: EJS templates.
+• Real-time: WebSockets (socket.io) for live video/controls.
+• Database: PostgreSQL (via Prisma ORM) unless specified otherwise.
+• Video: Start with WebRTC (Simple-Peer / LiveKit) → can swap in commercial service if needed.
+• Local AI: Containerised model (e.g. llama-cpp-server) + Python micro-service, invoked via REST/GRPC.
+• Scheduler: Integrate with Google Calendar API (coach) + local DB for mapping.
+• Auth: JWT sessions (passport-jwt) + bcrypt.
+• Testing: Jest + Supertest for backend, Cypress for E2E.
+• Repo scripts: npm run dev, test, migrate, etc.
+
+---
+
+## Guiding Principles
+1. Build in **small, testable slices**; deploy early & often.
+2. Keep AI components **loosely coupled** so we can iterate on models.
+3. Prioritise **data privacy** and store sensitive info encrypted.
+4. Use **feature flags** for unfinished modules.
+5. Document every major decision in `/docs/ADR/`.
+6. Prefer **open-source** solutions before paid SaaS.
+
+---
+
+## Directory Conventions (subject to change)
+```
+/HybridCoach
+  |-- src/
+       |-- controllers/
+       |-- models/
+       |-- routes/
+       |-- services/
+       |-- views/
+       |-- middlewares/
+  |-- public/           # static assets
+  |-- prisma/           # schema.prisma & migrations
+  |-- ai/               # local LLM dockerfiles, prompts, tools
+  |-- docs/
+  |-- tests/
+```
+
+---
+
+## Current Milestone (M0)
+1. Create project skeleton (Express, EJS, dotenv, scripts).
+2. Add health-check route & landing page.
+3. Push to Git and setup CI (GitHub Actions → ESLint + tests).
+4. Draft intake form schema.
+
+---
+
+(Keep this file updated when requirements change.) 
