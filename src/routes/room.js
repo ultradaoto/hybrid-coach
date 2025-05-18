@@ -52,7 +52,17 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
 
     // 2. Verify current user is part of this appointment
     const isParticipant = [appointment.clientId, appointment.coachId].includes(req.user.id);
-    if (!isParticipant) return res.status(403).send('You are not part of this appointment');
+    if (!isParticipant) {
+      // If appointment currently has coachId placeholder as clientId, allow first real client to claim
+      if (req.user.role === 'client' && appointment.clientId === appointment.coachId) {
+        await prisma.appointment.update({
+          where: { id: appointment.id },
+          data: { clientId: req.user.id },
+        });
+      } else {
+        return res.status(403).send('You are not part of this appointment');
+      }
+    }
 
     // 3. Upsert user-specific session linked to appointment
     const session = await prisma.session.upsert({
