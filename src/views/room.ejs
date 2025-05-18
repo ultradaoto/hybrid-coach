@@ -15,6 +15,8 @@
         background: #f9fafb;
         flex-direction: column;
       }
+      #videoContainer{ display:flex; }
+      #videoContainer.reverse{ flex-direction:row-reverse; }
       video {
         width: 45%;
         max-width: 480px;
@@ -26,7 +28,7 @@
   </head>
   <body>
     <h2>Hybrid Coaching Call</h2>
-    <div>
+    <div id="videoContainer">
       <video id="localVideo" autoplay playsinline muted></video>
       <video id="remoteVideo" autoplay playsinline></video>
       <div style="display:flex; width:100%; justify-content:center;">
@@ -45,6 +47,7 @@
     <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
     <script>
       const roomId = "<%= roomId %>";
+      const userRole = "<%= user.role %>";
       const userName = "<%= user.displayName || user.email %>";
       const jwtToken = "<%= jwt %>";
       const sessionId = "<%= sessionId %>";
@@ -62,6 +65,9 @@
       const remoteVideo = document.getElementById('remoteVideo');
 
       document.getElementById('localLabel').innerText = userName + ' (You)';
+      if(userRole === 'coach'){
+        document.getElementById('videoContainer').classList.add('reverse');
+      }
 
       async function initMedia(){
         try {

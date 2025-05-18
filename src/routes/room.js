@@ -6,9 +6,39 @@ import { prisma } from '../lib/prisma.js';
 
 const router = Router();
 
-router.get('/create', ensureAuthenticated, (req, res) => {
-  const roomId = randomUUID();
-  res.redirect(`/room/${roomId}`);
+router.get('/create', ensureAuthenticated, async (req, res, next) => {
+  try {
+    const roomId = randomUUID();
+
+    let coachId;
+    let clientId;
+
+    if (req.user.role === 'coach') {
+      coachId = req.user.id;
+      // Pick any client (for quick testing) other than coach
+      const client = await prisma.user.findFirst({ where: { role: 'client' } });
+      clientId = client ? client.id : req.user.id; // fallback self
+    } else {
+      clientId = req.user.id;
+      const coach = await prisma.user.findFirst({ where: { role: 'coach' } });
+      coachId = coach ? coach.id : req.user.id; // fallback self
+    }
+
+    const appointment = await prisma.appointment.create({
+      data: {
+        scheduledFor: new Date(),
+        durationMin: 30,
+        clientId,
+        coachId,
+        roomId,
+        status: 'active',
+      },
+    });
+
+    res.redirect(`/room/${appointment.roomId}`);
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
