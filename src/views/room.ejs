@@ -81,7 +81,7 @@
 
       function createPeer(initiator, targetId){
         targetSocket = targetId;
-        peer = new SimplePeer({ initiator, trickle:true, stream: localStream });
+        peer = new SimplePeer({ initiator, trickle:false, stream: localStream });
 
         peer.on('signal', data => {
           socket.emit('signal', { target: targetSocket, signal: data });
@@ -99,6 +99,9 @@
       socket.on('other-user', ({ socketId, name }) => {
         log(name + ' joined the call');
         document.getElementById('remoteLabel').innerText = name;
+        if(!peer){
+          createPeer(false, socketId);
+        }
       });
 
       socket.on('signal', ({ signal, sender }) => {
