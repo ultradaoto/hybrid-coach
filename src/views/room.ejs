@@ -105,6 +105,7 @@
       }
 
       socket.on('offer-request', otherId => {
+        if(peer) return;
         console.log('[SOCK] offer-request from server, I initiate');
         ensurePeer(true, otherId);
       });
