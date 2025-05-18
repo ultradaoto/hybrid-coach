@@ -44,7 +44,7 @@
     <div style="margin-top:0.5rem; font-weight:bold;" id="callTimer">00:00</div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script src="https://unpkg.com/mediasoup-client@4/lib/index.js"></script>
     <script>
       const roomId = "<%= roomId %>";
       const userRole = "<%= user.role %>";
@@ -59,8 +59,8 @@
 
       socket.emit('join-room', { roomId, name: userName });
 
-      let peer;
       let localStream;
+      let sendTransport, recvTransport, device;
       const localVideo = document.getElementById('localVideo');
       const remoteVideo = document.getElementById('remoteVideo');
 
@@ -77,106 +77,58 @@
       }
       initMedia();
 
-      let targetSocket = null;
+      /************* mediasoup SFU **************/
+      const sfuSocket = io({ path: '/mediasoup' });
 
-      function ensurePeer(initiator, targetId) {
-        targetSocket = targetId;
-        if (peer) return;
-        console.log('[RTC] createPeer initiator=%s target=%s', initiator, targetId);
+      function once(ev){ return new Promise(res=> sfuSocket.once(ev,res)); }
 
-        peer = new SimplePeer({
-          initiator,
-          trickle: false,
-          stream: localStream
-        });
+      async function createTransport(direction){
+        return new Promise(res=>{
+          sfuSocket.emit('sfu-create-transport', {}, async params=>{
+            let transport;
+            if(direction==='send') transport = device.createSendTransport(params);
+            else transport = device.createRecvTransport(params);
 
-        peer.on('signal', data => {
-          console.log('[RTC] emit signal to %s', targetSocket, data);
-          socket.emit('signal', { target: targetSocket, signal: data });
-        });
+            transport.on('connect', ({dtlsParameters},cb)=>{
+              sfuSocket.emit('sfu-connect-transport',{id:transport.id,dtlsParameters},cb);
+            });
 
-        peer.on('stream', stream => {
-          console.log('[RTC] remote stream received');
-          remoteVideo.srcObject = stream;
-        });
-
-        peer.on('error', err => console.error('[RTC] error', err));
-        peer.on('close',  ()  => console.log('[RTC] connection closed'));
-      }
-
-      socket.on('offer-request', otherId => {
-        if(peer) return;
-        console.log('[SOCK] offer-request from server, I initiate');
-        ensurePeer(true, otherId);
-      });
-
-      socket.on('other-user', ({ socketId, name }) => {
-        console.log('[SOCK] other-user joined', socketId, name);
-        remoteLabel.textContent = name;
-        ensurePeer(false, socketId);
-      });
-
-      socket.on('signal', ({ signal, sender }) => {
-        console.log('[SOCK] signal from', sender, signal.type ?? signal);
-        ensurePeer(false, sender);
-        peer.signal(signal);
-      });
-
-      socket.on('room-full', () => { alert('Room is full'); });
-
-      socket.on('participant-name', ({ socketId, name }) => {
-        document.getElementById('remoteLabel').innerText = name;
-      });
-
-      async function logMessage(sender, content){
-        await fetch('/api/message', {
-          method:'POST',
-          headers:{
-            'Content-Type':'application/json',
-            'Authorization':'Bearer '+localStorage.getItem('jwt')
-          },
-          body: JSON.stringify({ sessionId, sender, content })
-        });
-      }
-
-      /* ---------- TTS queue utility ---------- */
-      const ttsQueue = [];
-      let ttsPlaying = false;
-
-      async function playTTS(text){
-        ttsQueue.push(text);
-        if(!ttsPlaying) processTTSQueue();
-      }
-
-      async function processTTSQueue(){
-        if(ttsQueue.length === 0){ ttsPlaying = false; return; }
-        ttsPlaying = true;
-        const nextText = ttsQueue.shift();
-
-        try {
-          const res = await fetch('/api/tts', {
-            method:'POST',
-            headers:{
-              'Content-Type':'application/json',
-              'Authorization':'Bearer '+localStorage.getItem('jwt')
-            },
-            body: JSON.stringify({ text: nextText })
+            if(direction==='send'){
+              transport.on('produce', ({kind,rtpParameters},cb)=>{
+                sfuSocket.emit('sfu-produce',{transportId:transport.id,kind,rtpParameters},({id})=>cb({id}));
+              });
+            }
+            res(transport);
           });
-          if(res.ok){
-            const blob = await res.blob();
-            const audio = new Audio(URL.createObjectURL(blob));
-            audio.onended = processTTSQueue;
-            audio.play();
-          } else {
-            const errText = await res.text();
-            console.error('ElevenLabs error', res.status, errText);
-            throw new Error('TTS request failed');
-          }
-        } catch(err){
-          console.error(err);
-          processTTSQueue();
-        }
+        });
       }
+
+      async function joinSFU(){
+        localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+        localVideo.srcObject = localStream;
+
+        device = new mediasoupClient.Device();
+        sfuSocket.emit('join-sfu',{roomId});
+        const rtpCaps = await once('sfu-rtpCapabilities');
+        await device.load({routerRtpCapabilities:rtpCaps});
+
+        sendTransport = await createTransport('send');
+        const camTrack = localStream.getVideoTracks()[0];
+        await sendTransport.produce({track:camTrack});
+
+        recvTransport = await createTransport('recv');
+
+        sfuSocket.on('sfu-newProducer',async ({id,kind})=>{
+          sfuSocket.emit('sfu-consume',{transportId:recvTransport.id,producerId:id,rtpCapabilities:device.rtpCapabilities},async data=>{
+            if(data.error){ console.error(data.error); return; }
+            const consumer = await recvTransport.consume({id:data.id,producerId:id,kind:data.kind,rtpParameters:data.rtpParameters});
+            const remoteStream = new MediaStream([consumer.track]);
+            remoteVideo.srcObject = remoteStream;
+          });
+        });
+      }
+
+      joinSFU();
 
       // AI greeting on join
       async function aiGreeting(){

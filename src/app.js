@@ -9,6 +9,7 @@ import passport from 'passport';
 import './config/passport.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { initMediaSFU } from './lib/mediasoupServer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +65,7 @@ app.use((req, res) => {
 });
 
 // Start server & Socket.IO (skip during tests)
-if (!process.env.JEST_WORKER_ID) {
+if (!process.env.JEST_WORKER_ID) (async () => {
   const PORT = process.env.PORT || 3000;
   // Bind only to loopback by default (safer behind a reverse-proxy). Override with HOST env if needed.
   const HOST = process.env.HOST || '127.0.0.1';
@@ -119,9 +120,12 @@ if (!process.env.JEST_WORKER_ID) {
     });
   });
 
+  // Initialise mediasoup SFU namespace
+  await initMediaSFU(httpServer);
+
   httpServer.listen(PORT, HOST, () => {
     console.log(`🚀 Server & Socket.IO listening on http://${HOST}:${PORT}`);
   });
-}
+})();
 
 export default app; 
