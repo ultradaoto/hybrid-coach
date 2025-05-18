@@ -93,22 +93,8 @@ if (!process.env.JEST_WORKER_ID) {
       }
     });
 
-    socket.on('offer', payload => {
-      io.to(payload.target).emit('offer', {
-        sdp: payload.sdp,
-        caller: socket.id,
-      });
-    });
-
-    socket.on('answer', payload => {
-      io.to(payload.target).emit('answer', {
-        sdp: payload.sdp,
-        responder: socket.id,
-      });
-    });
-
-    socket.on('ice-candidate', payload => {
-      io.to(payload.target).emit('ice-candidate', payload);
+    socket.on('signal', ({ target, signal }) => {
+      io.to(target).emit('signal', { signal, sender: socket.id });
     });
   });
 
