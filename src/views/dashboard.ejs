@@ -42,11 +42,7 @@
       <% appointments.forEach(a => { %>
         <li>
           <%= new Date(a.scheduledFor).toLocaleString() %> –
-          <% if (new Date(a.scheduledFor) <= new Date()) { %>
-            <a href="/room/<%= a.roomId %>">Join Call</a>
-          <% } else { %>
-            <span>Scheduled</span>
-          <% } %>
+          <a href="/room/<%= a.roomId %>">Join Room</a>
           <% if (user.role === 'coach') { %>
             (Client: <%= a.client?.displayName || a.client?.email %>)
           <% } %>
@@ -57,9 +53,11 @@
     <p>No upcoming appointments.</p>
   <% } %>
 
-  <div style="margin-top:1rem">
-    <a href="/room/create" class="btn">Launch Test Room</a>
-  </div>
+  <% if (user.role === 'coach') { %>
+    <div style="margin-top:1rem">
+      <a href="/room/create" class="btn">Launch Test Room</a>
+    </div>
+  <% } %>
 
   <p style="margin-top:2rem"><a href="/auth/logout">Logout</a></p>
 </section> 
