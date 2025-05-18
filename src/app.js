@@ -66,6 +66,8 @@ app.use((req, res) => {
 // Start server & Socket.IO (skip during tests)
 if (!process.env.JEST_WORKER_ID) {
   const PORT = process.env.PORT || 3000;
+  // Bind only to loopback by default (safer behind a reverse-proxy). Override with HOST env if needed.
+  const HOST = process.env.HOST || '127.0.0.1';
   const httpServer = createServer(app);
   const io = new SocketIOServer(httpServer);
 
@@ -110,8 +112,8 @@ if (!process.env.JEST_WORKER_ID) {
     });
   });
 
-  httpServer.listen(PORT, () => {
-    console.log(`🚀 Server & Socket.IO listening on http://localhost:${PORT}`);
+  httpServer.listen(PORT, HOST, () => {
+    console.log(`🚀 Server & Socket.IO listening on http://${HOST}:${PORT}`);
   });
 }
 

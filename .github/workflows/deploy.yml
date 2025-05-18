@@ -1,0 +1,41 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Deploy to server
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=no $USER@$HOST '
+            set -e
+            DEPLOY_DIR=/var/www/myultracoach
+            sudo mkdir -p $(dirname "$DEPLOY_DIR")
+            sudo chown -R $(whoami): $(dirname "$DEPLOY_DIR")
+            if [ -d "$DEPLOY_DIR/.git" ]; then
+              cd "$DEPLOY_DIR" && git pull
+            else
+              git clone https://github.com/${{ github.repository }}.git "$DEPLOY_DIR"
+              cd "$DEPLOY_DIR"
+            fi
+            npm ci --omit=dev
+            npm run generate
+            npx prisma migrate deploy
+            pm2 reload ecosystem.config.js --update-env || pm2 start ecosystem.config.js
+          ' 
