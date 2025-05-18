@@ -30,6 +30,7 @@ async function index(req, res, next) {
         OR: [{ clientId: req.user.id }, { coachId: req.user.id }],
       },
       orderBy: { scheduledFor: 'asc' },
+      include: { client: true, coach: true },
     });
 
     res.render('dashboard', {

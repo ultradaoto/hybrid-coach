@@ -29,8 +29,8 @@ router.post('/', ensureAuthenticated, async (req, res, next) => {
       },
     });
 
-    // Redirect client directly to the room (or show confirmation)
-    res.redirect(`/room/${appointment.roomId}`);
+    // Redirect back to dashboard with confirmation toast
+    res.redirect('/dashboard?booked=1');
   } catch (err) {
     next(err);
   }
