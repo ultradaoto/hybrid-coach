@@ -81,7 +81,7 @@
 
       function createPeer(initiator, targetId){
         targetSocket = targetId;
-        peer = new SimplePeer({ initiator, trickle:false, stream: localStream });
+        peer = new SimplePeer({ initiator, trickle:true, stream: localStream });
 
         peer.on('signal', data => {
           socket.emit('signal', { target: targetSocket, signal: data });
@@ -199,10 +199,13 @@
 
       // Call timer & 15-minute callback
       const timerEl = document.getElementById('callTimer');
-      const startTs = Date.now();
+      let originTs = null;
+      socket.on('room-start', ts => { originTs = ts; });
+
       let fifteenFired = false;
       setInterval(async () => {
-        const elapsed = Math.floor((Date.now() - startTs)/1000);
+        if(originTs === null) return;
+        const elapsed = Math.floor((Date.now() - originTs)/1000);
         const mm = String(Math.floor(elapsed/60)).padStart(2,'0');
         const ss = String(elapsed%60).padStart(2,'0');
         timerEl.textContent = `${mm}:${ss}`;

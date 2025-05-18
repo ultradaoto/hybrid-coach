@@ -70,6 +70,7 @@ if (!process.env.JEST_WORKER_ID) {
   const HOST = process.env.HOST || '127.0.0.1';
   const httpServer = createServer(app);
   const io = new SocketIOServer(httpServer);
+  const roomStartTimes = new Map();
 
   // WebRTC signaling logic
   io.on('connection', socket => {
@@ -83,6 +84,11 @@ if (!process.env.JEST_WORKER_ID) {
       socket.join(roomId);
       socket.data.name = name;
 
+      // If timer already started send to newcomer
+      if (roomStartTimes.has(roomId)) {
+        socket.emit('room-start', roomStartTimes.get(roomId));
+      }
+
       if (numClients === 1) {
         // Notify existing peer
         const [existingSocketId] = room;
@@ -90,6 +96,13 @@ if (!process.env.JEST_WORKER_ID) {
         socket.to(existingSocketId).emit('other-user', { socketId: socket.id, name });
         socket.emit('offer-request', existingSocketId);
         socket.emit('participant-name', { socketId: existingSocketId, name: existingSocket?.data.name });
+
+        // Start timer when second participant joins
+        if (!roomStartTimes.has(roomId)) {
+          const startTs = Date.now();
+          roomStartTimes.set(roomId, startTs);
+          io.to(roomId).emit('room-start', startTs);
+        }
       }
     });
 
