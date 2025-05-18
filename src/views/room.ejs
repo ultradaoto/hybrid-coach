@@ -79,36 +79,32 @@
 
       let targetSocket = null;
 
-      function createPeer(initiator, targetId){
+      function ensurePeer(initiator, targetId) {
         targetSocket = targetId;
+        if (peer) return;
         peer = new SimplePeer({ initiator, trickle:false, stream: localStream });
 
         peer.on('signal', data => {
           socket.emit('signal', { target: targetSocket, signal: data });
         });
 
-        peer.on('stream', stream => { remoteVideo.srcObject = stream; });
-        peer.on('error', err => console.error(err));
+        peer.on('stream', s => (remoteVideo.srcObject = s));
+        peer.on('error', console.error);
       }
 
-      socket.on('offer-request', otherId => {
-        log('Creating initiator peer');
-        createPeer(true, otherId);
+      socket.on('offer-request', id => {
+        log('creating initiator');
+        ensurePeer(true, id);
       });
 
       socket.on('other-user', ({ socketId, name }) => {
-        log(name + ' joined the call');
         document.getElementById('remoteLabel').innerText = name;
-        if(!peer){
-          createPeer(false, socketId);
-        }
+        log(name + ' joined');
+        ensurePeer(false, socketId);
       });
 
       socket.on('signal', ({ signal, sender }) => {
-        if (!peer) {
-          log('Creating responder peer');
-          createPeer(false, sender);
-        }
+        ensurePeer(false, sender);
         peer.signal(signal);
       });
 
