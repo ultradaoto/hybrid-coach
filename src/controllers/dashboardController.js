@@ -1,9 +1,11 @@
 import calendarService from '../services/calendarService.js';
+import { prisma } from '../lib/prisma.js';
 
 async function index(req, res, next) {
   try {
     let meetings = [];
     let slots = [];
+    let appointments = [];
 
     if (req.user.role === 'coach' && req.user.googleTokens) {
       const events = await calendarService.listUpcomingEvents(req.user.googleTokens);
@@ -20,11 +22,22 @@ async function index(req, res, next) {
       ];
     }
 
+    // Fetch upcoming appointments (both roles)
+    const now = new Date();
+    appointments = await prisma.appointment.findMany({
+      where: {
+        scheduledFor: { gte: now },
+        OR: [{ clientId: req.user.id }, { coachId: req.user.id }],
+      },
+      orderBy: { scheduledFor: 'asc' },
+    });
+
     res.render('dashboard', {
       title: 'Dashboard',
       user: req.user,
       meetings,
       slots,
+      appointments,
     });
   } catch (err) {
     next(err);
