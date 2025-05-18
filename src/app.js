@@ -74,7 +74,10 @@ if (!process.env.JEST_WORKER_ID) {
 
   // WebRTC signaling logic
   io.on('connection', socket => {
+    console.log('[SOCK] connected', socket.id);
+
     socket.on('join-room', ({ roomId, name }) => {
+      console.log('[SOCK] join-room', roomId, name);
       const room = io.sockets.adapter.rooms.get(roomId);
       const numClients = room ? room.size : 0;
       if (numClients >= 2) {
@@ -107,7 +110,12 @@ if (!process.env.JEST_WORKER_ID) {
     });
 
     socket.on('signal', ({ target, signal }) => {
+      console.log('[SOCK] relay signal', socket.id, '->', target, signal.type ?? 'candidate');
       io.to(target).emit('signal', { signal, sender: socket.id });
+    });
+
+    socket.on('disconnect', () => {
+      console.log('[SOCK] disconnect', socket.id);
     });
   });
 

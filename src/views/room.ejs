@@ -82,28 +82,41 @@
       function ensurePeer(initiator, targetId) {
         targetSocket = targetId;
         if (peer) return;
-        peer = new SimplePeer({ initiator, trickle:false, stream: localStream });
+        console.log('[RTC] createPeer initiator=%s target=%s', initiator, targetId);
+
+        peer = new SimplePeer({
+          initiator,
+          trickle: false,
+          stream: localStream
+        });
 
         peer.on('signal', data => {
+          console.log('[RTC] emit signal to %s', targetSocket, data);
           socket.emit('signal', { target: targetSocket, signal: data });
         });
 
-        peer.on('stream', s => (remoteVideo.srcObject = s));
-        peer.on('error', console.error);
+        peer.on('stream', stream => {
+          console.log('[RTC] remote stream received');
+          remoteVideo.srcObject = stream;
+        });
+
+        peer.on('error', err => console.error('[RTC] error', err));
+        peer.on('close',  ()  => console.log('[RTC] connection closed'));
       }
 
-      socket.on('offer-request', id => {
-        log('creating initiator');
-        ensurePeer(true, id);
+      socket.on('offer-request', otherId => {
+        console.log('[SOCK] offer-request from server, I initiate');
+        ensurePeer(true, otherId);
       });
 
       socket.on('other-user', ({ socketId, name }) => {
-        document.getElementById('remoteLabel').innerText = name;
-        log(name + ' joined');
+        console.log('[SOCK] other-user joined', socketId, name);
+        remoteLabel.textContent = name;
         ensurePeer(false, socketId);
       });
 
       socket.on('signal', ({ signal, sender }) => {
+        console.log('[SOCK] signal from', sender, signal.type ?? signal);
         ensurePeer(false, sender);
         peer.signal(signal);
       });
