@@ -44,7 +44,7 @@
     <div style="margin-top:0.5rem; font-weight:bold;" id="callTimer">00:00</div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://unpkg.com/mediasoup-client@4/lib/index.js"></script>
+    <script src="https://unpkg.com/mediasoup-client@4"></script>
     <script>
       const roomId = "<%= roomId %>";
       const userRole = "<%= user.role %>";
@@ -78,27 +78,28 @@
       initMedia();
 
       /************* mediasoup SFU **************/
-      const sfuSocket = io({ path: '/mediasoup' });
+      const sfu = io({ path: '/mediasoup' });
 
-      function once(ev){ return new Promise(res=> sfuSocket.once(ev,res)); }
+      function once(ev){ return new Promise(res=> sfu.once(ev,res)); }
 
-      async function createTransport(direction){
-        return new Promise(res=>{
-          sfuSocket.emit('sfu-create-transport', {}, async params=>{
-            let transport;
-            if(direction==='send') transport = device.createSendTransport(params);
-            else transport = device.createRecvTransport(params);
+      async function makeTransport(kind) {
+        return new Promise(res => {
+          sfu.emit('sfu-create-transport', {}, async params => {
+            const tp = kind === 'send'
+              ? device.createSendTransport(params)
+              : device.createRecvTransport(params);
 
-            transport.on('connect', ({dtlsParameters},cb)=>{
-              sfuSocket.emit('sfu-connect-transport',{id:transport.id,dtlsParameters},cb);
-            });
+            tp.on('connect', ({ dtlsParameters }, cb) =>
+              sfu.emit('sfu-connect-transport',
+                { id: tp.id, dtlsParameters }, cb));
 
-            if(direction==='send'){
-              transport.on('produce', ({kind,rtpParameters},cb)=>{
-                sfuSocket.emit('sfu-produce',{transportId:transport.id,kind,rtpParameters},({id})=>cb({id}));
-              });
+            if (kind === 'send') {
+              tp.on('produce', ({ kind, rtpParameters }, cb) =>
+                sfu.emit('sfu-produce',
+                  { transportId: tp.id, kind, rtpParameters },
+                  ({ id, error }) => error ? console.error(error) : cb({ id })));
             }
-            res(transport);
+            res(tp);
           });
         });
       }
@@ -108,23 +109,28 @@
         localVideo.srcObject = localStream;
 
         device = new mediasoupClient.Device();
-        sfuSocket.emit('join-sfu',{roomId});
+        sfu.emit('join-sfu',{roomId});
         const rtpCaps = await once('sfu-rtpCapabilities');
         await device.load({routerRtpCapabilities:rtpCaps});
 
-        sendTransport = await createTransport('send');
+        sendTransport = await makeTransport('send');
         const camTrack = localStream.getVideoTracks()[0];
         await sendTransport.produce({track:camTrack});
 
-        recvTransport = await createTransport('recv');
+        recvTransport = await makeTransport('recv');
 
-        sfuSocket.on('sfu-newProducer',async ({id,kind})=>{
-          sfuSocket.emit('sfu-consume',{transportId:recvTransport.id,producerId:id,rtpCapabilities:device.rtpCapabilities},async data=>{
-            if(data.error){ console.error(data.error); return; }
-            const consumer = await recvTransport.consume({id:data.id,producerId:id,kind:data.kind,rtpParameters:data.rtpParameters});
-            const remoteStream = new MediaStream([consumer.track]);
-            remoteVideo.srcObject = remoteStream;
-          });
+        sfu.on('sfu-newProducer', ({ id, kind }) => {
+          sfu.emit('sfu-consume',
+            { transportId: recvTransport.id, producerId: id,
+              rtpCapabilities: device.rtpCapabilities },
+            async ({ id: cid, kind, rtpParameters, error }) => {
+              if (error) { console.error(error); return; }
+              const consumer = await recvTransport.consume({
+                id: cid, producerId: id, kind, rtpParameters
+              });
+              const ms = new MediaStream([consumer.track]);
+              remoteVideo.srcObject = ms;
+            });
         });
       }
 
