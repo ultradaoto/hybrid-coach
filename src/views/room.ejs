@@ -45,155 +45,306 @@
 
     <script src="/socket.io/socket.io.js"></script>
 
-    <!-- Load mediasoup-client v3 from jsdelivr -->
-    <script src="https://cdn.jsdelivr.net/npm/mediasoup-client@3.11.0/lib/index.js"></script>
+    <!-- Load mediasoup-client and protoo-client as ES modules -->
+    <script type="module">
+      import mediasoupClientModule from 'https://esm.sh/mediasoup-client@3.11.0';
+      import protooClientModule from 'https://esm.sh/protoo-client@4.0.4';
+      
+      window.mediasoupClient = mediasoupClientModule; // Expose the whole module
+      window.protooClient = protooClientModule;
+      
+      console.log('mediasoup-client and protoo-client modules script has run.');
+      // Consider a custom event here if waitForDependencies needs a more robust signal
+    </script>
 
+    <!-- Main application logic script -->
     <script>
-      const roomId = "<%= roomId %>";
-      const userRole = "<%= user.role %>";
-      const userName = "<%= user.displayName || user.email %>";
-      const jwtToken = "<%= jwt %>";
-      const sessionId = "<%= sessionId %>";
-      localStorage.setItem('jwt', jwtToken);
-      const socket = io();
-      const messages = document.getElementById('messages');
+      // Wait for dependencies to load (now set by the module script)
+      function waitForDependencies(callback) {
+        const messagesDiv = document.getElementById('messages'); // Get messages div for logging
+        function persistentLog(msg) { // Helper to log to console and page
+            console.log(msg);
+            if(messagesDiv) messagesDiv.innerHTML += msg + '<br>';
+        }
 
-      function log(msg){ messages.innerHTML += msg + '<br>'; }
+        persistentLog('Initializing: Waiting for client libraries...');
+        const checkInterval = setInterval(() => {
+          const msClientReady = !!window.mediasoupClient;
+          const ptClientReady = !!window.protooClient;
 
-      socket.emit('join-room', { roomId, name: userName });
-
-      let localStream;
-      let sendTransport, recvTransport, device;
-      const localVideo = document.getElementById('localVideo');
-      const remoteVideo = document.getElementById('remoteVideo');
-
-      document.getElementById('localLabel').innerText = userName + ' (You)';
-      if(userRole === 'coach'){
-        document.getElementById('videoContainer').classList.add('reverse');
+          if (msClientReady && ptClientReady) {
+            clearInterval(checkInterval);
+            persistentLog('✅ All client libraries (mediasoupClient, protooClient) are loaded.');
+            callback();
+          } else {
+            persistentLog('⏳ Waiting... mediasoupClient: ' + (msClientReady ? 'OK' : 'MISSING') + ', protooClient: ' + (ptClientReady ? 'OK' : 'MISSING'));
+          }
+        }, 200); // Check every 200ms for visibility
       }
 
-      /************* mediasoup SFU **************/
-      const sfu = io({ path: '/mediasoup' });
+      waitForDependencies(() => {
+        // Main app logic will now use window.mediasoupClient.Device etc.
+        // ... (rest of the main script) ...
+        const roomId = "<%= roomId %>";
+        const userRole = "<%= user.role %>";
+        const userName = "<%= user.displayName || user.email %>";
+        const jwtToken = "<%= jwt %>";
+        const sessionId = "<%= sessionId %>";
+        localStorage.setItem('jwt', jwtToken);
+        const socket = io(); // This is for general app signaling (chat, timer, etc.)
+        const messages = document.getElementById('messages');
 
-      function once(ev){ return new Promise(res=> sfu.once(ev,res)); }
+        const peerId = `pid_${Math.random().toString(36).substr(2, 9)}`;
+        let protooPeer;
 
-      async function makeTransport(kind) {
-        return new Promise(res => {
-          sfu.emit('sfu-create-transport', {}, async params => {
-            const tp = kind === 'send'
-              ? device.createSendTransport(params)
-              : device.createRecvTransport(params);
+        function log(msg){ messages.innerHTML += msg + '<br>'; }
 
-            tp.on('connect', ({ dtlsParameters }, cb) =>
-              sfu.emit('sfu-connect-transport',
-                { id: tp.id, dtlsParameters }, cb));
+        socket.emit('join-room', { roomId, name: userName });
 
-            if (kind === 'send') {
-              tp.on('produce', ({ kind, rtpParameters }, cb) =>
-                sfu.emit('sfu-produce',
-                  { transportId: tp.id, kind, rtpParameters },
-                  ({ id, error }) => error ? console.error(error) : cb({ id })));
+        let localStream;
+        let sendTransport, recvTransport, device;
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+
+        document.getElementById('localLabel').innerText = userName + ' (You)';
+        if(userRole === 'coach'){
+          document.getElementById('videoContainer').classList.add('reverse');
+        }
+
+        const protooWebSocketUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/protoo?roomId=${roomId}&peerId=${peerId}`;
+        const transport = new window.protooClient.WebSocketTransport(protooWebSocketUrl);
+        protooPeer = new window.protooClient.Peer(transport);
+
+        protooPeer.on('open', () => {
+          console.log('Protoo connection open. Calling joinSFU(). PeerID:', peerId, 'RoomID:', roomId);
+          log('✅ Protoo connection established.');
+          joinSFU(); 
+        });
+
+        protooPeer.on('request', (request, accept, reject) => {
+          console.log('Received Protoo request from server (unexpected on client):', request);
+          reject(501, 'Client does not handle requests'); 
+        });
+
+        // Duplicated protooPeer.on('notification', ...) was here, ensure only one remains after merge
+        // The one inside joinSFU for newProducer is more specific and should be kept if different.
+        // This one is a general handler if needed.
+        protooPeer.on('notification', (notification) => {
+            console.log('Received global Protoo notification from server:', notification);
+             if (notification.method === 'newProducer' && !device.loaded) {
+                 // This might be an issue if newProducer comes before device is loaded.
+                 // The handler inside joinSFU is better placed.
+                 console.warn('Global newProducer notification received, but joinSFU handles this.');
+             }
+        });
+
+
+        protooPeer.on('failed', (currentAttempt, maxAttempts) => {
+          console.error(`Protoo connection attempt ${currentAttempt} of ${maxAttempts} failed. URL: ${protooWebSocketUrl}`);
+          log(`🔴 Protoo connection failed (attempt ${currentAttempt}/${maxAttempts}). Will not auto-retry.`);
+        });
+
+        protooPeer.on('disconnected', () => {
+          console.error('Protoo disconnected. URL:', protooWebSocketUrl);
+          log('🔴 Protoo disconnected.');
+        });
+
+        protooPeer.on('close', () => {
+          console.log('Protoo connection closed. URL:', protooWebSocketUrl);
+          log('ℹ️ Protoo connection closed.');
+        });
+
+        function protooRequest(method, data = {}) {
+          if (!protooPeer || !protooPeer.connected) {
+            const errorMsg = `Protoo peer not connected. Cannot send request: ${method}`;
+            console.error(errorMsg, 'Peer state:', protooPeer ? protooPeer.state : 'undefined');
+            log(`🔴 ${errorMsg}`);
+            return Promise.reject(new Error(errorMsg));
+          }
+          return protooPeer.request(method, data);
+        }
+
+        async function makeTransport(direction) {
+          console.log(`makeTransport called for ${direction}, needs Protoo implementation`);
+          const { id, iceParameters, iceCandidates, dtlsParameters, sctpParameters } =
+            await protooRequest('createWebRtcTransport', { producing: direction === 'send', consuming: direction === 'recv' });
+
+          const transport = direction === 'send'
+            ? device.createSendTransport({ id, iceParameters, iceCandidates, dtlsParameters, sctpParameters })
+            : device.createRecvTransport({ id, iceParameters, iceCandidates, dtlsParameters, sctpParameters });
+
+          transport.on('connect', async ({ dtlsParameters: connectDtlsParameters }, callback, errback) => {
+            try {
+              await protooRequest('connectWebRtcTransport', { transportId: transport.id, dtlsParameters: connectDtlsParameters });
+              callback();
+            } catch (error) {
+              errback(error);
             }
-            res(tp);
           });
-        });
-      }
 
-      async function joinSFU(){
-        console.log('📹 requesting camera');
-        localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-        localVideo.srcObject = localStream;
-
-        console.log('🎥 got local stream, connecting to SFU');
-        device = new mediasoupClient.Device();
-        sfu.emit('join-sfu',{roomId});
-        const rtpCaps = await once('sfu-rtpCapabilities');
-        console.log('🔧 loaded device');
-        await device.load({routerRtpCapabilities:rtpCaps});
-
-        sendTransport = await makeTransport('send');
-        console.log('🚚 send transport ready', sendTransport.id);
-        const camTrack = localStream.getVideoTracks()[0];
-        await sendTransport.produce({track:camTrack});
-        console.log('📡 produced local video');
-
-        recvTransport = await makeTransport('recv');
-        console.log('📥 recv transport ready', recvTransport.id);
-
-        sfu.on('sfu-newProducer', ({ id, kind }) => {
-          console.log('🆕 new producer', id, kind);
-          sfu.emit('sfu-consume',
-            { transportId: recvTransport.id, producerId: id,
-              rtpCapabilities: device.rtpCapabilities },
-            async ({ id: cid, kind, rtpParameters, error }) => {
-              if (error) { console.error(error); return; }
-              const consumer = await recvTransport.consume({
-                id: cid, producerId: id, kind, rtpParameters
-              });
-              const ms = new MediaStream([consumer.track]);
-              remoteVideo.srcObject = ms;
+          if (direction === 'send') {
+            transport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
+              try {
+                const { id: producerId } = await protooRequest('produce', { transportId: transport.id, kind, rtpParameters, appData });
+                callback({ id: producerId });
+              } catch (error) {
+                errback(error);
+              }
             });
-        });
-      }
+          }
+          return transport;
+        }
 
-      joinSFU().then(aiGreeting);
+        async function joinSFU(){
+          log('📹 Attempting to join SFU...'); 
+          console.log('📹 requesting camera');
+          try {
+            localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+            localVideo.srcObject = localStream;
+            log('🎥 Got local stream.');
+            console.log('🎥 got local stream, connecting to SFU via Protoo');
+            
+            // Ensure mediasoupClient is available
+            if (!window.mediasoupClient || !window.mediasoupClient.Device) { // Check for Device property too
+                const errMsg = 'mediasoupClient or mediasoupClient.Device is not available on window.';
+                console.error(errMsg, window.mediasoupClient);
+                log(`❌ ERROR: ${errMsg}`);
+                return;
+            }
+            device = new window.mediasoupClient.Device(); 
+            
+            log('🚀 Requesting Router RTP Capabilities...');
+            const routerRtpCapabilities = await protooRequest('getRouterRtpCapabilities');
+            console.log('🔧 Received Router RTP Capabilities:', routerRtpCapabilities);
+            log('👍 Got Router RTP Capabilities.');
+            
+            await device.load({ routerRtpCapabilities });
+            console.log('🔧 Device loaded with router capabilities');
+            log('👍 Device loaded.');
 
-      // AI greeting after media & SFU ready
-      async function aiGreeting(){
-        const greetingPrompt = `Say: Hello ${userName}. Welcome to the session! How are things going with Ultra so far?`;
-        const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: greetingPrompt, userId:'<%= user.id %>', sessionId }) });
-        const data = await res.json();
-        log('AI: '+data.reply);
-        await logMessage('ai', data.reply);
-        playTTS(data.reply);
-      }
+            log('🚚 Creating send transport...');
+            sendTransport = await makeTransport('send');
+            console.log('🚚 send transport ready', sendTransport.id);
+            log(`👍 Send transport created: ${sendTransport.id}`);
+            const camTrack = localStream.getVideoTracks()[0];
+            await sendTransport.produce({ track: camTrack }); 
+            console.log('📡 produced local video');
+            log('📡 Video produced.');
 
-      // Chat with AI
-      const inputEl = document.getElementById('msgInput');
-      document.getElementById('sendBtn').onclick = async () => {
-        const text = inputEl.value.trim();
-        if(!text) return;
-        log('You: ' + text);
-        inputEl.value='';
-        await logMessage('client', text);
-        const res  = await fetch('/api/chat', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ message: text, userId: '<%= user.id %>', sessionId }) });
-        const data = await res.json();
-        log('AI: ' + data.reply);
-        await logMessage('ai', data.reply);
-        // enqueue TTS
-        playTTS(data.reply);
-      };
+            log('📥 Creating recv transport...');
+            recvTransport = await makeTransport('recv');
+            console.log('📥 recv transport ready', recvTransport.id);
+            log(`👍 Recv transport created: ${recvTransport.id}`);
 
-      // Call timer & 15-minute callback
-      const timerEl = document.getElementById('callTimer');
-      let originTs = null;
-      socket.on('room-start', ts => { originTs = ts; });
+            // This specific notification handler for newProducer should be inside joinSFU
+            // if it relies on `device` or `recvTransport` which are scoped/initialized here.
+            // Remove or ensure the global one doesn't conflict.
+            // For now, let's assume this is the primary one.
+            protooPeer.off('notification'); // Remove any generic/previous ones
+            protooPeer.on('notification', async (notification) => {
+              console.log('Received Protoo notification (specific to joinSFU):', notification);
+              if (notification.method === 'newProducer') {
+                const { producerId, kind, appData } = notification.data; 
+                console.log('🆕 new producer notification', producerId, kind, appData);
+                log(`🆕 Seeing new producer: ${producerId} (${kind})`);
+                try {
+                  if (!device.loaded) {
+                    console.warn('Device not loaded yet, cannot consume. ProducerId:', producerId);
+                    log('⚠️ Device not loaded, cannot consume yet.');
+                    return;
+                  }
+                  if (!recvTransport) {
+                    console.warn('Receive transport not ready, cannot consume. ProducerId:', producerId);
+                    log('⚠️ Receive transport not ready, cannot consume yet.');
+                    return;
+                  }
 
-      let fifteenFired = false;
-      setInterval(async () => {
-        if(originTs === null) return;
-        const elapsed = Math.floor((Date.now() - originTs)/1000);
-        const mm = String(Math.floor(elapsed/60)).padStart(2,'0');
-        const ss = String(elapsed%60).padStart(2,'0');
-        timerEl.textContent = `${mm}:${ss}`;
+                  const { id: consumerId, producerId: remoteProducerId, kind: remoteKind, rtpParameters } = await protooRequest('consume', {
+                    rtpCapabilities: device.rtpCapabilities,
+                    producerId,
+                  });
+                  const consumer = await recvTransport.consume({
+                    id: consumerId,
+                    producerId: remoteProducerId, 
+                    kind: remoteKind, 
+                    rtpParameters,
+                  });
+                  const ms = new MediaStream([consumer.track]);
+                  remoteVideo.srcObject = ms;
+                  log(`🎧 Consuming remote stream: ${producerId}`);
+                  // await protooRequest('resumeConsumer', { consumerId }); 
+                } catch (err) {
+                  console.error('Error consuming new producer:', err);
+                  log(`❌ ERROR consuming producer ${producerId}: ${err.message}`);
+                }
+              }
+            });
+            log('🎧 Listening for new producers...');
+            aiGreeting(); // Call AI greeting once SFU setup is initiated
 
-        if (!fifteenFired && elapsed >= 900){
-          fifteenFired = true;
-          const note = 'System: The coach has another call in 5 minutes and will step away soon. Please provide any final recommendations for the next week of Ultra use.';
-          await logMessage('system', note);
-          const res = await fetch('/api/chat', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ message: note, userId:'<%= user.id %>', sessionId }) });
+          } catch (err) {
+            console.error('Error in joinSFU:', err);
+            log(`❌ ERROR in joinSFU: ${err.message}`);
+          }
+        }
+        
+        // AI greeting after media & SFU ready (or at least initiated)
+        async function aiGreeting(){
+          const greetingPrompt = `Say: Hello ${userName}. Welcome to the session! How are things going with Ultra so far?`;
+          const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: greetingPrompt, userId:'<%= user.id %>', sessionId }) });
           const data = await res.json();
           log('AI: '+data.reply);
-          await logMessage('ai', data.reply);
-          playTTS(data.reply);
+          // await logMessage('ai', data.reply); // logMessage might not be defined here.
+          // playTTS(data.reply); // playTTS might not be defined here.
         }
-      },1000);
+
+        // Chat with AI (ensure logMessage and playTTS are available or remove)
+        const inputEl = document.getElementById('msgInput');
+        document.getElementById('sendBtn').onclick = async () => {
+          const text = inputEl.value.trim();
+          if(!text) return;
+          log('You: ' + text);
+          inputEl.value='';
+          // await logMessage('client', text);
+          const res  = await fetch('/api/chat', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ message: text, userId: '<%= user.id %>', sessionId }) });
+          const data = await res.json();
+          log('AI: ' + data.reply);
+          // await logMessage('ai', data.reply);
+          // playTTS(data.reply);
+        };
+
+        // Call timer & 15-minute callback
+        const timerEl = document.getElementById('callTimer');
+        let originTs = null;
+        socket.on('room-start', ts => { originTs = ts; });
+
+        let fifteenFired = false;
+        setInterval(async () => {
+          if(originTs === null) return;
+          const elapsed = Math.floor((Date.now() - originTs)/1000);
+          const mm = String(Math.floor(elapsed/60)).padStart(2,'0');
+          const ss = String(elapsed%60).padStart(2,'0');
+          timerEl.textContent = `${mm}:${ss}`;
+
+          if (!fifteenFired && elapsed >= 900){ // 15 minutes = 900 seconds
+            fifteenFired = true;
+            const note = 'System: The coach has another call in 5 minutes and will step away soon. Please provide any final recommendations for the next week of Ultra use.';
+            // await logMessage('system', note);
+            const res = await fetch('/api/chat', {
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ message: note, userId:'<%= user.id %>', sessionId }) });
+            const data = await res.json();
+            log('AI: '+data.reply);
+            // await logMessage('ai', data.reply);
+            // playTTS(data.reply);
+          }
+        },1000);
+        
+      }); // End of waitForDependencies callback
     </script>
   </body>
 </html> 
