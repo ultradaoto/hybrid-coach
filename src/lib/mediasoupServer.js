@@ -19,14 +19,15 @@ export async function initMediaSFU(httpServer) {
     { kind: 'video', mimeType: 'video/VP8', clockRate: 90000 },
   ];
 
-  const rooms = new Map(); // roomId -> { router, peers: Map(socketId, transports) }
+  const rooms = new Map(); // roomId -> { router, producers:Set, peers: Map }
 
   async function getRoom(roomId) {
     if (rooms.has(roomId)) return rooms.get(roomId);
     const router = await worker.createRouter({ mediaCodecs });
     console.log('[SFU] Created router for room', roomId);
     const peers = new Map();
-    const room = { router, peers };
+    const producers = new Set();
+    const room = { router, peers, producers };
     rooms.set(roomId, room);
     return room;
   }
@@ -40,6 +41,9 @@ export async function initMediaSFU(httpServer) {
       currentRoomId = roomId;
       const room = await getRoom(roomId);
       socket.emit('sfu-rtpCapabilities', room.router.rtpCapabilities);
+      /* tell newcomer about existing producers */
+      room.producers.forEach(pId =>
+        socket.emit('sfu-newProducer', { id: pId, kind: 'video' }));
       console.log('[SFU] send rtpCapabilities to', socket.id);
     });
 
@@ -71,7 +75,8 @@ export async function initMediaSFU(httpServer) {
       const room = await getRoom(currentRoomId);
       const transport = transports.find(t => t.id === transportId);
       const producer = await transport.produce({ kind, rtpParameters });
-      console.log('[SFU] producer created', producer.id, 'kind', kind);
+      console.log('[SFU] producer', producer.id);
+      room.producers.add(producer.id);
       socket.broadcast.to(currentRoomId).emit('sfu-newProducer', { id: producer.id, kind });
       cb({ id: producer.id });
     });
@@ -84,6 +89,7 @@ export async function initMediaSFU(httpServer) {
         }
         const transport = transports.find(t => t.id === transportId);
         const consumer = await transport.consume({ producerId, rtpCapabilities });
+        await consumer.resume();
         console.log('[SFU] consumer created', consumer.id, 'to', socket.id);
         cb({
           id: consumer.id,
