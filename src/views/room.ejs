@@ -105,21 +105,28 @@
       }
 
       async function joinSFU(){
+        console.log('📹 requesting camera');
         localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
         localVideo.srcObject = localStream;
 
+        console.log('🎥 got local stream, connecting to SFU');
         device = new mediasoupClient.Device();
         sfu.emit('join-sfu',{roomId});
         const rtpCaps = await once('sfu-rtpCapabilities');
+        console.log('🔧 loaded device');
         await device.load({routerRtpCapabilities:rtpCaps});
 
         sendTransport = await makeTransport('send');
+        console.log('🚚 send transport ready', sendTransport.id);
         const camTrack = localStream.getVideoTracks()[0];
         await sendTransport.produce({track:camTrack});
+        console.log('📡 produced local video');
 
         recvTransport = await makeTransport('recv');
+        console.log('📥 recv transport ready', recvTransport.id);
 
         sfu.on('sfu-newProducer', ({ id, kind }) => {
+          console.log('🆕 new producer', id, kind);
           sfu.emit('sfu-consume',
             { transportId: recvTransport.id, producerId: id,
               rtpCapabilities: device.rtpCapabilities },
