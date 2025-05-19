@@ -44,7 +44,13 @@
     <div style="margin-top:0.5rem; font-weight:bold;" id="callTimer">00:00</div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mediasoup-client@4/dist/mediasoup.min.js"></script>
+
+    <!-- Load mediasoup-client as an ES module and expose it globally -->
+    <script type="module">
+      import { Device } from 'https://cdn.jsdelivr.net/npm/mediasoup-client@4/lib/index.js';
+      window.mediasoupClient = { Device };
+    </script>
+
     <script>
       const roomId = "<%= roomId %>";
       const userRole = "<%= user.role %>";
@@ -68,14 +74,6 @@
       if(userRole === 'coach'){
         document.getElementById('videoContainer').classList.add('reverse');
       }
-
-      async function initMedia(){
-        try {
-          localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-          localVideo.srcObject = localStream;
-        } catch(err){ alert('Could not access camera/mic'); console.error(err); }
-      }
-      initMedia();
 
       /************* mediasoup SFU **************/
       const sfu = io({ path: '/mediasoup' });
@@ -141,9 +139,9 @@
         });
       }
 
-      joinSFU();
+      joinSFU().then(aiGreeting);
 
-      // AI greeting on join
+      // AI greeting after media & SFU ready
       async function aiGreeting(){
         const greetingPrompt = `Say: Hello ${userName}. Welcome to the session! How are things going with Ultra so far?`;
         const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: greetingPrompt, userId:'<%= user.id %>', sessionId }) });
@@ -152,9 +150,6 @@
         await logMessage('ai', data.reply);
         playTTS(data.reply);
       }
-
-      // trigger greeting once media initialized
-      initMedia().then(aiGreeting);
 
       // Chat with AI
       const inputEl = document.getElementById('msgInput');
