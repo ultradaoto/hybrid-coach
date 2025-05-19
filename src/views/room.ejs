@@ -45,11 +45,8 @@
 
     <script src="/socket.io/socket.io.js"></script>
 
-    <!-- Load mediasoup-client as ES-module and expose globally -->
-    <script type="module">
-      import { Device } from 'https://esm.sh/mediasoup-client@4';
-      window.mediasoupClient = { Device };
-    </script>
+    <!-- Load mediasoup-client as UMD bundle -->
+    <script src="https://unpkg.com/mediasoup-client@4/dist/mediasoup-client.min.js"></script>
 
     <script>
       const roomId = "<%= roomId %>";
