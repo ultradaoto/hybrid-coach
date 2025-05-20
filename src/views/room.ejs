@@ -114,14 +114,8 @@
         const canReceiveVideo = true; // Always enable video receiving
         const stunServers = [ // Public STUN servers with fallbacks
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' },
-          // Additional STUN servers as fallback
-          { urls: 'stun:stun.ekiga.net' },
-          { urls: 'stun:stun.ideasip.com' },
-          { urls: 'stun:stun.schlund.de' }
+          { urls: 'stun:stun1.l.google.com:19302' }
+          // Limiting to just a couple of reliable STUN servers
         ];
         debugClient(`Client wantsVideo: ${wantsVideo}`);
 
@@ -497,9 +491,11 @@
                   setTimeout(async () => {
                     try {
                       const tcpTurnOptions = {
+                        iceTransportPolicy: 'relay',  // Force TURN relay
                         additionalIceServers: [
+                          // TCP TURN servers are more reliable through firewalls
                           {
-                            urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
+                            urls: 'turn:global.turn.twilio.com:443?transport=tcp',
                             username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
                             credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
                           },
@@ -745,14 +741,10 @@
             // Always add reliable public TURN servers
             debugClient('[makeTransport] Adding reliable public TURN servers for maximum compatibility');
             iceServersToUse = [
-              ...iceServersToUse,
+              ...stunServers, // Use minimal STUN servers
+              // TCP TURN servers (more reliable through firewalls)
               {
-                urls: 'turn:turn.webrtc.org:3478',
-                username: 'webrtc',
-                credential: 'turnserver'
-              },
-              {
-                urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                urls: 'turn:global.turn.twilio.com:443?transport=tcp',
                 username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
                 credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
               },
@@ -762,7 +754,7 @@
                 credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
               }
             ];
-            log(`🌐 Added reliable public TURN servers`);
+            log(`🌐 Using TCP TURN servers for better firewall traversal`);
             
             // Add additional ICE servers if provided
             if (options && options.additionalIceServers) {
@@ -798,13 +790,20 @@
               dtlsParameters,
               sctpParameters,
               iceServers: iceServersToUse,
-              // Never force relay as first try, let ICE decide
+              // Default to TCP in high-latency scenarios
               iceTransportPolicy: 'all',
               additionalSettings: {
                 sdpSemantics: 'unified-plan',
                 enableDtlsSrtp: true,
                 iceCandidatePoolSize: 10, // Increase candidate pool
                 iceCheckMinInterval: 250, // Faster ICE checks (in milliseconds)
+                // Force Firefox to use small MTU for better firewall compatibility
+                flags: {
+                  preferTcp: true, // Prefer TCP connectivity
+                  enableIpv6: false, // Disable IPv6 for faster fallback
+                  disableIPv6: true,
+                  enableTurnTcp: true // Enable turn over TCP explicitly
+                },
                 // Add Edge/Safari specific settings
                 ...(isEdgeOrSafari ? {
                   // More aggressive ICE for problematic browsers
@@ -819,6 +818,11 @@
                 typeof RTCPeerConnection.prototype.addTransceiver === 'function') {
               transportOptions.additionalSettings.icePreferIpv4 = true;
               transportOptions.additionalSettings.iceNetworkTypes = ['ethernet', 'wifi'];
+              
+              // Force TCP preference in Chrome
+              if (/Chrome/.test(navigator.userAgent)) {
+                transportOptions.iceTcpMux = true; // Enable TCP muxing if available
+              }
             }
             
             debugClient(`[makeTransport] Using transportOptions for ${direction} transport:`, JSON.parse(JSON.stringify(transportOptions))); // Log the options
@@ -1933,54 +1937,38 @@
             console.log('🔧 Device loaded with router capabilities');
             log('👍 Device loaded.');
             
-            // Check if using Edge browser and force TURN directly
+            // Use TCP-optimized transport for all browsers to improve firewall traversal
+            log('🔍 Using TCP-optimized transport settings for firewall compatibility');
             
-            // If Edge or explicitly requested to receive video but not send (novideo flag)
-            if (isEdge || (canReceiveVideo && !wantsVideo)) {
-              log(`${isEdge ? '🔍 Edge browser detected' : '🔍 Video receive mode'} - using optimized transport settings`);
-              
-              const transportOptions = {
-                additionalIceServers: [
-                  {
-                    urls: 'turn:turn.webrtc.org:3478',
-                    username: 'webrtc',
-                    credential: 'turnserver'
-                  },
-                  {
-                    urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-                    username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                    credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-                  },
-                  {
-                    urls: 'turns:global.turn.twilio.com:443?transport=tcp',
-                    username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                    credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-                  }
-                ]
-              };
-              
-              // Create both transports with optimized settings
-              log('🚚 Creating optimized send transport...');
-              sendTransport = await makeTransport('send', transportOptions);
-              console.log('🚚 send transport ready', sendTransport.id);
-              log(`👍 Optimized send transport created: ${sendTransport.id}`);
-              
-              log('📥 Creating optimized recv transport...');
-              recvTransport = await makeTransport('recv', transportOptions);
-              console.log('📥 recv transport ready', recvTransport.id);
-              log(`👍 Optimized recv transport created: ${recvTransport.id}`);
-            } else {
-              // Create both transports first - regular mode for non-Edge
-              log('🚚 Creating send transport...');
-              sendTransport = await makeTransport('send');
-              console.log('🚚 send transport ready', sendTransport.id);
-              log(`👍 Send transport created: ${sendTransport.id}`);
-
-              log('📥 Creating recv transport...');
-              recvTransport = await makeTransport('recv');
-              console.log('📥 recv transport ready', recvTransport.id);
-              log(`👍 Recv transport created: ${recvTransport.id}`);
-            }
+            const transportOptions = {
+              additionalIceServers: [
+                {
+                  urls: 'turn:global.turn.twilio.com:443?transport=tcp',
+                  username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                  credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                },
+                {
+                  urls: 'turns:global.turn.twilio.com:443?transport=tcp',
+                  username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                  credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                }
+              ],
+              // For Edge browser, force relay mode
+              ...((/Edge/.test(navigator.userAgent)) ? {
+                iceTransportPolicy: 'relay'
+              } : {})
+            };
+            
+            // Create both transports with optimized settings
+            log('🚚 Creating TCP-optimized send transport...');
+            sendTransport = await makeTransport('send', transportOptions);
+            console.log('🚚 send transport ready', sendTransport.id);
+            log(`👍 TCP-optimized send transport created: ${sendTransport.id}`);
+            
+            log('📥 Creating TCP-optimized recv transport...');
+            recvTransport = await makeTransport('recv', transportOptions);
+            console.log('📥 recv transport ready', recvTransport.id);
+            log(`👍 TCP-optimized recv transport created: ${recvTransport.id}`);
             
             // Store transport IDs for verification
             storeTransportIds(sendTransport.id, recvTransport.id);
@@ -2362,19 +2350,9 @@
             
             // Configure better TURN servers with TCP fallbacks
             const turnServers = [
+              // TCP TURN servers are more reliable through firewalls
               {
-                urls: 'turn:turn.webrtc.org:3478',
-                username: 'webrtc',
-                credential: 'turnserver'
-              },
-              {
-                urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-              },
-              // Add explicit TCP transport options which work better through firewalls
-              {
-                urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
+                urls: 'turn:global.turn.twilio.com:443?transport=tcp',
                 username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
                 credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
               },
@@ -2385,15 +2363,18 @@
               }
             ];
             
-            // If forcing TURN, use different options
+            // Always force TURN relay mode in reconnection attempts
             const transportOptions = {
-              additionalIceServers: turnServers
+              additionalIceServers: turnServers,
+              // Force relay mode for reconnection attempts for more reliability
+              iceTransportPolicy: 'relay',
+              iceTcpPolicy: 'prefer'
             };
             
-            // If this is a retry after failure, prefer TCP TURN
+            // If this is a retry after failure, force TCP-only TURN
             if (forceTurn) {
-              log('🔄 Using TCP TURN for better firewall traversal');
-              transportOptions.iceTcpPolicy = 'prefer';
+              log('🔄 Using TCP-only TURN for guaranteed firewall traversal');
+              transportOptions.iceTcpMux = true; // Enable TCP multiplexing if available
             }
             
             if (direction === 'recv') {
