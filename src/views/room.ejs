@@ -102,12 +102,16 @@
         const remoteVideo = document.getElementById('remoteVideo');
         
         const wantsVideo = !window.location.search.includes('novideo');
-        const stunServers = [ // Public STUN servers
+        const stunServers = [ // Public STUN servers with fallbacks
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
           { urls: 'stun:stun3.l.google.com:19302' },
-          { urls: 'stun:stun4.l.google.com:19302' }
+          { urls: 'stun:stun4.l.google.com:19302' },
+          // Additional STUN servers as fallback
+          { urls: 'stun:stun.ekiga.net' },
+          { urls: 'stun:stun.ideasip.com' },
+          { urls: 'stun:stun.schlund.de' }
         ];
         debugClient(`Client wantsVideo: ${wantsVideo}`);
 
@@ -179,13 +183,66 @@
           return protooPeer.request(method, data);
         }
 
+        function startWebRTCStats() {
+          if (!recvTransport || !sendTransport) {
+            debugClient('[startWebRTCStats] Transports not ready, will retry in 5s');
+            setTimeout(startWebRTCStats, 5000);
+            return;
+          }
+
+          // Check stats every 5 seconds
+          const statsInterval = setInterval(async () => {
+            try {
+              if (!recvTransport || !sendTransport) {
+                debugClient('[webrtcStats] Transports closed, stopping stats interval');
+                clearInterval(statsInterval);
+                return;
+              }
+
+              // Log the connection state
+              const recvState = recvTransport.connectionState;
+              const sendState = sendTransport.connectionState;
+              debugClient(`[webrtcStats] Transport states - recv: ${recvState}, send: ${sendState}`);
+              
+              if (recvState !== 'connected' || sendState !== 'connected') {
+                log(`📊 Transport states: recv=${recvState}, send=${sendState}`);
+              }
+
+              // For WebRTC internals debugging
+              if (recvTransport.handler && recvTransport.handler._pc) {
+                const pc = recvTransport.handler._pc;
+                const stats = await pc.getStats();
+                let hasActiveCandidate = false;
+                let candidatePairs = [];
+
+                stats.forEach(stat => {
+                  if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
+                    hasActiveCandidate = true;
+                    candidatePairs.push(`${stat.localCandidateId} <-> ${stat.remoteCandidateId} (${stat.state})`);
+                  }
+                });
+
+                if (!hasActiveCandidate && (recvState !== 'connected' || sendState !== 'connected')) {
+                  debugClient('[webrtcStats] No active candidate pairs found. This indicates NAT traversal issues.');
+                  log('⚠️ NAT traversal issue detected. Check firewall settings.');
+                } else if (hasActiveCandidate) {
+                  debugClient(`[webrtcStats] Active candidate pairs: ${candidatePairs.join(', ')}`);
+                }
+              }
+            } catch (e) {
+              debugClient('[webrtcStats] Error collecting stats:', e);
+            }
+          }, 5000);
+        }
+
         async function makeTransport(direction) {
           try {
             debugClient(`[makeTransport] Requesting server to create ${direction} transport...`);
             const serverResponse = await protooRequest('createWebRtcTransport', {
               producing: direction === 'send',
               consuming: direction === 'recv',
-              // sctpCapabilities: device.sctpCapabilities
+              // Include SCTP capabilities (for data channels)
+              sctpCapabilities: device.sctpCapabilities || undefined
             });
             debugClient(`[makeTransport] Raw response from server for createWebRtcTransport (${direction}):`, JSON.parse(JSON.stringify(serverResponse))); // Log the raw response
 
@@ -205,10 +262,13 @@
               iceCandidates,
               dtlsParameters,
               sctpParameters,
-              iceServers: stunServers, // Add STUN servers here
-              iceTransportPolicy: 'all', // Default is 'all'
-              // proprietaryConstraints: undefined,
-              // appData: { producing: direction === 'send', consuming: direction === 'recv' } // Optional appData
+              iceServers: stunServers,
+              iceTransportPolicy: 'all',
+              // Add additional properties for debugging
+              additionalSettings: {
+                sdpSemantics: 'unified-plan',
+                enableDtlsSrtp: true
+              }
             };
             
             debugClient(`[makeTransport] Using transportOptions for ${direction} transport:`, JSON.parse(JSON.stringify(transportOptions))); // Log the options
@@ -264,6 +324,11 @@
                 // However, some SFU designs might expect trickle ICE from client. Mediasoup-demo usually doesn't.
             });
 
+            // Add an explicit debug log for ice gathering state changes
+            transport.on('icegatheringstatechange', (state) => {
+              debugClient(`[transport ${direction} ${transport.id}] ICE gathering state changed to ${state}`);
+              log(`🧊 ${direction.charAt(0).toUpperCase() + direction.slice(1)} transport ICE gathering: ${state}`);
+            });
 
             return transport;
           } catch (error) {
@@ -294,14 +359,38 @@
           console.log('🆕 consuming new producer notification', producerId, kind, appData, 'from peer', producerPeerId);
           log(`🆕 Seeing new producer: ${producerId} (${kind}) from peer ${producerPeerId}`);
           try {
-            if (!device.loaded) { // Double check, though queueing should prevent this primarily
-              console.warn('ConsumeProducer called but device not loaded. ProducerId:', producerId);
-              log('⚠️ Device not loaded at consumeProducer call for ' + producerId);
+            if (!device || !device.loaded) {
+              const errMsg = 'Device not loaded at consumeProducer call';
+              console.warn(`${errMsg} for ${producerId}`);
+              log(`⚠️ ${errMsg} for ${producerId}`);
+              // Queue it to try again later instead of just returning
+              pendingProducersToConsume.push(producerInfo);
               return;
             }
+            
+            // Make sure we have a recv transport
             if (!recvTransport) {
-              console.warn('Receive transport not ready, cannot consume. ProducerId:', producerId);
-              log('⚠️ Receive transport not ready for ' + producerId);
+              const errMsg = 'Receive transport not ready, cannot consume';
+              console.warn(`${errMsg}. ProducerId: ${producerId}`);
+              log(`⚠️ ${errMsg} for ${producerId}`);
+              
+              // If we were previously connected but lost the transport, try to recreate it
+              if (device.loaded) {
+                log(`🔄 Attempting to recreate receive transport...`);
+                try {
+                  recvTransport = await makeTransport('recv');
+                  log(`👍 Recreated receive transport: ${recvTransport.id}`);
+                  // Now continue with consumption after a slight delay
+                  setTimeout(() => consumeProducer(producerInfo), 500);
+                  return;
+                } catch (recreateErr) {
+                  console.error('Failed to recreate receive transport', recreateErr);
+                  log(`❌ Failed to recreate receive transport: ${recreateErr.message}`);
+                  return;
+                }
+              }
+              // If we couldn't recreate, just queue for later
+              pendingProducersToConsume.push(producerInfo);
               return;
             }
 
@@ -394,8 +483,32 @@
             });
 
           } catch (err) {
-            console.error('Error consuming new producer:', producerId, err);
+            console.error(`Error in consume request for producer ${producerId}:`, err);
             log(`❌ ERROR consuming producer ${producerId}: ${err.message}`);
+            
+            // If this was a transport error, we might need to recreate it
+            if (err.message && err.message.includes('transport')) {
+              log(`🔄 Transport error detected. Will try to recreate transport on next attempt.`);
+              if (recvTransport) {
+                recvTransport.close();
+                recvTransport = null;
+              }
+              // Queue the producer for later retry
+              pendingProducersToConsume.push(producerInfo);
+              // Try to recreate after a delay
+              setTimeout(async () => {
+                try {
+                  log(`🔄 Recreating receive transport after error...`);
+                  recvTransport = await makeTransport('recv');
+                  log(`✅ Successfully recreated receive transport`);
+                  // Process the pending queue
+                  processPendingConsumers();
+                } catch (recreateErr) {
+                  console.error('Failed to recreate transport after error', recreateErr);
+                  log(`❌ Failed to recreate transport: ${recreateErr.message}`);
+                }
+              }, 2000);
+            }
           }
           debugClient(`[consumeProducer] END for producerId: ${producerId}`);
         }
@@ -462,6 +575,8 @@
 
             log('🎧 Listening for new producers (via global handler)...');
             aiGreeting();
+
+            startWebRTCStats();
 
           } catch (err) {
             console.error('Error in joinSFU:', err);

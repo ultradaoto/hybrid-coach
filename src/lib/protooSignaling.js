@@ -103,6 +103,19 @@ export async function initProtooSignaling(httpServer) {
         consumers: new Map()
       });
       
+      // Check if this peer is reconnecting and had producers
+      if (roomData.reconnectInfo && roomData.reconnectInfo[peerId]) {
+        const reconnectData = roomData.reconnectInfo[peerId];
+        // Only use reconnect data if it's recent (within last 30 seconds)
+        if (Date.now() - reconnectData.timestamp < 30000) {
+          debug(`Peer ${peerId} is reconnecting, will restore producer info`);
+          // We'll tell this peer about other peers' producers in the existing loop below
+          // But don't need any special handling here
+        }
+        // Clean up after using
+        delete roomData.reconnectInfo[peerId];
+      }
+      
       // Inform the new peer about existing producers in the room
       for (const existingPeerData of roomData.peers.values()) {
         if (existingPeerData.protooPeer.id === peerId) continue; // Don't tell about self, though it has no producers yet
@@ -223,12 +236,33 @@ export async function initProtooSignaling(httpServer) {
               break;
             }
             case 'consume': {
-              const { rtpCapabilities, producerId } = requestMessage.data; // transportId for consume is implicit to peer's recv transport
-              const consumerTransport = Array.from(peerData.transports.values()).find(t => t.appData.consuming);
+              const { rtpCapabilities, producerId } = requestMessage.data;
+              // Find a suitable transport - ensure it's a consuming transport
+              const consumerTransport = Array.from(peerData.transports.values())
+                .find(t => t.appData && t.appData.consuming === true);
 
               if (!consumerTransport) {
+                debug(`No suitable (consuming) transport found for peer ${peerId} to consume producer ${producerId}. Available transports:`, 
+                  Array.from(peerData.transports.values()).map(t => `${t.id}(consuming:${!!t.appData.consuming})`));
                 throw new Error(`no suitable (consuming) transport found for peer ${peerId} to consume producer ${producerId}`);
               }
+              
+              // Find the producer across all peers in the room
+              let producer = null;
+              for (const [otherPeerId, otherPeerData] of roomData.peers.entries()) {
+                const foundProducer = otherPeerData.producers.get(producerId);
+                if (foundProducer) {
+                  producer = foundProducer;
+                  debug(`Found producer ${producerId} from peer ${otherPeerId}`);
+                  break;
+                }
+              }
+              
+              if (!producer) {
+                debug(`Producer ${producerId} not found in any peer`);
+                throw new Error(`producer ${producerId} not found`);
+              }
+              
               if (!mediasoupRouter.canConsume({ producerId, rtpCapabilities })) {
                 throw new Error(`peer ${peerId} cannot consume producer ${producerId}`);
               }
@@ -284,16 +318,36 @@ export async function initProtooSignaling(httpServer) {
         debug(`protoo peer closed: ${peerId} (transportId: ${protooTransport.id})`);
         const peerData = roomData.peers.get(peerId);
         if (peerData) {
+          // Store information about producers for potential reconnection
+          const producerInfo = Array.from(peerData.producers.values()).map(p => ({
+            id: p.id,
+            kind: p.kind,
+            appData: p.appData
+          }));
+          
+          // Close all transports for this peer
           peerData.transports.forEach(t => t.close());
-          // Producers & consumers are closed when their transport closes
+          // Consumers & producers are automatically closed when their transport closes
+          
+          // Clean up peer data
+          roomData.peers.delete(peerId);
+          
+          // Store reconnection info for a short time
+          setTimeout(() => {
+            debug(`Storing reconnection info for ${peerId}`);
+            roomData.reconnectInfo = roomData.reconnectInfo || {};
+            roomData.reconnectInfo[peerId] = {
+              producerInfo,
+              timestamp: Date.now()
+            };
+          }, 100);
         }
-        roomData.peers.delete(peerId);
         
         // Optional: If room becomes empty, close the mediasoupRouter and delete the room
         if (roomData.peers.size === 0 && roomData.protooRoom.peers.length === 0) {
-            debug(`room ${roomId} is empty, closing mediasoupRouter`);
-            mediasoupRouter.close();
-            rooms.delete(roomId);
+          debug(`room ${roomId} is empty, closing mediasoupRouter`);
+          mediasoupRouter.close();
+          rooms.delete(roomId);
         }
       });
 
