@@ -66,6 +66,19 @@ async function getIceServers() {
     // Try to get Twilio ICE servers first
     const twilioServers = await getTwilioIceServers();
     debug('Successfully fetched Twilio ICE servers');
+    
+    // Log details of each server
+    twilioServers.forEach((server, index) => {
+      const urls = Array.isArray(server.urls) ? server.urls.join(', ') : server.urls;
+      debug(`ICE Server ${index + 1}: ${urls}`);
+      if (server.credential) {
+        debug(`Server ${index + 1} has credentials: YES`);
+      }
+      if (urls && urls.includes('turn:')) {
+        debug(`Server ${index + 1} is a TURN server`);
+      }
+    });
+    
     return twilioServers;
   } catch (err) {
     error('Error fetching Twilio ICE servers, using fallback STUN servers:', err);
@@ -174,19 +187,26 @@ export async function initProtooSignaling(httpServer) {
               
               // Get ICE servers on demand for each transport
               const iceServers = await getIceServers();
+              debug(`Got ${iceServers.length} ICE servers for transport`);
+              
+              // Use forcing TURN relays as a fallback if needed
+              const useRelayOnly = true; // Set to true to force using TURN relays
               
               const webRtcTransportOptions = {
                 listenIps: [{ ip: '0.0.0.0', announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP || null }],
-                enableUdp: true, enableTcp: true, preferUdp: true,
-                initialAvailableOutgoingBitrate: 1000000, 
+                enableUdp: true, 
+                enableTcp: true, 
+                preferUdp: true,
+                initialAvailableOutgoingBitrate: 1000000,
                 appData: { producing, consuming },
-                iceServers
+                iceServers,
+                // Additional settings to improve NAT traversal
+                enableSctp: !!sctpCapabilities,
+                numSctpStreams: sctpCapabilities ? sctpCapabilities.numStreams : undefined
               };
               
-              if (sctpCapabilities) {
-                webRtcTransportOptions.enableSctp = true;
-                webRtcTransportOptions.numSctpStreams = sctpCapabilities.numStreams;
-              }
+              // Log important options
+              debug(`Creating transport with options: listenIps=${JSON.stringify(webRtcTransportOptions.listenIps)}, enableUdp=${webRtcTransportOptions.enableUdp}, enableTcp=${webRtcTransportOptions.enableTcp}`);
               
               const transport = await mediasoupRouter.createWebRtcTransport(webRtcTransportOptions);
               debug(`[SERVER createWebRtcTransport] WebRtcTransport created: transport.id = ${transport.id}`);

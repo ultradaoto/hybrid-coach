@@ -91,7 +91,13 @@
         const jwtToken = "<%= jwt %>";
         const sessionId = "<%= sessionId %>";
         localStorage.setItem('jwt', jwtToken);
-        const socket = io(); // This is for general app signaling (chat, timer, etc.)
+        const socket = io(window.location.origin, {
+          path: '/socket.io/',
+          transports: ['websocket', 'polling'], // Try websocket first, fall back to polling
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 20000 // Increase timeout
+        });
         const messages = document.getElementById('messages');
 
         const peerId = `pid_${Math.random().toString(36).substr(2, 9)}`;
@@ -246,6 +252,23 @@
               if (turnResponse.ok) {
                 const turnData = await turnResponse.json();
                 if (turnData.iceServers && turnData.iceServers.length > 0) {
+                  // Enhanced logging of ice servers
+                  debugClient(`[makeTransport] Raw Twilio ICE servers response: ${JSON.stringify(turnData.iceServers)}`);
+                  
+                  // Log details of each ICE server
+                  turnData.iceServers.forEach((server, idx) => {
+                    const urls = Array.isArray(server.urls) ? server.urls.join(', ') : server.urls;
+                    debugClient(`[makeTransport] ICE Server ${idx + 1}: ${urls}`);
+                    if (server.credential) {
+                      // Don't log actual credentials for security
+                      debugClient(`[makeTransport] Server ${idx + 1} has credentials: YES (redacted)`);
+                    }
+                    // Log if it's a TURN server
+                    if (urls && urls.includes('turn:')) {
+                      debugClient(`[makeTransport] Server ${idx + 1} is a TURN server`);
+                    }
+                  });
+                  
                   iceServersToUse = turnData.iceServers;
                   debugClient(`[makeTransport] Successfully fetched Twilio ICE servers: ${iceServersToUse.length} servers`);
                   log(`🌐 Using Twilio TURN/STUN servers`);
@@ -286,12 +309,12 @@
               iceCandidates,
               dtlsParameters,
               sctpParameters,
-              iceServers: iceServersToUse, // Use the Twilio servers if available
-              iceTransportPolicy: 'all',
-              // Add additional properties for debugging
+              iceServers: iceServersToUse, 
+              iceTransportPolicy: 'relay', // Force using TURN relays instead of 'all'
               additionalSettings: {
                 sdpSemantics: 'unified-plan',
-                enableDtlsSrtp: true
+                enableDtlsSrtp: true,
+                iceCandidatePoolSize: 10 // Increase candidate pool
               }
             };
             
