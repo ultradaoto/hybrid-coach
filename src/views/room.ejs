@@ -93,7 +93,7 @@
         localStorage.setItem('jwt', jwtToken);
         const socket = io(window.location.origin, {
           path: '/socket.io/',
-          transports: ['polling'], // Force polling only - websockets are getting 403 errors
+          transports: ['polling', 'websocket'], // Allow both types but try websocket first
           reconnectionAttempts: 10,
           reconnectionDelay: 1000, // Increase timeout
           timeout: 20000, // Increase timeout
@@ -101,9 +101,6 @@
           pingTimeout: 60000, // Wait 60 seconds for a pong response
           auth: {
             token: jwtToken // Include auth token for socket connections
-          },
-          extraHeaders: {
-            'x-auth-token': jwtToken // Add auth token as header for WebSocket upgrade requests
           }
         });
         const messages = document.getElementById('messages');
@@ -124,9 +121,7 @@
           // Additional STUN servers as fallback
           { urls: 'stun:stun.ekiga.net' },
           { urls: 'stun:stun.ideasip.com' },
-          { urls: 'stun:stun.schlund.de' },
-          // Local candidates (needed for local development)
-          { urls: 'stun:127.0.0.1' }
+          { urls: 'stun:stun.schlund.de' }
         ];
         debugClient(`Client wantsVideo: ${wantsVideo}`);
 
@@ -487,7 +482,7 @@
                 
                 if (stuckTime > 15) {  // If stuck in "new" for more than 15 seconds
                   debugClient('[monitorConnection] Edge browser transport stuck in "new" state for too long');
-                  log(`⚠️ Edge browser transport stuck in "new" state for ${stuckTime}s. Forcing TURN-only reconnection...`);
+                  log(`⚠️ Edge browser transport stuck in "new" state for ${stuckTime}s. Forcing TCP TURN reconnection...`);
                   
                   // Close existing transport
                   try {
@@ -498,27 +493,27 @@
                   
                   recvTransport = null;
                   
-                  // Force a TURN-only transport creation
+                  // Force a TCP TURN transport creation
                   setTimeout(async () => {
                     try {
-                      const turnOptions = {
-                        iceTransportPolicy: 'relay',  // Force TURN relay
+                      const tcpTurnOptions = {
                         additionalIceServers: [
                           {
-                            urls: 'turn:turn.webrtc.org:3478',
-                            username: 'webrtc',
-                            credential: 'turnserver'
+                            urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
+                            username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                            credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
                           },
                           {
-                            urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                            urls: 'turns:global.turn.twilio.com:443?transport=tcp',
                             username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
                             credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
                           }
-                        ]
+                        ],
+                        iceTcpPolicy: 'prefer' // Prefer TCP for better firewall traversal
                       };
                       
-                      log('📥 Creating new forced TURN-only receive transport...');
-                      recvTransport = await makeTransport('recv', turnOptions);
+                      log('📥 Creating new TCP TURN receive transport...');
+                      recvTransport = await makeTransport('recv', tcpTurnOptions);
                       
                       // Update stored ID
                       storeTransportIds(
@@ -526,7 +521,7 @@
                         recvTransport.id
                       );
                       
-                      log(`✅ Created new forced TURN-only receive transport: ${recvTransport.id}`);
+                      log(`✅ Created new TCP TURN receive transport: ${recvTransport.id}`);
                       
                       // Process any pending consumers
                       setTimeout(() => {
@@ -730,9 +725,10 @@
                     }
                   });
                   
-                  iceServersToUse = turnData.iceServers;
-                  debugClient(`[makeTransport] Successfully fetched Twilio ICE servers: ${iceServersToUse.length} servers`);
-                  log(`🌐 Using Twilio TURN/STUN servers`);
+                  // Combine STUN and TURN servers rather than replacing entirely
+                  iceServersToUse = [...stunServers, ...turnData.iceServers];
+                  debugClient(`[makeTransport] Using combined STUN/TURN servers: ${iceServersToUse.length} servers`);
+                  log(`🌐 Using Twilio + Public TURN/STUN servers`);
                 } else {
                   debugClient('[makeTransport] No ICE servers returned from Twilio, using fallback STUN servers');
                   log(`⚠️ Using fallback STUN servers only`);
@@ -746,34 +742,27 @@
               log(`⚠️ Using fallback STUN servers only`);
             }
             
-            // Add fallback free TURN servers when no configured ones are available
-            // These are public TURN servers that might help in difficult NAT scenarios
-            let hasTurnServer = false;
-            iceServersToUse.forEach(server => {
-              const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
-              if (urls.some(url => url.includes('turn:'))) {
-                hasTurnServer = true;
+            // Always add reliable public TURN servers
+            debugClient('[makeTransport] Adding reliable public TURN servers for maximum compatibility');
+            iceServersToUse = [
+              ...iceServersToUse,
+              {
+                urls: 'turn:turn.webrtc.org:3478',
+                username: 'webrtc',
+                credential: 'turnserver'
+              },
+              {
+                urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+              },
+              {
+                urls: 'turns:global.turn.twilio.com:443?transport=tcp',
+                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
               }
-            });
-            
-            if (!hasTurnServer) {
-              // Add fallback TURN servers (these are free but might be rate-limited)
-              debugClient('[makeTransport] No TURN servers configured, adding fallback public TURN servers');
-              iceServersToUse = [
-                ...iceServersToUse,
-                {
-                  urls: 'turn:turn.webrtc.org:3478',
-                  username: 'webrtc',
-                  credential: 'turnserver'
-                },
-                {
-                  urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-                  username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                  credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-                }
-              ];
-              log(`🌐 Added fallback public TURN servers`);
-            }
+            ];
+            log(`🌐 Added reliable public TURN servers`);
             
             // Add additional ICE servers if provided
             if (options && options.additionalIceServers) {
@@ -781,8 +770,6 @@
               iceServersToUse = [...iceServersToUse, ...options.additionalIceServers];
             }
             
-            // Special handling for localhost: Allow direct connection without STUN/TURN
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             const serverResponse = await protooRequest('createWebRtcTransport', {
               producing: direction === 'send',
               consuming: direction === 'recv',
@@ -810,22 +797,19 @@
               iceCandidates,
               dtlsParameters,
               sctpParameters,
-              iceServers: isLocalhost ? [] : iceServersToUse, 
-              iceTransportPolicy: options.iceTransportPolicy || 'all', // Allow override from options
+              iceServers: iceServersToUse,
+              // Never force relay as first try, let ICE decide
+              iceTransportPolicy: 'all',
               additionalSettings: {
                 sdpSemantics: 'unified-plan',
                 enableDtlsSrtp: true,
                 iceCandidatePoolSize: 10, // Increase candidate pool
                 iceCheckMinInterval: 250, // Faster ICE checks (in milliseconds)
-                iceCheckingTimeout: 10000, // 10 seconds timeout for ICE gathering
-                iceUnwritableTimeout: 8000, // 8 seconds timeout for ICE unwritable
-                iceConnectionReceivingTimeout: 8000, // 8 seconds timeout for ICE connection receiving
                 // Add Edge/Safari specific settings
                 ...(isEdgeOrSafari ? {
                   // More aggressive ICE for problematic browsers
                   iceAggressiveNomination: true,
                   iceKeepaliveInterval: 2000, // faster keepalives
-                  iceTransportType: 'aggressive' // try harder
                 } : {})
               }
             };
@@ -1955,8 +1939,7 @@
             if (isEdge || (canReceiveVideo && !wantsVideo)) {
               log(`${isEdge ? '🔍 Edge browser detected' : '🔍 Video receive mode'} - using optimized transport settings`);
               
-              const turnOptions = {
-                iceTransportPolicy: isEdge ? 'relay' : 'all',
+              const transportOptions = {
                 additionalIceServers: [
                   {
                     urls: 'turn:turn.webrtc.org:3478',
@@ -1967,18 +1950,23 @@
                     urls: 'turn:global.turn.twilio.com:3478?transport=udp',
                     username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
                     credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                  },
+                  {
+                    urls: 'turns:global.turn.twilio.com:443?transport=tcp',
+                    username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                    credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
                   }
                 ]
               };
               
               // Create both transports with optimized settings
               log('🚚 Creating optimized send transport...');
-              sendTransport = await makeTransport('send', turnOptions);
+              sendTransport = await makeTransport('send', transportOptions);
               console.log('🚚 send transport ready', sendTransport.id);
               log(`👍 Optimized send transport created: ${sendTransport.id}`);
               
               log('📥 Creating optimized recv transport...');
-              recvTransport = await makeTransport('recv', turnOptions);
+              recvTransport = await makeTransport('recv', transportOptions);
               console.log('📥 recv transport ready', recvTransport.id);
               log(`👍 Optimized recv transport created: ${recvTransport.id}`);
             } else {
@@ -2102,7 +2090,10 @@
           // Data channel keepalive - critical for preventing NAT timeouts
           let keepaliveInterval = null;
           
-          // Start data channel keepalive for both transports
+          // Track data channels to prevent duplicates
+          if (!window._dataChannels) window._dataChannels = new Map();
+          
+          // Start data channel keepalive for both transports with higher frequency
           if (recvTransport && recvTransport.connectionState === 'connected') {
             const recvChannel = createKeepaliveDataChannel(recvTransport, 'recv-keepalive');
             if (recvChannel) {
@@ -2122,6 +2113,15 @@
               return null;
             }
             
+            // Check if we already have a channel for this transport
+            if (window._dataChannels.has(transport.id)) {
+              const existingChannel = window._dataChannels.get(transport.id);
+              if (existingChannel && existingChannel.readyState === 'open') {
+                debugClient(`[iceKeepalive] Using existing channel for ${transport.id}`);
+                return existingChannel;
+              }
+            }
+            
             const pc = transport.handler._pc;
             
             try {
@@ -2131,22 +2131,55 @@
                 protocol: 'keepalive'
               });
               
+              // Store the channel for future reference
+              window._dataChannels.set(transport.id, channel);
+              
               channel.onopen = () => {
                 debugClient(`[iceKeepalive] Channel '${label}' open for ${transport.id}`);
                 
-                // Send small packets every 15 seconds to maintain NAT bindings
+                // Send small packets every 5 seconds to maintain NAT bindings
+                // More frequent for better NAT hole punching
+                if (keepaliveInterval) {
+                  clearInterval(keepaliveInterval);
+                }
+                
                 keepaliveInterval = setInterval(() => {
                   if (channel.readyState === 'open') {
                     try {
-                      channel.send(JSON.stringify({ type: 'keepalive', ts: Date.now() }));
+                      // Send a small packet with timestamp to keep the connection alive
+                      channel.send(JSON.stringify({ 
+                        type: 'keepalive', 
+                        ts: Date.now(),
+                        id: Math.random().toString(36).substring(2,9)  // Random ID to prevent caching
+                      }));
                       debugClient(`[iceKeepalive] Sent keepalive on ${label}`);
                     } catch (e) {
                       debugClient(`[iceKeepalive] Error sending keepalive: ${e.message}`);
                     }
                   } else {
+                    // Try to recreate channel if it's closed
+                    debugClient(`[iceKeepalive] Channel state is ${channel.readyState}, recreating`);
                     clearInterval(keepaliveInterval);
+                    setTimeout(() => {
+                      createKeepaliveDataChannel(transport, label);
+                    }, 1000);
                   }
-                }, 15000);
+                }, 5000); // More frequent keepalive for better NAT traversal
+              };
+              
+              channel.onclose = () => {
+                debugClient(`[iceKeepalive] Channel '${label}' closed for ${transport.id}`);
+                clearInterval(keepaliveInterval);
+                
+                // Try to recreate after a short delay
+                setTimeout(() => {
+                  createKeepaliveDataChannel(transport, label);
+                }, 2000);
+              };
+              
+              channel.onerror = (err) => {
+                debugClient(`[iceKeepalive] Channel '${label}' error: ${err}`);
+                clearInterval(keepaliveInterval);
               };
               
               return channel;
@@ -2327,113 +2360,85 @@
               sendTransport = null;
             }
             
-            // If forcing TURN, modify the iceTransportPolicy
+            // Configure better TURN servers with TCP fallbacks
+            const turnServers = [
+              {
+                urls: 'turn:turn.webrtc.org:3478',
+                username: 'webrtc',
+                credential: 'turnserver'
+              },
+              {
+                urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+              },
+              // Add explicit TCP transport options which work better through firewalls
+              {
+                urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
+                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+              },
+              {
+                urls: 'turns:global.turn.twilio.com:443?transport=tcp',
+                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+              }
+            ];
+            
+            // If forcing TURN, use different options
+            const transportOptions = {
+              additionalIceServers: turnServers
+            };
+            
+            // If this is a retry after failure, prefer TCP TURN
             if (forceTurn) {
-              debugClient(`[refreshTransport] Using TURN-only policy for ${direction} transport`);
-              log(`⚠️ Forcing TURN-only mode for better connectivity`);
+              log('🔄 Using TCP TURN for better firewall traversal');
+              transportOptions.iceTcpPolicy = 'prefer';
+            }
+            
+            if (direction === 'recv') {
+              log('📥 Creating new receive transport...');
+              recvTransport = await makeTransport('recv', transportOptions);
               
-              // Create a new transport with TURN-only policy
-              if (direction === 'recv') {
-                log('📥 Creating new TURN-only receive transport...');
-                const turnOptions = {
-                  iceTransportPolicy: 'relay', // Force TURN
-                  additionalIceServers: [
-                    {
-                      urls: 'turn:turn.webrtc.org:3478',
-                      username: 'webrtc',
-                      credential: 'turnserver'
-                    },
-                    {
-                      urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-                      username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                      credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-                    }
-                  ]
-                };
-                recvTransport = await makeTransport('recv', turnOptions);
-                
-                // Update stored ID
-                storeTransportIds(
-                  window._transportIds && window._transportIds.send ? window._transportIds.send : null,
-                  recvTransport.id
-                );
-                
-                log(`👍 New TURN-only receive transport created: ${recvTransport.id}`);
-                
-                processPendingConsumers();
-              } else if (direction === 'send') {
-                log('🚚 Creating new TURN-only send transport...');
-                const turnOptions = {
-                  iceTransportPolicy: 'relay', // Force TURN
-                  additionalIceServers: [
-                    {
-                      urls: 'turn:turn.webrtc.org:3478',
-                      username: 'webrtc',
-                      credential: 'turnserver'
-                    },
-                    {
-                      urls: 'turn:global.turn.twilio.com:3478?transport=udp',
-                      username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                      credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-                    }
-                  ]
-                };
-                sendTransport = await makeTransport('send', turnOptions);
-                
-                // Update stored ID
-                storeTransportIds(
-                  sendTransport.id,
-                  window._transportIds && window._transportIds.recv ? window._transportIds.recv : null
-                );
-                
-                log(`👍 New TURN-only send transport created: ${sendTransport.id}`);
-                
-                // Re-produce local media if needed
-                if (wantsVideo && localStream) {
-                  const camTrack = localStream.getVideoTracks()[0];
-                  if (camTrack) {
-                    log('📡 Re-producing video track...');
-                    await sendTransport.produce({ track: camTrack, appData: { source: 'webcam' } });
-                    log('📡 Video re-produced.');
-                  }
+              // Update stored ID
+              storeTransportIds(
+                window._transportIds && window._transportIds.send ? window._transportIds.send : null,
+                recvTransport.id
+              );
+              
+              log(`👍 New receive transport created: ${recvTransport.id}`);
+              
+              // Re-consume existing producers
+              setTimeout(() => processPendingConsumers(), 500);
+            } else if (direction === 'send') {
+              log('🚚 Creating new send transport...');
+              sendTransport = await makeTransport('send', transportOptions);
+              
+              // Update stored ID
+              storeTransportIds(
+                sendTransport.id,
+                window._transportIds && window._transportIds.recv ? window._transportIds.recv : null
+              );
+              
+              log(`👍 New send transport created: ${sendTransport.id}`);
+              
+              // Re-produce local media if needed
+              if (wantsVideo && localStream) {
+                const camTrack = localStream.getVideoTracks()[0];
+                if (camTrack) {
+                  log('📡 Re-producing video track...');
+                  await sendTransport.produce({ track: camTrack, appData: { source: 'webcam' } });
+                  log('📡 Video re-produced.');
                 }
               }
-            } else {
-              // Create a new transport of the same type with normal settings
-              if (direction === 'recv') {
-                log('📥 Creating new receive transport...');
-                recvTransport = await makeTransport('recv');
-                
-                // Update stored ID
-                storeTransportIds(
-                  window._transportIds && window._transportIds.send ? window._transportIds.send : null,
-                  recvTransport.id
-                );
-                
-                log(`👍 New receive transport created: ${recvTransport.id}`);
-                
-                // Re-consume existing producers
-                processPendingConsumers();
-              } else if (direction === 'send') {
-                log('🚚 Creating new send transport...');
-                sendTransport = await makeTransport('send');
-                
-                // Update stored ID
-                storeTransportIds(
-                  sendTransport.id,
-                  window._transportIds && window._transportIds.recv ? window._transportIds.recv : null
-                );
-                
-                log(`👍 New send transport created: ${sendTransport.id}`);
-                
-                // Re-produce local media if needed
-                if (wantsVideo && localStream) {
-                  const camTrack = localStream.getVideoTracks()[0];
-                  if (camTrack) {
-                    log('📡 Re-producing video track...');
-                    await sendTransport.produce({ track: camTrack, appData: { source: 'webcam' } });
-                    log('📡 Video re-produced.');
-                  }
+              
+              // Always re-produce audio if available
+              if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                  log('🎤 Re-producing audio track...');
+                  await sendTransport.produce({ track: audioTrack, appData: { source: 'microphone' } });
+                  log('🎤 Audio re-produced.');
                 }
               }
             }
