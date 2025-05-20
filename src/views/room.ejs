@@ -93,21 +93,28 @@
         localStorage.setItem('jwt', jwtToken);
         const socket = io(window.location.origin, {
           path: '/socket.io/',
-          transports: ['websocket', 'polling'], // Try websocket first, fall back to polling
-          reconnectionAttempts: 5,
-          reconnectionDelay: 1000,
-          timeout: 20000 // Increase timeout
+          transports: ['polling'], // Force polling only - websockets are getting 403 errors
+          reconnectionAttempts: 10,
+          reconnectionDelay: 1000, // Increase timeout
+          timeout: 20000, // Increase timeout
+          pingInterval: 25000, // Send a ping every 25 seconds
+          pingTimeout: 60000, // Wait 60 seconds for a pong response
+          auth: {
+            token: jwtToken // Include auth token for socket connections
+          },
+          extraHeaders: {
+            'x-auth-token': jwtToken // Add auth token as header for WebSocket upgrade requests
+          }
         });
         const messages = document.getElementById('messages');
 
-        const peerId = `pid_${Math.random().toString(36).substr(2, 9)}`;
-        let protooPeer;
         let localStream;
         let sendTransport, recvTransport, device;
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
         
-        const wantsVideo = !window.location.search.includes('novideo');
+        const wantsVideo = !window.location.search.includes('novideo'); // Only affects sending
+        const canReceiveVideo = true; // Always enable video receiving
         const stunServers = [ // Public STUN servers with fallbacks
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
@@ -117,11 +124,37 @@
           // Additional STUN servers as fallback
           { urls: 'stun:stun.ekiga.net' },
           { urls: 'stun:stun.ideasip.com' },
-          { urls: 'stun:stun.schlund.de' }
+          { urls: 'stun:stun.schlund.de' },
+          // Local candidates (needed for local development)
+          { urls: 'stun:127.0.0.1' }
         ];
         debugClient(`Client wantsVideo: ${wantsVideo}`);
 
         let pendingProducersToConsume = [];
+        
+        // Add a flag to track if joinSFU is already running
+        let joinSfuInProgress = false;
+        
+        // Generate a stable peer ID for this user/device that persists across reconnections
+        function getStablePeerId() {
+          // Look for existing peer ID in localStorage
+          let storedPeerId = localStorage.getItem('mediasoup_peer_id');
+          
+          // If no stored ID or it's from a different room, generate a new one
+          if (!storedPeerId || !storedPeerId.startsWith(`${roomId}_`)) {
+            storedPeerId = `${roomId}_pid_${Math.random().toString(36).substr(2, 9)}`;
+            localStorage.setItem('mediasoup_peer_id', storedPeerId);
+          }
+          
+          // Extract just the peer ID part
+          return storedPeerId.split('_').slice(1).join('_');
+        }
+        
+        // Generate stable peer ID
+        const peerId = getStablePeerId();
+        debugClient(`Using peer ID: ${peerId}`);
+        
+        let protooPeer;
 
         function log(msg){ messages.innerHTML += msg + '<br>'; }
         function debugClient(message) { console.log('[CLIENT DEBUG]', message); }
@@ -136,56 +169,254 @@
         const protooWebSocketUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/protoo?roomId=${roomId}&peerId=${peerId}`;
         const transport = new window.protooClient.WebSocketTransport(protooWebSocketUrl);
         protooPeer = new window.protooClient.Peer(transport);
-
-        protooPeer.on('open', () => {
-          console.log('Protoo connection open. Calling joinSFU(). PeerID:', peerId, 'RoomID:', roomId);
-          log('✅ Protoo connection established.');
-          joinSFU(); 
-        });
-
-        protooPeer.on('request', (request, accept, reject) => {
-          console.log('Received Protoo request from server (unexpected on client):', request);
-          reject(501, 'Client does not handle requests'); 
-        });
-
-        // Generic notification handler - primarily for newProducers
-        protooPeer.on('notification', async (notification) => {
-          debugClient(`Received Protoo notification: ${notification.method}`);
-          if (notification.method === 'newProducer') {
-            const producerInfo = notification.data;
-            if (device && device.loaded) {
-              debugClient('Device is loaded, consuming producer immediately:', producerInfo.producerId);
-              await consumeProducer(producerInfo);
-            } else {
-              debugClient('Device not loaded yet, queueing producer:', producerInfo.producerId);
-              pendingProducersToConsume.push(producerInfo);
-              log('⚠️ Device not loaded, producer queued: ' + producerInfo.producerId);
+        
+        // Keep track of reconnection attempts
+        let protooReconnectAttempts = 0;
+        const MAX_PROTOO_RECONNECT_ATTEMPTS = 10;
+        let protooReconnectTimeout = null;
+        let initialConnectionEstablished = false;
+        
+        function setupProtooConnectionHandlers() {
+          protooPeer.on('open', () => {
+            console.log('Protoo connection open. Will call joinSFU() when fully connected. PeerID:', peerId, 'RoomID:', roomId);
+            log('✅ Protoo connection established.');
+            protooReconnectAttempts = 0; // Reset counter on successful connection
+            if (protooReconnectTimeout) {
+              clearTimeout(protooReconnectTimeout);
+              protooReconnectTimeout = null;
             }
-          }
-        });
+            
+            // Wait a moment to ensure full connection before starting
+            setTimeout(() => {
+              initialConnectionEstablished = true;
+              // Restart keepalive when connection is established
+              if (typeof startKeepalive === 'function') {
+                debugClient('Restarting keepalive after reconnection');
+                startKeepalive();
+              }
+              
+              console.log('Protoo connection fully ready. Starting joinSFU().');
+              joinSFU();
+            }, 500);
+          });
 
-        protooPeer.on('failed', (currentAttempt, maxAttempts) => {
-          console.error(`Protoo connection attempt ${currentAttempt} of ${maxAttempts} failed. URL: ${protooWebSocketUrl}`);
-          log(`🔴 Protoo connection failed (attempt ${currentAttempt}/${maxAttempts}). Will not auto-retry.`);
-        });
+          protooPeer.on('request', (request, accept, reject) => {
+            console.log('Received Protoo request from server (unexpected on client):', request);
+            
+            // Handle ping requests from server
+            if (request.method === 'ping') {
+              debugClient(`Received ping request from server, responding`);
+              accept({ timestamp: Date.now() });
+              return;
+            }
+            
+            // Reject all other requests
+            reject(501, 'Client does not handle requests'); 
+          });
 
-        protooPeer.on('disconnected', () => {
-          console.error('Protoo disconnected. URL:', protooWebSocketUrl);
-          log('🔴 Protoo disconnected.');
-        });
+          // Generic notification handler - primarily for newProducers
+          protooPeer.on('notification', async (notification) => {
+            debugClient(`Received Protoo notification: ${notification.method}`);
+            if (notification.method === 'newProducer') {
+              const producerInfo = notification.data;
+              if (device && device.loaded) {
+                debugClient('Device is loaded, consuming producer immediately:', producerInfo.producerId);
+                await consumeProducer(producerInfo);
+              } else {
+                debugClient('Device not loaded yet, queueing producer:', producerInfo.producerId);
+                pendingProducersToConsume.push(producerInfo);
+                log('⚠️ Device not loaded, producer queued: ' + producerInfo.producerId);
+              }
+            }
+          });
 
-        protooPeer.on('close', () => {
-          console.log('Protoo connection closed. URL:', protooWebSocketUrl);
-          log('ℹ️ Protoo connection closed.');
-        });
+          protooPeer.on('failed', (currentAttempt, maxAttempts) => {
+            console.error(`Protoo connection attempt ${currentAttempt} of ${maxAttempts} failed. URL: ${protooWebSocketUrl}`);
+            log(`🔴 Protoo connection failed (attempt ${currentAttempt}/${maxAttempts}). Will not auto-retry.`);
+            
+            // Only try reconnecting if we haven't exceeded our custom attempt limit
+            if (protooReconnectAttempts < MAX_PROTOO_RECONNECT_ATTEMPTS) {
+              protooReconnectAttempts++;
+              const delay = Math.min(1000 * (protooReconnectAttempts * 2), 30000); // Exponential backoff with 30s max
+              
+              log(`🔄 Attempting protoo reconnect in ${delay/1000} seconds... (${protooReconnectAttempts}/${MAX_PROTOO_RECONNECT_ATTEMPTS})`);
+              
+              if (protooReconnectTimeout) clearTimeout(protooReconnectTimeout);
+              protooReconnectTimeout = setTimeout(() => {
+                try {
+                  // Close existing peer and transport fully before creating new ones
+                  if (protooPeer) {
+                    try {
+                      protooPeer.close();
+                    } catch (e) {
+                      console.warn('Error closing protoo peer:', e);
+                    }
+                  }
+                  
+                  if (transport) {
+                    try {
+                      transport.close();
+                    } catch (e) {
+                      console.warn('Error closing transport:', e);
+                    }
+                  }
+                  
+                  // Clean up any existing transports
+                  if (sendTransport) {
+                    try {
+                      sendTransport.close();
+                    } catch (e) {}
+                    sendTransport = null;
+                  }
+                  
+                  if (recvTransport) {
+                    try {
+                      recvTransport.close();
+                    } catch (e) {}
+                    recvTransport = null;
+                  }
+                  
+                  // Clear any existing device
+                  device = null;
+                  
+                  // Allow a moment for resources to be cleaned up
+                  setTimeout(() => {
+                    log('🔄 Creating fresh connection...');
+                    // Create new transport and peer
+                    const newTransport = new window.protooClient.WebSocketTransport(protooWebSocketUrl);
+                    protooPeer = new window.protooClient.Peer(newTransport);
+                    setupProtooConnectionHandlers(); // Setup handlers on new peer
+                  }, 500);
+                } catch (err) {
+                  console.error('Error creating new protoo connection:', err);
+                  log(`❌ Failed to create new protoo connection: ${err.message}`);
+                }
+              }, delay);
+            } else {
+              log(`❌ Maximum protoo reconnection attempts (${MAX_PROTOO_RECONNECT_ATTEMPTS}) reached. Please refresh the page.`);
+            }
+          });
+
+          protooPeer.on('disconnected', () => {
+            console.error('Protoo disconnected. URL:', protooWebSocketUrl);
+            log('🔴 Protoo disconnected.');
+            
+            // Handle disconnection similarly to connection failure
+            if (protooReconnectAttempts < MAX_PROTOO_RECONNECT_ATTEMPTS) {
+              protooReconnectAttempts++;
+              const delay = Math.min(1000 * (protooReconnectAttempts * 2), 15000); // Shorter delay for disconnect
+              
+              log(`🔄 Attempting protoo reconnect after disconnect in ${delay/1000} seconds... (${protooReconnectAttempts}/${MAX_PROTOO_RECONNECT_ATTEMPTS})`);
+              
+              if (protooReconnectTimeout) clearTimeout(protooReconnectTimeout);
+              protooReconnectTimeout = setTimeout(() => {
+                try {
+                  // Close existing peer and transport fully before creating new ones
+                  if (protooPeer) {
+                    try {
+                      protooPeer.close();
+                    } catch (e) {
+                      console.warn('Error closing protoo peer:', e);
+                    }
+                  }
+                  
+                  if (transport) {
+                    try {
+                      transport.close();
+                    } catch (e) {
+                      console.warn('Error closing transport:', e);
+                    }
+                  }
+                  
+                  // Clean up any existing transports
+                  if (sendTransport) {
+                    try {
+                      sendTransport.close();
+                    } catch (e) {}
+                    sendTransport = null;
+                  }
+                  
+                  if (recvTransport) {
+                    try {
+                      recvTransport.close();
+                    } catch (e) {}
+                    recvTransport = null;
+                  }
+                  
+                  // Clear any existing device
+                  device = null;
+                  
+                  // Allow a moment for resources to be cleaned up
+                  setTimeout(() => {
+                    log('🔄 Creating fresh connection...');
+                    // Create new transport and peer
+                    const newTransport = new window.protooClient.WebSocketTransport(protooWebSocketUrl);
+                    protooPeer = new window.protooClient.Peer(newTransport);
+                    setupProtooConnectionHandlers(); // Setup handlers on new peer
+                  }, 500);
+                } catch (err) {
+                  console.error('Error creating new protoo connection:', err);
+                  log(`❌ Failed to create new protoo connection: ${err.message}`);
+                }
+              }, delay);
+            }
+          });
+
+          protooPeer.on('close', () => {
+            console.log('Protoo connection closed. URL:', protooWebSocketUrl);
+            log('ℹ️ Protoo connection closed.');
+            
+            // Clean up intervals to prevent leaks
+            if (keepaliveInterval) {
+              clearInterval(keepaliveInterval);
+              keepaliveInterval = null;
+            }
+            
+            if (connectionMonitorInterval) {
+              clearInterval(connectionMonitorInterval);
+              connectionMonitorInterval = null;
+            }
+          });
+        }
+        
+        // Setup initial connection handlers
+        setupProtooConnectionHandlers();
 
         function protooRequest(method, data = {}) {
-          if (!protooPeer || !protooPeer.connected) {
-            const errorMsg = `Protoo peer not connected. Cannot send request: ${method}`;
-            console.error(errorMsg, 'Peer state:', protooPeer ? protooPeer.state : 'undefined');
+          if (!protooPeer) {
+            const errorMsg = `Protoo peer not created yet. Cannot send request: ${method}`;
+            console.error(errorMsg);
             log(`🔴 ${errorMsg}`);
             return Promise.reject(new Error(errorMsg));
           }
+          
+          // Make sure the peer is connected before sending requests
+          if (!protooPeer.connected) {
+            const errorMsg = `Protoo peer not connected. Cannot send request: ${method}`;
+            console.error(errorMsg, 'Peer state:', protooPeer ? protooPeer.connected : 'undefined');
+            log(`🔴 ${errorMsg}`);
+            
+            // If this is the first connection attempt, wait a bit and retry
+            if (method === 'getRouterRtpCapabilities' && protooReconnectAttempts === 0) {
+              log(`⏳ Waiting for connection to establish before sending ${method}...`);
+              return new Promise((resolve, reject) => {
+                // Try again in 1 second
+                setTimeout(() => {
+                  if (protooPeer && protooPeer.connected) {
+                    log(`✅ Connection established, retrying ${method} request...`);
+                    protooPeer.request(method, data)
+                      .then(resolve)
+                      .catch(reject);
+                  } else {
+                    reject(new Error(`Connection timeout for ${method} request`));
+                  }
+                }, 1000);
+              });
+            }
+            
+            return Promise.reject(new Error(errorMsg));
+          }
+          
           return protooPeer.request(method, data);
         }
 
@@ -196,7 +427,191 @@
             return;
           }
 
-          // Give more time for connection to establish - wait 10 seconds before first check
+          // Keep track of connection state for monitoring
+          let lastConnectedTime = null;
+          let connectionMonitorInterval = null;
+          let reconnectAttempts = 0;
+          const MAX_RECONNECT_ATTEMPTS = 5;
+          
+          // Setup periodic ping to keep connection alive
+          let keepaliveInterval = null;
+          
+          function startKeepalive() {
+            // Clear any existing interval
+            if (keepaliveInterval) {
+              clearInterval(keepaliveInterval);
+            }
+            
+            // Send a ping every 20 seconds to keep the connection alive
+            keepaliveInterval = setInterval(() => {
+              if (!protooPeer || !protooPeer.connected) {
+                debugClient('[keepalive] Protoo peer not connected, skipping ping');
+                return;
+              }
+              
+              try {
+                debugClient('[keepalive] Sending ping to server');
+                protooRequest('ping', { clientTime: Date.now() })
+                  .then(response => {
+                    debugClient(`[keepalive] Ping successful, server time: ${response.timestamp}`);
+                    // Update last activity time
+                    lastConnectedTime = Date.now();
+                  })
+                  .catch(err => {
+                    debugClient(`[keepalive] Ping failed: ${err.message}`);
+                    // Could trigger reconnection here if needed
+                  });
+              } catch (e) {
+                debugClient(`[keepalive] Error sending ping: ${e.message}`);
+              }
+            }, 20000); // Every 20 seconds
+          }
+          
+          // Start the keepalive immediately
+          startKeepalive();
+          
+          // Function to check and maintain connection
+          function monitorConnection() {
+            try {
+              if (!recvTransport || !sendTransport) return;
+              
+              const recvState = recvTransport.connectionState;
+              const sendState = sendTransport.connectionState;
+              
+              // Special handling for Edge browser's receive transport stuck in "new" state
+              const isEdge = /Edge/.test(navigator.userAgent) || /Edg/.test(navigator.userAgent);
+              if (isEdge && recvState === 'new') {
+                // Check how long the transport has been in "new" state
+                const transportCreatedAt = recvTransport._createdAt || 0;
+                const stuckTime = Math.floor((Date.now() - transportCreatedAt) / 1000);
+                
+                if (stuckTime > 15) {  // If stuck in "new" for more than 15 seconds
+                  debugClient('[monitorConnection] Edge browser transport stuck in "new" state for too long');
+                  log(`⚠️ Edge browser transport stuck in "new" state for ${stuckTime}s. Forcing TURN-only reconnection...`);
+                  
+                  // Close existing transport
+                  try {
+                    recvTransport.close();
+                  } catch (e) {
+                    debugClient(`[monitorConnection] Error closing stuck receive transport: ${e.message}`);
+                  }
+                  
+                  recvTransport = null;
+                  
+                  // Force a TURN-only transport creation
+                  setTimeout(async () => {
+                    try {
+                      const turnOptions = {
+                        iceTransportPolicy: 'relay',  // Force TURN relay
+                        additionalIceServers: [
+                          {
+                            urls: 'turn:turn.webrtc.org:3478',
+                            username: 'webrtc',
+                            credential: 'turnserver'
+                          },
+                          {
+                            urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                            username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                            credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                          }
+                        ]
+                      };
+                      
+                      log('📥 Creating new forced TURN-only receive transport...');
+                      recvTransport = await makeTransport('recv', turnOptions);
+                      
+                      // Update stored ID
+                      storeTransportIds(
+                        window._transportIds && window._transportIds.send ? window._transportIds.send : null,
+                        recvTransport.id
+                      );
+                      
+                      log(`✅ Created new forced TURN-only receive transport: ${recvTransport.id}`);
+                      
+                      // Process any pending consumers
+                      setTimeout(() => {
+                        processPendingConsumers();
+                      }, 500);
+                    } catch (e) {
+                      debugClient(`[monitorConnection] Error creating forced TURN transport: ${e.message}`);
+                      log(`❌ Error creating forced TURN transport: ${e.message}`);
+                    }
+                  }, 1000);
+                  
+                  return; // Skip the rest of the monitoring for this cycle
+                }
+              }
+              
+              if (recvState === 'connected' || sendState === 'connected') {
+                lastConnectedTime = Date.now();
+                reconnectAttempts = 0; // Reset counter on successful connection
+              } else if (lastConnectedTime) {
+                // Calculate how long we've been disconnected
+                const disconnectedTime = Math.floor((Date.now() - lastConnectedTime) / 1000);
+                if (disconnectedTime > 15 && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                  // If disconnected for more than 15 seconds, try to reconnect
+                  log(`📡 Connection lost for ${disconnectedTime} seconds. Attempting reconnection (${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})...`);
+                  
+                  // Send a ping/pong to check if signaling is still active
+                  protooRequest('ping')
+                    .then(() => {
+                      debugClient('[monitorConnection] Signaling is responsive, attempting to refresh media connection');
+                      
+                      // Refresh receive transport
+                      if (recvTransport && recvTransport.connectionState !== 'connected') {
+                        log('🔄 Reconnecting receive transport...');
+                        refreshTransport('recv');
+                      }
+                      
+                      // Refresh send transport
+                      if (sendTransport && sendTransport.connectionState !== 'connected') {
+                        log('🔄 Reconnecting send transport...');
+                        refreshTransport('send');
+                      }
+                    })
+                    .catch(e => {
+                      debugClient('[monitorConnection] Signaling channel unresponsive:', e);
+                      log('⚠️ Signaling channel lost. Attempting full reconnection...');
+                      
+                      // More serious reconnection needed - recreate everything
+                      cleanupTransports();
+                      joinSFU();
+                    });
+                  
+                  reconnectAttempts++;
+                  lastConnectedTime = Date.now(); // Reset timer to avoid multiple attempts too quickly
+                } else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+                  log('⚠️ Maximum reconnection attempts reached. Please refresh the page.');
+                  clearInterval(connectionMonitorInterval);
+                }
+              }
+            } catch (e) {
+              debugClient('[monitorConnection] Error monitoring connection:', e);
+            }
+          }
+          
+          // Function to clean up transports
+          function cleanupTransports() {
+            if (recvTransport) {
+              try {
+                recvTransport.close();
+              } catch (e) {
+                debugClient('Error closing receive transport:', e);
+              }
+              recvTransport = null;
+            }
+            
+            if (sendTransport) {
+              try {
+                sendTransport.close();
+              } catch (e) {
+                debugClient('Error closing send transport:', e);
+              }
+              sendTransport = null;
+            }
+          }
+
+          // Give more time for connection to establish - wait 20 seconds before first check
           setTimeout(() => {
             // Check stats every 5 seconds
             const statsInterval = setInterval(async () => {
@@ -216,6 +631,14 @@
                   log(`✅ WebRTC connection established successfully!`);
                   // Once connected, we can reduce frequency of checks
                   clearInterval(statsInterval);
+                  
+                  // Start connection monitoring at regular intervals
+                  lastConnectedTime = Date.now();
+                  connectionMonitorInterval = setInterval(monitorConnection, 10000);
+                  
+                  // Start media connection monitoring to keep ICE alive
+                  monitorMediaConnection();
+                  
                   // Keep checking less frequently
                   setInterval(() => {
                     const rs = recvTransport.connectionState;
@@ -223,7 +646,7 @@
                     if (rs !== 'connected' || ss !== 'connected') {
                       log(`⚠️ WebRTC connection changed: recv=${rs}, send=${ss}`);
                     }
-                  }, 10000);
+                  }, 15000);
                 } else if (recvState !== 'connected' || sendState !== 'connected') {
                   log(`📊 Transport states: recv=${recvState}, send=${sendState}`);
                 }
@@ -254,10 +677,32 @@
                 debugClient('[webrtcStats] Error collecting stats:', e);
               }
             }, 5000);
-          }, 10000); // Initial 10 second wait
+            
+            // Set timeout to attempt reconnection if not connected after 45 seconds
+            setTimeout(() => {
+              if (recvTransport && sendTransport && 
+                  (recvTransport.connectionState !== 'connected' || 
+                   sendTransport.connectionState !== 'connected')) {
+                log('⚠️ Connection not established after 45 seconds. Attempting reconnection...');
+                // Close existing transports
+                if (recvTransport) {
+                  recvTransport.close();
+                  recvTransport = null;
+                }
+                if (sendTransport) {
+                  sendTransport.close();
+                  sendTransport = null;
+                }
+                
+                // Reload the device and try again
+                log('🔄 Reloading device and recreating transports...');
+                joinSFU();
+              }
+            }, 45000);
+          }, 20000); // Initial 20 second wait
         }
 
-        async function makeTransport(direction) {
+        async function makeTransport(direction, options = {}) {
           try {
             debugClient(`[makeTransport] Requesting server to create ${direction} transport...`);
             
@@ -301,6 +746,43 @@
               log(`⚠️ Using fallback STUN servers only`);
             }
             
+            // Add fallback free TURN servers when no configured ones are available
+            // These are public TURN servers that might help in difficult NAT scenarios
+            let hasTurnServer = false;
+            iceServersToUse.forEach(server => {
+              const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+              if (urls.some(url => url.includes('turn:'))) {
+                hasTurnServer = true;
+              }
+            });
+            
+            if (!hasTurnServer) {
+              // Add fallback TURN servers (these are free but might be rate-limited)
+              debugClient('[makeTransport] No TURN servers configured, adding fallback public TURN servers');
+              iceServersToUse = [
+                ...iceServersToUse,
+                {
+                  urls: 'turn:turn.webrtc.org:3478',
+                  username: 'webrtc',
+                  credential: 'turnserver'
+                },
+                {
+                  urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                  username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                  credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                }
+              ];
+              log(`🌐 Added fallback public TURN servers`);
+            }
+            
+            // Add additional ICE servers if provided
+            if (options && options.additionalIceServers) {
+              debugClient('[makeTransport] Adding additional ICE servers');
+              iceServersToUse = [...iceServersToUse, ...options.additionalIceServers];
+            }
+            
+            // Special handling for localhost: Allow direct connection without STUN/TURN
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             const serverResponse = await protooRequest('createWebRtcTransport', {
               producing: direction === 'send',
               consuming: direction === 'recv',
@@ -319,20 +801,41 @@
             const { id: transportId, iceParameters, iceCandidates, dtlsParameters, sctpParameters } = serverResponse;
             debugClient(`[makeTransport] Server created ${direction} transport, (client-side transportId will be): ${transportId}`);
 
+            // Add special browser detection for Edge/Safari
+            const isEdgeOrSafari = /Edge/.test(navigator.userAgent) || /Safari/.test(navigator.userAgent);
+            
             const transportOptions = {
               id: transportId,
               iceParameters,
               iceCandidates,
               dtlsParameters,
               sctpParameters,
-              iceServers: iceServersToUse, 
-              iceTransportPolicy: 'relay', // Force using TURN relays instead of 'all'
+              iceServers: isLocalhost ? [] : iceServersToUse, 
+              iceTransportPolicy: options.iceTransportPolicy || 'all', // Allow override from options
               additionalSettings: {
                 sdpSemantics: 'unified-plan',
                 enableDtlsSrtp: true,
-                iceCandidatePoolSize: 10 // Increase candidate pool
+                iceCandidatePoolSize: 10, // Increase candidate pool
+                iceCheckMinInterval: 250, // Faster ICE checks (in milliseconds)
+                iceCheckingTimeout: 10000, // 10 seconds timeout for ICE gathering
+                iceUnwritableTimeout: 8000, // 8 seconds timeout for ICE unwritable
+                iceConnectionReceivingTimeout: 8000, // 8 seconds timeout for ICE connection receiving
+                // Add Edge/Safari specific settings
+                ...(isEdgeOrSafari ? {
+                  // More aggressive ICE for problematic browsers
+                  iceAggressiveNomination: true,
+                  iceKeepaliveInterval: 2000, // faster keepalives
+                  iceTransportType: 'aggressive' // try harder
+                } : {})
               }
             };
+            
+            // Force IPv4 for better compatibility
+            if (typeof RTCPeerConnection !== 'undefined' && 
+                typeof RTCPeerConnection.prototype.addTransceiver === 'function') {
+              transportOptions.additionalSettings.icePreferIpv4 = true;
+              transportOptions.additionalSettings.iceNetworkTypes = ['ethernet', 'wifi'];
+            }
             
             debugClient(`[makeTransport] Using transportOptions for ${direction} transport:`, JSON.parse(JSON.stringify(transportOptions))); // Log the options
 
@@ -341,6 +844,9 @@
               device.createRecvTransport(transportOptions);
 
             debugClient(`[makeTransport] Client-side ${direction} transport created: ${transport.id}`);
+            
+            // Store creation time to detect stalled transports
+            transport._createdAt = Date.now();
 
             transport.on('connect', async ({ dtlsParameters: connectDtlsParameters }, callback, errback) => {
               try {
@@ -373,6 +879,30 @@
             transport.on('connectionstatechange', (state) => {
               console.log(`[transport ${direction} ${transport.id}] connection state changed to ${state}`);
               log(`🔁 ${direction.charAt(0).toUpperCase() + direction.slice(1)} transport connection state: ${state}`);
+              
+              // Add special handling for "new" state that doesn't progress
+              if (state === 'new') {
+                // Set a timer to check if we're stuck in "new" state
+                transport._newStateTimer = setTimeout(() => {
+                  if (transport.connectionState === 'new') {
+                    // Still in "new" state after delay - force recreation
+                    debugClient(`[transport ${direction}] Stuck in "new" state for 10s, forcing recreation`);
+                    log(`⚠️ ${direction} transport stuck in "new" state. Forcing recreation...`);
+                    
+                    // Close and recreate transport
+                    if (typeof refreshTransport === 'function') {
+                      refreshTransport(direction, true);  // true = force TURN mode
+                    }
+                  }
+                }, 10000); // 10 second timeout for "new" state
+              } else {
+                // Clear the timer if state progresses
+                if (transport._newStateTimer) {
+                  clearTimeout(transport._newStateTimer);
+                  transport._newStateTimer = null;
+                }
+              }
+              
               if (state === 'failed' || state === 'closed' || state === 'disconnected') {
                 // Handle transport failure, maybe notify user or attempt reconnection
                 console.warn(`[transport ${direction} ${transport.id}] Transport ${state}.`);
@@ -393,6 +923,75 @@
               log(`🧊 ${direction.charAt(0).toUpperCase() + direction.slice(1)} transport ICE gathering: ${state}`);
             });
 
+            // Monitor ICE candidates more closely
+            if (transport.handler && transport.handler._pc) {
+              const pc = transport.handler._pc;
+              
+              pc.addEventListener('icecandidate', (event) => {
+                if (event.candidate) {
+                  debugClient(`[transport ${direction}] New ICE candidate: ${event.candidate.candidate}`);
+                  const candidateInfo = event.candidate.candidate.split(' ');
+                  if (candidateInfo.length > 7) {
+                    const type = candidateInfo[7]; // typ host/srflx/relay
+                    log(`🧊 New ${type} ICE candidate for ${direction} transport`);
+                  }
+                } else {
+                  log(`🧊 ICE candidate gathering complete for ${direction} transport`);
+                }
+              });
+
+              pc.addEventListener('connectionstatechange', () => {
+                log(`🔌 PeerConnection state (${direction}): ${pc.connectionState}`);
+                
+                // Special handling for Edge browser to force TURN if direct connection fails
+                if (pc.connectionState === 'checking' && /Edge/.test(navigator.userAgent)) {
+                  // In Edge, if we're stuck in checking, try forcing TURN
+                  setTimeout(() => {
+                    if (pc.connectionState === 'checking' || pc.connectionState === 'new') {
+                      log(`⚠️ Edge browser detected with stuck connection. Trying to force TURN...`);
+                      // Force recreation with TURN only
+                      if (typeof refreshTransport === 'function') {
+                        refreshTransport(direction, true); // true = force TURN
+                      }
+                    }
+                  }, 8000); // Give it 8 seconds to connect
+                }
+              });
+
+              pc.addEventListener('icecandidateerror', (event) => {
+                log(`❌ ICE candidate error: ${event.errorText || 'Unknown error'}`);
+              });
+              
+              // Force STUN/TURN requests to happen faster
+              if (pc.setConfiguration && typeof pc.getConfiguration === 'function') {
+                try {
+                  const currentConfig = pc.getConfiguration();
+                  
+                  // Apply the iceTransportPolicy if specified in options
+                  if (options.iceTransportPolicy) {
+                    debugClient(`[makeTransport] Setting iceTransportPolicy to ${options.iceTransportPolicy}`);
+                    pc.setConfiguration({
+                      ...currentConfig,
+                      iceTransportPolicy: options.iceTransportPolicy,
+                      iceCandidatePoolSize: 10,
+                      bundlePolicy: 'max-bundle',
+                      rtcpMuxPolicy: 'require'
+                    });
+                  } else {
+                    pc.setConfiguration({
+                      ...currentConfig,
+                      iceTransportPolicy: 'all',
+                      iceCandidatePoolSize: 10,
+                      bundlePolicy: 'max-bundle',
+                      rtcpMuxPolicy: 'require'
+                    });
+                  }
+                } catch (e) {
+                  debugClient(`[transport ${direction}] Error setting configuration: ${e.message}`);
+                }
+              }
+            }
+
             return transport;
           } catch (error) {
             console.error(`[makeTransport] Error in makeTransport(${direction}):`, error);
@@ -405,13 +1004,89 @@
           debugClient(`Processing ${pendingProducersToConsume.length} pending producers to consume.`);
           if (pendingProducersToConsume.length === 0) return;
 
+          // First verify that the receive transport is ready
+          if (!recvTransport || recvTransport.connectionState === 'failed' || recvTransport.connectionState === 'closed') {
+            debugClient('[processPendingConsumers] Receive transport not ready, attempting to recreate');
+            log('⚠️ Receive transport not ready, recreating before consuming...');
+            
+            try {
+              if (recvTransport) {
+                try { recvTransport.close(); } catch (e) {}
+                recvTransport = null;
+              }
+              
+              recvTransport = await makeTransport('recv');
+              log(`✅ New receive transport created for pending consumers: ${recvTransport.id}`);
+              
+              // Wait a moment for transport to initialize
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (e) {
+              debugClient(`[processPendingConsumers] Failed to recreate transport: ${e.message}`);
+              log(`❌ Failed to recreate receive transport: ${e.message}`);
+              
+              // Try again later
+              setTimeout(processPendingConsumers, 5000);
+              return;
+            }
+          }
+          
+          // Check for Edge browser with "new" transport state
+          if (/Edge/.test(navigator.userAgent) && recvTransport.connectionState === 'new') {
+            // For Edge, we need special handling as it often gets stuck in "new" state
+            debugClient('[processPendingConsumers] Edge browser with transport in "new" state detected');
+            
+            // If transport has been in "new" state for more than 5 seconds, force a recreation
+            if (recvTransport._createdAt && (Date.now() - recvTransport._createdAt > 5000)) {
+              debugClient('[processPendingConsumers] Edge transport stuck in "new" state, forcing recreation with TURN');
+              log('⚠️ Edge browser detected with stuck connection. Forcing TURN...');
+              
+              try {
+                if (recvTransport) {
+                  try { recvTransport.close(); } catch (e) {}
+                  recvTransport = null;
+                }
+                
+                // Use the enhanced refreshTransport with forceTurn=true
+                if (typeof refreshTransport === 'function') {
+                  await refreshTransport('recv', true);
+                  // Wait a moment for the new transport
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+              } catch (e) {
+                debugClient(`[processPendingConsumers] Error recreating transport for Edge: ${e.message}`);
+                
+                // Try again later
+                setTimeout(processPendingConsumers, 5000);
+                return;
+              }
+            } else {
+              // If it's a new transport, set creation timestamp for future checks
+              if (!recvTransport._createdAt) {
+                recvTransport._createdAt = Date.now();
+              }
+              
+              // Try again shortly to see if state changes
+              setTimeout(processPendingConsumers, 2000);
+              return;
+            }
+          }
+
           const producersToProcess = [...pendingProducersToConsume];
           pendingProducersToConsume = []; // Clear queue before processing to avoid re-entrancy issues
           debugClient(`Cleared pendingProducersToConsume queue. Now processing ${producersToProcess.length} producers.`);
 
+          // Process in sequence to avoid overwhelming the connection
           for (const producerInfo of producersToProcess) {
             debugClient(`Calling consumeProducer for queued producer: ${producerInfo.producerId}`);
-            await consumeProducer(producerInfo);
+            try {
+              await consumeProducer(producerInfo);
+              // Small delay between consumers to help with stability
+              await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (e) {
+              debugClient(`Error consuming producer ${producerInfo.producerId}: ${e.message}`);
+              // Add back to queue
+              pendingProducersToConsume.push(producerInfo);
+            }
           }
           debugClient(`Finished processing ${producersToProcess.length} pending producers.`);
         }
@@ -423,9 +1098,9 @@
           log(`🆕 Seeing new producer: ${producerId} (${kind}) from peer ${producerPeerId}`);
           try {
             if (!device || !device.loaded) {
-              const errMsg = 'Device not loaded at consumeProducer call';
-              console.warn(`${errMsg} for ${producerId}`);
-              log(`⚠️ ${errMsg} for ${producerId}`);
+              const errorMsg = 'Device not loaded at consumeProducer call';
+              console.warn(`${errorMsg} for ${producerId}`);
+              log(`⚠️ ${errorMsg} for ${producerId}`);
               // Queue it to try again later instead of just returning
               pendingProducersToConsume.push(producerInfo);
               return;
@@ -433,9 +1108,9 @@
             
             // Make sure we have a recv transport
             if (!recvTransport) {
-              const errMsg = 'Receive transport not ready, cannot consume';
-              console.warn(`${errMsg}. ProducerId: ${producerId}`);
-              log(`⚠️ ${errMsg} for ${producerId}`);
+              const errorMsg = 'Receive transport not ready, cannot consume';
+              console.warn(`${errorMsg}. ProducerId: ${producerId}`);
+              log(`⚠️ ${errorMsg} for ${producerId}`);
               
               // If we were previously connected but lost the transport, try to recreate it
               if (device.loaded) {
@@ -443,6 +1118,18 @@
                 try {
                   recvTransport = await makeTransport('recv');
                   log(`👍 Recreated receive transport: ${recvTransport.id}`);
+                  
+                  // Update stored transport ID
+                  if (window._transportIds) {
+                    window._transportIds.recv = recvTransport.id;
+                    window._transportIds.timestamp = Date.now();
+                    try {
+                      localStorage.setItem('mediasoup_transport_ids', JSON.stringify(window._transportIds));
+                    } catch (e) {
+                      console.error('Error saving transport IDs to localStorage:', e);
+                    }
+                  }
+                  
                   // Now continue with consumption after a slight delay
                   setTimeout(() => consumeProducer(producerInfo), 500);
                   return;
@@ -456,192 +1143,865 @@
               pendingProducersToConsume.push(producerInfo);
               return;
             }
-
-            const { id: consumerId, producerId: remoteProducerIdReturned, kind: remoteKind, rtpParameters } = await protooRequest('consume', {
-              rtpCapabilities: device.rtpCapabilities,
-              producerId,
-            });
-            const consumer = await recvTransport.consume({
-              id: consumerId,
-              producerId: remoteProducerIdReturned, 
-              kind: remoteKind, 
-              rtpParameters: rtpParameters,
-            });
             
-            log(`🎧 Consuming remote stream: ${producerId}`);
-            debugClient(`[consumeProducer] Consumer ${consumer.id} created for producer ${producerId}. Initial client state: paused=${consumer.paused}, track=${!!consumer.track}`);
-            
-            await protooRequest('resumeConsumer', { consumerId: consumer.id });
-            debugClient(`[consumeProducer] Server acknowledged resume request for consumer ${consumer.id}`);
-            
-            consumer.resume();
-            log(`▶️ Resumed remote stream: ${producerId}`);
-            debugClient(`[consumeProducer] Client-side consumer.resume() called for ${consumer.id}. New client state: paused=${consumer.paused}, track=${!!consumer.track}`);
-
-            function attachTrackToVideo(track) {
-                if (!track || track.readyState !== 'live') {
-                    debugClient(`[consumeProducer] Track for consumer ${consumer.id} is not live. State: ${track ? track.readyState : 'no track'}`);
-                    log(`⚠️ Remote track for ${producerId} not live.`);
-                    return;
-                }
-                debugClient(`[consumeProducer] Track for consumer ${consumer.id} is live. Attaching to remoteVideo.`);
-                
-                // Simplest assignment: Create a new MediaStream with just this track
-                remoteVideo.srcObject = new MediaStream([track]);
-                
-                debugClient(`[attachTrackToVideo] remoteVideo.srcObject assigned with new MediaStream.`);
-                // Add the detailed logging for tracks *after* assignment
-                const stream = remoteVideo.srcObject;
-                if (stream && typeof stream.getTracks === 'function') {
-                    const tracks = stream.getTracks();
-                    debugClient(`[attachTrackToVideo] MediaStream now has ${tracks.length} track(s).`);
-                    tracks.forEach((t, index) => {
-                        debugClient(`[attachTrackToVideo] Track ${index}: id=${t.id}, kind=${t.kind}, label='${t.label}', enabled=${t.enabled}, muted=${t.muted}, readyState=${t.readyState}`);
-                        
-                        // If track is muted, try to unmute after a short delay
-                        if (t.muted) {
-                            debugClient(`[attachTrackToVideo] Track ${index} is muted, will try to unmute shortly...`);
-                            log(`🔇 Remote track is muted, waiting for media...`);
-                            
-                            // Check muted state periodically
-                            let unmuteTries = 0;
-                            const maxTries = 30; // 30 seconds max
-                            const checkInterval = setInterval(() => {
-                                if (!t.muted || unmuteTries >= maxTries) {
-                                    if (!t.muted) {
-                                        debugClient(`[attachTrackToVideo] Track ${t.id} unmuted after ${unmuteTries} tries!`);
-                                        log(`🔊 Remote media flowing now!`);
-                                    } else {
-                                        debugClient(`[attachTrackToVideo] Track ${t.id} still muted after ${maxTries} tries.`);
-                                        log(`⚠️ Remote media still muted after ${maxTries} seconds.`);
-                                    }
-                                    clearInterval(checkInterval);
-                                }
-                                unmuteTries++;
-                            }, 1000);
-                        }
-                    });
+            // Verify that transport ID is still valid on server
+            const transportId = recvTransport.id;
+            if (!isTransportValid('recv', transportId)) {
+              debugClient(`[consumeProducer] Transport ID ${transportId} may be invalid (doesn't match stored ID)`);
+              log(`⚠️ Transport ID validation failed. Recreating transport...`);
+              
+              try {
+                recvTransport.close();
+              } catch (e) {
+                debugClient(`[consumeProducer] Error closing possibly invalid transport: ${e.message}`);
+              }
+              
+              recvTransport = null;
+              
+              // Try to create a new transport
+              try {
+                // Check if we need to use Edge-specific settings
+                const isEdge = /Edge/.test(navigator.userAgent) || /Edg/.test(navigator.userAgent);
+                if (isEdge) {
+                  const turnOptions = {
+                    iceTransportPolicy: 'relay',
+                    additionalIceServers: [
+                      {
+                        urls: 'turn:turn.webrtc.org:3478',
+                        username: 'webrtc',
+                        credential: 'turnserver'
+                      },
+                      {
+                        urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                        username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                        credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                      }
+                    ]
+                  };
+                  recvTransport = await makeTransport('recv', turnOptions);
                 } else {
-                    debugClient(`[attachTrackToVideo] remoteVideo.srcObject is null/undefined after new MediaStream assignment.`);
+                  recvTransport = await makeTransport('recv');
                 }
-
-                remoteVideo.play().then(() => {
-                    debugClient(`[consumeProducer] remoteVideo.play() resolved for ${producerId}`);
-                }).catch(e => {
-                    console.warn(`[consumeProducer] remoteVideo.play() failed for ${producerId}:`, e);
-                    log(`⚠️ Could not play remote video for ${producerId}. Autoplay might be blocked.`);
-                });
-                log(`🖼️ Displaying remote stream: ${producerId}`);
+                
+                // Update stored transport ID
+                if (window._transportIds) {
+                  window._transportIds.recv = recvTransport.id;
+                  window._transportIds.timestamp = Date.now();
+                  try {
+                    localStorage.setItem('mediasoup_transport_ids', JSON.stringify(window._transportIds));
+                  } catch (e) {
+                    console.error('Error saving transport IDs to localStorage:', e);
+                  }
+                }
+                
+                log(`👍 Created new receive transport: ${recvTransport.id}`);
+                setTimeout(() => consumeProducer(producerInfo), 500);
+                return;
+              } catch (createErr) {
+                console.error('Error creating new receive transport:', createErr);
+                log(`❌ Failed to create receive transport: ${createErr.message}`);
+                pendingProducersToConsume.push(producerInfo);
+                return;
+              }
             }
 
-            if (consumer.track) {
-                attachTrackToVideo(consumer.track);
-            } else {
-                debugClient(`[consumeProducer] Track for consumer ${consumer.id} not immediately available after resume. Listening for 'trackstart'.`);
-                consumer.once('trackstart', () => {
-                    debugClient(`[consumeProducer] 'trackstart' event received for consumer ${consumer.id}.`);
-                    attachTrackToVideo(consumer.track);
+            try {
+              // Verify transport exists on server with a ping first
+              try {
+                await protooRequest('ping', { 
+                  clientTime: Date.now(),
+                  transportId: recvTransport.id
                 });
-            }
-            
-            consumer.on('trackended', () => {
-                debugClient(`[consumeProducer] Consumer ${consumer.id} track ended. Clearing remote video.`);
-                log(`🚫 Remote stream ended: ${producerId}`);
-                if (remoteVideo.srcObject && typeof remoteVideo.srcObject.getTracks === 'function') {
-                    const stream = remoteVideo.srcObject;
-                    stream.getTracks().forEach(t => {
-                        if (t.id === consumer.track.id) {
-                            stream.removeTrack(t);
-                        }
-                    });
-                    if (stream.getTracks().length === 0) {
-                        remoteVideo.srcObject = null;
+              } catch (pingErr) {
+                // If ping fails with an error mentioning the transport, the transport is likely gone
+                if (pingErr.message && pingErr.message.toLowerCase().includes('transport')) {
+                  throw new Error(`Transport ping failed: ${pingErr.message}`);
+                }
+                // Otherwise, just a general ping failure, we can still try to consume
+              }
+              
+              const { id: consumerId, producerId: remoteProducerIdReturned, kind: remoteKind, rtpParameters } = await protooRequest('consume', {
+                rtpCapabilities: device.rtpCapabilities,
+                producerId,
+                transportId: recvTransport.id  // Explicitly include transport ID
+              });
+              
+              // Successfully got consumer from server
+              debugClient(`[consumeProducer] Server created consumer ${consumerId} for producer ${producerId}`);
+              
+              const consumer = await recvTransport.consume({
+                id: consumerId,
+                producerId: remoteProducerIdReturned, 
+                kind: remoteKind, 
+                rtpParameters: rtpParameters,
+              });
+              
+              log(`🎧 Consuming remote stream: ${producerId}`);
+              debugClient(`[consumeProducer] Consumer ${consumer.id} created for producer ${producerId}. Initial client state: paused=${consumer.paused}, track=${!!consumer.track}`);
+              
+              await protooRequest('resumeConsumer', { consumerId: consumer.id });
+              debugClient(`[consumeProducer] Server acknowledged resume request for consumer ${consumer.id}`);
+              
+              consumer.resume();
+              log(`▶️ Resumed remote stream: ${producerId}`);
+              debugClient(`[consumeProducer] Client-side consumer.resume() called for ${consumer.id}. New client state: paused=${consumer.paused}, track=${!!consumer.track}`);
+
+              // Store consumer in window for recovery purposes
+              if (!window._consumers) window._consumers = {};
+              window._consumers[producerId] = consumer;
+              
+              // Schedule a delayed second resume attempt - this often helps with Edge browser
+              setTimeout(async () => {
+                try {
+                  if (consumer && consumer.closed !== true) {
+                    debugClient(`[consumeProducer] Doing delayed resume for consumer ${consumer.id}`);
+                    await protooRequest('resumeConsumer', { consumerId: consumer.id });
+                    consumer.resume();
+                    log(`🔄 Re-established media flow for ${producerId}`);
+                  }
+                } catch (e) {
+                  debugClient(`[consumeProducer] Error in delayed resume: ${e.message}`);
+                }
+              }, 3000); // Try again after 3 seconds
+
+              function attachTrackToVideo(track, producerId) {
+                  if (!track || track.readyState !== 'live') {
+                      debugClient(`[attachTrackToVideo] Track ${track?.id} is not live. State: ${track ? track.readyState : 'no track'}`);
+                      log(`⚠️ Remote track for ${producerId} not live.`);
+                      return;
+                  }
+                  debugClient(`[attachTrackToVideo] Track ${track.id} is live. Attaching to remoteVideo.`);
+                  
+                  // Simplest assignment: Create a new MediaStream with just this track
+                  if (!remoteVideo.srcObject) {
+                      remoteVideo.srcObject = new MediaStream();
+                  }
+                  
+                  // Add this track to existing stream if it doesn't already exist
+                  const stream = remoteVideo.srcObject;
+                  const existingTrack = stream.getTracks().find(t => t.id === track.id);
+                  if (!existingTrack) {
+                      stream.addTrack(track);
+                  }
+                  
+                  debugClient(`[attachTrackToVideo] remoteVideo.srcObject assigned with stream containing ${stream.getTracks().length} tracks`);
+                  
+                  // CRITICAL FIX: Set display style to ensure video element is visible
+                  remoteVideo.style.display = 'block';
+                  
+                  // Add the detailed logging for tracks *after* assignment
+                  if (stream && typeof stream.getTracks === 'function') {
+                      const tracks = stream.getTracks();
+                      debugClient(`[attachTrackToVideo] MediaStream now has ${tracks.length} track(s).`);
+                      tracks.forEach((t, index) => {
+                          debugClient(`[attachTrackToVideo] Track ${index}: id=${t.id}, kind=${t.kind}, label='${t.label}', enabled=${t.enabled}, muted=${t.muted}, readyState=${t.readyState}`);
+                          
+                          // Add per-track monitoring for stable media flow
+                          monitorTrack(t, producerId);
+                          
+                          // Show visual indicator for receiving video bytes, but add class to show it's not rendering frames
+                          if (t.kind === 'video') {
+                              remoteVideo.classList.add('receiving-video-data');
+                              
+                              // Create a bytes-but-no-frames indicator
+                              const indicator = document.createElement('div');
+                              indicator.id = 'bytesNoFramesIndicator';
+                              indicator.style.display = 'none'; // Hidden by default
+                              indicator.style.position = 'absolute';
+                              indicator.style.top = '10px';
+                              indicator.style.left = '10px';
+                              indicator.style.backgroundColor = 'rgba(255,0,0,0.7)';
+                              indicator.style.color = 'white';
+                              indicator.style.padding = '5px';
+                              indicator.style.borderRadius = '5px';
+                              indicator.textContent = 'Receiving bytes but no frames';
+                              document.body.appendChild(indicator);
+                              
+                              // Keep track of this indicator in window scope
+                              window._bytesNoFramesIndicator = indicator;
+                          }
+                          
+                          // If track is muted, try to unmute after a short delay
+                          if (t.muted) {
+                              debugClient(`[attachTrackToVideo] Track ${index} is muted, will try to unmute shortly...`);
+                              log(`🔇 Remote track is muted, waiting for media...`);
+                              
+                              // Check muted state periodically
+                              let unmuteTries = 0;
+                              const maxTries = 60; // 60 seconds max
+                              const checkInterval = setInterval(() => {
+                                  if (!t.muted || unmuteTries >= maxTries) {
+                                      if (!t.muted) {
+                                          debugClient(`[attachTrackToVideo] Track ${t.id} unmuted after ${unmuteTries} tries!`);
+                                          log(`🔊 Remote media flowing now!`);
+                                      } else {
+                                          debugClient(`[attachTrackToVideo] Track ${t.id} still muted after ${maxTries} tries.`);
+                                          log(`⚠️ Remote media still muted after ${maxTries} seconds. Attempting recovery...`);
+                                          attemptTrackRecovery(producerId);
+                                      }
+                                      clearInterval(checkInterval);
+                                  }
+                                  unmuteTries++;
+                              }, 1000);
+                          }
+                      });
+                  } else {
+                      debugClient(`[attachTrackToVideo] remoteVideo.srcObject is null/undefined after new MediaStream assignment.`);
+                  }
+
+                  // Try to play and handle autoplay restrictions
+                  playVideoWithFallback(remoteVideo, producerId);
+              }
+              
+              function playVideoWithFallback(videoElement, trackId) {
+                  videoElement.play().then(() => {
+                      debugClient(`[playVideoWithFallback] Video play() successful for ${trackId}`);
+                      log(`🖼️ Displaying remote stream: ${trackId}`);
+                  }).catch(e => {
+                      debugClient(`[playVideoWithFallback] Video play() failed for ${trackId}: ${e.message}`);
+                      log(`⚠️ Could not autoplay video for ${trackId}. Adding UI controls.`);
+                      
+                      // Add controls and make visible in case of autoplay restrictions
+                      videoElement.controls = true;
+                      videoElement.muted = true; // Muted videos can autoplay
+                      
+                      // Try again with mute 
+                      videoElement.play().then(() => {
+                          debugClient(`[playVideoWithFallback] Muted play successful for ${trackId}`);
+                          log(`🖼️ Displaying muted stream, click to unmute`);
+                          
+                          // Add click handler to unmute
+                          videoElement.addEventListener('click', function unmute() {
+                              videoElement.muted = false;
+                              videoElement.removeEventListener('click', unmute);
+                              log(`🔊 Unmuted stream: ${trackId}`);
+                          });
+                      }).catch(err => {
+                          debugClient(`[playVideoWithFallback] Even muted play failed: ${err.message}`);
+                          log(`❌ Cannot play video even muted. Check browser settings.`);
+                      });
+                  });
+              }
+
+              if (consumer.track) {
+                  attachTrackToVideo(consumer.track, producerId);
+              } else {
+                  debugClient(`[consumeProducer] Track for consumer ${consumer.id} not immediately available after resume. Listening for 'trackstart'.`);
+                  consumer.once('trackstart', () => {
+                      debugClient(`[consumeProducer] 'trackstart' event received for consumer ${consumer.id}.`);
+                      attachTrackToVideo(consumer.track, producerId);
+                  });
+              }
+              
+              consumer.on('trackended', () => {
+                  debugClient(`[consumeProducer] Consumer ${consumer.id} track ended. Clearing remote video.`);
+                  log(`🚫 Remote stream ended: ${producerId}`);
+                  if (remoteVideo.srcObject && typeof remoteVideo.srcObject.getTracks === 'function') {
+                      const stream = remoteVideo.srcObject;
+                      stream.getTracks().forEach(t => {
+                          if (t.id === consumer.track.id) {
+                              stream.removeTrack(t);
+                          }
+                      });
+                      if (stream.getTracks().length === 0) {
+                          remoteVideo.srcObject = null;
+                      }
+                  }
+              });
+              consumer.on('producerpause', () => {
+                  debugClient(`[consumeProducer] Producer for consumer ${consumer.id} paused.`);
+                  log(`⏸️ Remote stream paused: ${producerId}`);
+              });
+              consumer.on('producerresume', () => {
+                  debugClient(`[consumeProducer] Producer for consumer ${consumer.id} resumed.`);
+                  log(`▶️ Remote stream resumed by producer: ${producerId}`);
+              });
+
+            } catch (innerErr) {
+              // Handle specific transport errors
+              if (innerErr.message && (
+                  innerErr.message.includes('Channel request handler with ID') || 
+                  innerErr.message.includes('transport') || 
+                  innerErr.message.includes('not found'))) {
+                
+                debugClient(`[consumeProducer] Transport error detected: ${innerErr.message}`);
+                log(`🔄 Transport error detected. Recreating transport...`);
+                
+                // Mark transport as invalid to force recreation on next attempt
+                if (window._transportIds && window._transportIds.recv === recvTransport.id) {
+                  window._transportIds.recv = null;
+                }
+                
+                // Close and nullify the receive transport
+                if (recvTransport) {
+                  try {
+                    recvTransport.close();
+                  } catch (e) {
+                    debugClient(`[consumeProducer] Error closing receive transport: ${e.message}`);
+                  }
+                  recvTransport = null;
+                }
+                
+                // Recreate the transport after a short delay
+                setTimeout(async () => {
+                  try {
+                    log(`🔄 Creating new receive transport after error...`);
+                    const isEdge = /Edge/.test(navigator.userAgent) || /Edg/.test(navigator.userAgent);
+                    if (isEdge) {
+                      const turnOptions = {
+                        iceTransportPolicy: 'relay',
+                        additionalIceServers: [
+                          {
+                            urls: 'turn:turn.webrtc.org:3478',
+                            username: 'webrtc',
+                            credential: 'turnserver'
+                          },
+                          {
+                            urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                            username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                            credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                          }
+                        ]
+                      };
+                      recvTransport = await makeTransport('recv', turnOptions);
+                    } else {
+                      recvTransport = await makeTransport('recv');
                     }
-                }
-            });
-            consumer.on('producerpause', () => {
-                debugClient(`[consumeProducer] Producer for consumer ${consumer.id} paused.`);
-                log(`⏸️ Remote stream paused: ${producerId}`);
-            });
-            consumer.on('producerresume', () => {
-                debugClient(`[consumeProducer] Producer for consumer ${consumer.id} resumed.`);
-                log(`▶️ Remote stream resumed by producer: ${producerId}`);
-            });
-
+                    
+                    // Update stored ID
+                    storeTransportIds(
+                      window._transportIds && window._transportIds.send ? window._transportIds.send : null,
+                      recvTransport.id
+                    );
+                    
+                    log(`✅ Successfully created new receive transport: ${recvTransport.id}`);
+                    
+                    // Try consuming again
+                    setTimeout(() => {
+                      pendingProducersToConsume.push(producerInfo);
+                      processPendingConsumers();
+                    }, 500);
+                  } catch (recreateErr) {
+                    debugClient(`[consumeProducer] Failed to recreate transport: ${recreateErr.message}`);
+                    log(`❌ Failed to recreate transport: ${recreateErr.message}`);
+                    
+                    // Queue for later retry
+                    pendingProducersToConsume.push(producerInfo);
+                  }
+                }, 1000);
+              } else {
+                // Other errors
+                console.error(`Error consuming producer ${producerId}:`, innerErr);
+                log(`❌ ERROR consuming producer ${producerId}: ${innerErr.message}`);
+                
+                // Still queue for retry
+                pendingProducersToConsume.push(producerInfo);
+              }
+            }
           } catch (err) {
             console.error(`Error in consume request for producer ${producerId}:`, err);
             log(`❌ ERROR consuming producer ${producerId}: ${err.message}`);
             
-            // If this was a transport error, we might need to recreate it
-            if (err.message && err.message.includes('transport')) {
-              log(`🔄 Transport error detected. Will try to recreate transport on next attempt.`);
-              if (recvTransport) {
-                recvTransport.close();
-                recvTransport = null;
-              }
-              // Queue the producer for later retry
-              pendingProducersToConsume.push(producerInfo);
-              // Try to recreate after a delay
-              setTimeout(async () => {
-                try {
-                  log(`🔄 Recreating receive transport after error...`);
-                  recvTransport = await makeTransport('recv');
-                  log(`✅ Successfully recreated receive transport`);
-                  // Process the pending queue
-                  processPendingConsumers();
-                } catch (recreateErr) {
-                  console.error('Failed to recreate transport after error', recreateErr);
-                  log(`❌ Failed to recreate transport: ${recreateErr.message}`);
-                }
-              }, 2000);
-            }
+            // Add to queue for retry
+            pendingProducersToConsume.push(producerInfo);
           }
           debugClient(`[consumeProducer] END for producerId: ${producerId}`);
         }
 
+        // Function to monitor track for dropped frames or freezes
+        function monitorTrack(track, producerId) {
+            // Don't monitor audio tracks
+            if (track.kind !== 'video') return;
+            
+            let lastFrames = 0;
+            let lastTimestamp = Date.now();
+            let staleFrameCount = 0;
+            // Use more patience for novideo clients since they might need more time to establish proper receiving
+            const MAX_STALE_FRAMES = !wantsVideo ? 15 : 5; // Higher threshold for receive-only clients
+            let initialGracePeriod = true;
+            
+            // For receive-only clients, delay monitoring to give the connection time to stabilize
+            if (!wantsVideo) {
+                setTimeout(() => {
+                    initialGracePeriod = false;
+                    debugClient(`[monitorTrack] Initial grace period ended for receive-only client`);
+                }, 15000); // 15 second grace period for receive-only clients
+            } else {
+                initialGracePeriod = false; // No grace period for full participants
+            }
+            
+            const monitor = setInterval(async () => {
+                try {
+                    // Skip checks during initial grace period for receive-only clients
+                    if (initialGracePeriod) {
+                        debugClient(`[monitorTrack] In grace period, skipping frame check`);
+                        return;
+                    }
+                    
+                    // Check if track still exists and is in the DOM
+                    if (!track || track.readyState !== 'live' || !remoteVideo || !remoteVideo.srcObject) {
+                        clearInterval(monitor);
+                        debugClient(`[monitorTrack] Track ${track.id} no longer available, stopping monitor`);
+                        return;
+                    }
+                    
+                    // Get stats from the peer connection (more reliable than track.getStats)
+                    if (recvTransport && recvTransport.handler && recvTransport.handler._pc) {
+                        try {
+                            const pc = recvTransport.handler._pc;
+                            const stats = await pc.getStats();
+                            
+                            let frameInfoFound = false;
+                            let currentFrames = null;
+                            
+                            stats.forEach(stat => {
+                                // Look for either inbound-rtp (receiver) or outbound-rtp (sender) statistics
+                                if ((stat.type === 'inbound-rtp' || stat.type === 'track') && 
+                                    stat.kind === 'video' && 
+                                    (stat.framesReceived !== undefined || stat.framesDecoded !== undefined)) {
+                                    
+                                    // Use whatever frame count is available
+                                    currentFrames = stat.framesDecoded || stat.framesReceived;
+                                    frameInfoFound = true;
+                                    
+                                    // For debugging
+                                    if (stat.framesReceived !== undefined) {
+                                        debugClient(`[monitorTrack] Stats found: framesReceived=${stat.framesReceived}, bytesReceived=${stat.bytesReceived || 'N/A'}`);
+                                    }
+                                    if (stat.framesDecoded !== undefined) {
+                                        debugClient(`[monitorTrack] Stats found: framesDecoded=${stat.framesDecoded}, keyFramesDecoded=${stat.keyFramesDecoded || 'N/A'}`);
+                                    }
+                                    
+                                    // Also check for frozen frames if that stat is available
+                                    if (stat.freezeCount !== undefined && stat.freezeCount > 0) {
+                                        debugClient(`[monitorTrack] Detected ${stat.freezeCount} video freezes`);
+                                        if (stat.freezeCount > 3) {
+                                            log(`⚠️ Video appears to be freezing. Attempting recovery...`);
+                                            attemptTrackRecovery(producerId);
+                                            clearInterval(monitor);
+                                            return;
+                                        }
+                                    }
+                                    
+                                    // Check for timestamp gaps
+                                    const now = Date.now();
+                                    const timeDiff = now - lastTimestamp;
+                                    lastTimestamp = now;
+                                    
+                                    if (timeDiff > 5000) {
+                                        // More than 5 second gap between stats, could be a problem
+                                        debugClient(`[monitorTrack] Large gap (${timeDiff}ms) between stats readings, possible connection issue`);
+                                    }
+                                }
+                            });
+                            
+                            // Special check for clients receiving video but not sending
+                            if (!wantsVideo && currentFrames === 0) {
+                                // Check if we're receiving bytes but no frames
+                                if (bytesReceived > 0) {
+                                    debugClient(`[monitorTrack] Receiving ${bytesReceived} bytes but no frames, possible codec issue`);
+                                    
+                                    // Show the bytes-but-no-frames indicator
+                                    if (window._bytesNoFramesIndicator) {
+                                        window._bytesNoFramesIndicator.style.display = 'block';
+                                        window._bytesNoFramesIndicator.textContent = `Receiving ${bytesReceived} bytes but no frames`;
+                                    }
+                                    
+                                    // If this is the first time we detect this issue, try a last resort fix
+                                    if (!window._triedCodecFallback && bytesReceived > 10000) {
+                                        window._triedCodecFallback = true;
+                                        
+                                        // Try a last resort fix - force the video element to show something
+                                        debugClient(`[monitorTrack] Attempting last resort fix for receiving bytes without frames`);
+                                        
+                                        // Create a dummy canvas to try to force the video to display something
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = 320;
+                                        canvas.height = 240;
+                                        const ctx = canvas.getContext('2d');
+                                        
+                                        // Draw a simple indicator on the canvas
+                                        ctx.fillStyle = 'black';
+                                        ctx.fillRect(0, 0, 320, 240);
+                                        ctx.fillStyle = 'white';
+                                        ctx.font = '14px Arial';
+                                        ctx.fillText(`Receiving video data: ${bytesReceived} bytes`, 10, 30);
+                                        ctx.fillText('Video stream connected but codec issue detected', 10, 60);
+                                        ctx.fillText('You may need to use same browser on both ends', 10, 90);
+                                        
+                                        // Add canvas to the page as a fallback visual
+                                        canvas.style.position = 'absolute';
+                                        canvas.style.top = remoteVideo.offsetTop + 'px';
+                                        canvas.style.left = remoteVideo.offsetLeft + 'px';
+                                        canvas.style.zIndex = '1000';
+                                        document.body.appendChild(canvas);
+                                        
+                                        // Keep updating the bytesReceived count
+                                        setInterval(() => {
+                                            if (bytesReceived > 0) {
+                                                ctx.fillStyle = 'black';
+                                                ctx.fillRect(0, 0, 320, 240);
+                                                ctx.fillStyle = 'white';
+                                                ctx.font = '14px Arial';
+                                                ctx.fillText(`Receiving video data: ${bytesReceived} bytes`, 10, 30);
+                                                ctx.fillText('Video stream connected but codec issue detected', 10, 60);
+                                                ctx.fillText('You may need to use same browser on both ends', 10, 90);
+                                                
+                                                // Draw a blinking indicator to show it's still working
+                                                const now = Date.now();
+                                                if (Math.floor(now / 500) % 2 === 0) {
+                                                    ctx.fillStyle = 'green';
+                                                    ctx.fillRect(10, 120, 20, 20);
+                                                }
+                                            }
+                                        }, 500);
+                                        
+                                        log(`ℹ️ Video data is being received but can't be decoded by your browser.`);
+                                        log(`ℹ️ This is likely a codec compatibility issue between Edge and Chrome.`);
+                                        log(`ℹ️ Audio should still work normally.`);
+                                    }
+                                    
+                                    // If we have enough data but no frames, force recovery sooner
+                                    if (staleFrameCount >= 3 && bytesReceived > 5000) {
+                                        log(`⚠️ Receiving data (${bytesReceived} bytes) but no frames. Forcing stream recovery...`);
+                                        clearInterval(monitor);
+                                        attemptTrackRecovery(producerId);
+                                        return;
+                                    }
+                                } else {
+                                    // Hide the indicator if no bytes received
+                                    if (window._bytesNoFramesIndicator) {
+                                        window._bytesNoFramesIndicator.style.display = 'none';
+                                    }
+                                    
+                                    debugClient(`[monitorTrack] Zero frames on receive-only client, no bytes received yet`);
+                                }
+                            }
+                            
+                            if (frameInfoFound && currentFrames !== null) {
+                                if (currentFrames === lastFrames) {
+                                    staleFrameCount++;
+                                    debugClient(`[monitorTrack] No new frames detected (${staleFrameCount}/${MAX_STALE_FRAMES}). Current: ${currentFrames}, Last: ${lastFrames}`);
+                                    
+                                    if (staleFrameCount >= MAX_STALE_FRAMES) {
+                                        log(`⚠️ Video appears to be frozen (no new frames). Attempting recovery...`);
+                                        attemptTrackRecovery(producerId);
+                                        clearInterval(monitor);
+                                    }
+                                } else {
+                                    // Frames are changing, all good
+                                    staleFrameCount = 0;
+                                    debugClient(`[monitorTrack] Frame count changed: ${lastFrames} → ${currentFrames}`);
+                                }
+                                lastFrames = currentFrames;
+                            } else {
+                                debugClient(`[monitorTrack] No frame info found in stats`);
+                                // If we repeatedly can't find stats, that's another kind of problem
+                                staleFrameCount++;
+                                if (staleFrameCount >= MAX_STALE_FRAMES) {
+                                    log(`⚠️ Can't get video stats. Attempting recovery...`);
+                                    attemptTrackRecovery(producerId);
+                                    clearInterval(monitor);
+                                }
+                            }
+                        } catch (e) {
+                            debugClient(`[monitorTrack] Error getting peer connection stats: ${e.message}`);
+                        }
+                    } else {
+                        debugClient(`[monitorTrack] No peer connection available to monitor`);
+                    }
+                } catch (e) {
+                    debugClient(`[monitorTrack] Error monitoring track: ${e.message}`);
+                }
+            }, 3000); // Check every 3 seconds
+            
+            // Auto-cleanup after 3 minutes
+            setTimeout(() => {
+                if (monitor) {
+                    clearInterval(monitor);
+                    debugClient(`[monitorTrack] Stopping track monitor after timeout`);
+                }
+            }, 180000);
+        }
+
+        // Try to recover a failed track
+        async function attemptTrackRecovery(producerId) {
+            // Check if we're already attempting recovery for this producer
+            if (window._recoveryAttempts && window._recoveryAttempts[producerId]) {
+                const lastAttempt = window._recoveryAttempts[producerId];
+                const timeSinceLastAttempt = Date.now() - lastAttempt.timestamp;
+                
+                // Don't retry too frequently - use exponential backoff
+                if (timeSinceLastAttempt < lastAttempt.backoff) {
+                    debugClient(`[attemptTrackRecovery] Skipping recovery for ${producerId}, last attempt was ${timeSinceLastAttempt}ms ago (backoff: ${lastAttempt.backoff}ms)`);
+                    return;
+                }
+            }
+            
+            // Initialize or update recovery tracking
+            if (!window._recoveryAttempts) window._recoveryAttempts = {};
+            
+            // Calculate backoff time - start at 5s, double each attempt, max 60s
+            let backoff = 5000;
+            if (window._recoveryAttempts[producerId]) {
+                backoff = Math.min(window._recoveryAttempts[producerId].backoff * 2, 60000);
+            }
+            
+            // Record this attempt
+            window._recoveryAttempts[producerId] = {
+                timestamp: Date.now(),
+                backoff: backoff,
+                attempts: (window._recoveryAttempts[producerId]?.attempts || 0) + 1
+            };
+            
+            debugClient(`[attemptTrackRecovery] Attempting to recover producer: ${producerId} (attempt ${window._recoveryAttempts[producerId].attempts}, backoff: ${backoff}ms)`);
+            log(`🔄 Attempting to recover media stream... (${window._recoveryAttempts[producerId].attempts})`);
+            
+            try {
+                // First try to get any existing consumer for this producer
+                let consumerFound = false;
+                
+                if (recvTransport && recvTransport.handler && recvTransport.handler._consumers) {
+                    // Try to find the consumer for this producer
+                    const consumers = recvTransport.handler._consumers;
+                    for (const consumerId in consumers) {
+                        const consumer = consumers[consumerId];
+                        if (consumer && consumer.producerId === producerId) {
+                            consumerFound = true;
+                            log(`🔍 Found existing consumer for producer ${producerId}, attempting to restart...`);
+                            
+                            // Try resuming the consumer
+                            try {
+                                await protooRequest('resumeConsumer', { consumerId: consumer.id });
+                                consumer.resume();
+                                log(`▶️ Resume request sent for consumer ${consumer.id}`);
+                                
+                                // Try to force media flow using aggressive resume
+                                for (let i = 0; i < 3; i++) {
+                                    try {
+                                        await protooRequest('resumeConsumer', { consumerId: consumer.id });
+                                        consumer.resume();
+                                        await new Promise(resolve => setTimeout(resolve, 300));
+                                    } catch (e) {
+                                        debugClient(`[attemptTrackRecovery] Error in aggressive resume: ${e.message}`);
+                                    }
+                                }
+                                log(`🔄 Sent multiple resume signals to help re-establish media flow`);
+                                
+                                // If track exists, try reattaching it
+                                if (consumer.track) {
+                                    log(`🔄 Reattaching track from consumer...`);
+                                    attachTrackToVideo(consumer.track, producerId);
+                                } else {
+                                    log(`⚠️ Consumer has no track to reattach`);
+                                }
+                            } catch (e) {
+                                debugClient(`[attemptTrackRecovery] Error resuming consumer: ${e.message}`);
+                                consumerFound = false; // Mark as not found so we try recreating
+                            }
+                            break;
+                        }
+                    }
+                }
+            } catch (e) {
+                debugClient(`[attemptTrackRecovery] Error during recovery: ${e.message}`);
+                log(`❌ Recovery attempt failed: ${e.message}`);
+            }
+        }
+
         async function joinSFU(){
+          // Prevent multiple simultaneous joinSFU calls
+          if (joinSfuInProgress) {
+            debugClient('joinSFU already in progress, ignoring duplicate call');
+            return;
+          }
+          
+          joinSfuInProgress = true;
+          
           log('📹 Attempting to join SFU...'); 
           console.log('📹 requesting camera');
           try {
+            // Properly clean up existing transports first to avoid stale handlers
+            if (recvTransport) {
+              debugClient('[joinSFU] Cleaning up existing receive transport');
+              try {
+                recvTransport.close();
+              } catch (e) {
+                debugClient(`[joinSFU] Error closing receive transport: ${e.message}`);
+              }
+              recvTransport = null;
+            }
+            
+            if (sendTransport) {
+              debugClient('[joinSFU] Cleaning up existing send transport');
+              try {
+                sendTransport.close();
+              } catch (e) {
+                debugClient(`[joinSFU] Error closing send transport: ${e.message}`);
+              }
+              sendTransport = null;
+            }
+            
+            // Wait a moment to ensure cleanup is complete
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Request appropriate media - always request audio, video depends on wantsVideo flag
             log(wantsVideo ? '🎥 Requesting video & audio...' : '🎤 Requesting audio only...');
-            localStream = await navigator.mediaDevices.getUserMedia({video: wantsVideo, audio:true});
-            localVideo.srcObject = localStream; // Show local audio/video regardless
-            log('🎤 Got local media stream.');
-            console.log('🎤 got local media stream, wantsVideo:', wantsVideo);
+            
+            // Set video constraints based on browser to ensure codec compatibility
+            const videoConstraints = wantsVideo ? {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { max: 30 }
+            } : false;
+            
+            try {
+              localStream = await navigator.mediaDevices.getUserMedia({
+                video: videoConstraints, 
+                audio: true
+              });
+              localVideo.srcObject = localStream; // Show local audio/video regardless
+              log('🎤 Got local media stream.');
+              console.log('🎤 got local media stream, wantsVideo:', wantsVideo);
+            } catch (mediaError) {
+              console.error('Error getting media:', mediaError);
+              log(`⚠️ Media access error: ${mediaError.message}. Will continue with limited functionality.`);
+              
+              // Create an empty stream to continue
+              localStream = new MediaStream();
+              
+              // Try with just audio if video failed
+              if (wantsVideo) {
+                try {
+                  const audioOnlyStream = await navigator.mediaDevices.getUserMedia({video: false, audio: true});
+                  audioOnlyStream.getAudioTracks().forEach(track => {
+                    localStream.addTrack(track);
+                  });
+                  log('🎤 Got audio-only stream as fallback.');
+                } catch (audioError) {
+                  console.error('Error getting audio:', audioError);
+                  log(`⚠️ Audio access error: ${audioError.message}. Continuing without local media.`);
+                }
+              }
+            }
+            
+            // Log network connectivity info
+            log('🌐 Checking network connectivity...');
+            try {
+              const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+              if (connection) {
+                log(`🌐 Network type: ${connection.type || 'unknown'}, downlink: ${connection.downlink || 'unknown'} Mbps`);
+                log(`🌐 Effective type: ${connection.effectiveType || 'unknown'}, RTT: ${connection.rtt || 'unknown'} ms`);
+              }
+            } catch (e) {
+              console.error('Error getting network info:', e);
+            }
             
             if (!window.mediasoupClient || !window.mediasoupClient.Device) { 
-                const errMsg = 'mediasoupClient or mediasoupClient.Device is not available on window.';
-                console.error(errMsg, window.mediasoupClient);
-                log(`❌ ERROR: ${errMsg}`);
+                const errorMsg = 'mediasoupClient or mediasoupClient.Device is not available on window.';
+                console.error(errorMsg, window.mediasoupClient);
+                log(`❌ ERROR: ${errorMsg}`);
                 return;
             }
-            device = new window.mediasoupClient.Device(); 
+            
+            // Always create a fresh device to avoid stale capabilities
+            device = new window.mediasoupClient.Device();
             
             log('🚀 Requesting Router RTP Capabilities...');
             const routerRtpCapabilities = await protooRequest('getRouterRtpCapabilities');
             console.log('🔧 Received Router RTP Capabilities:', routerRtpCapabilities);
             log('👍 Got Router RTP Capabilities.');
             
+            // Ensure VP8 codec priority to improve cross-browser compatibility
+            const isEdge = /Edge/.test(navigator.userAgent) || /Edg/.test(navigator.userAgent);
+            
+            // Only modify codecs if we have access to their structure
+            try {
+              if (routerRtpCapabilities.codecs && Array.isArray(routerRtpCapabilities.codecs)) {
+                // Find VP8 codec and move it to the front of the list for higher priority
+                const vp8Index = routerRtpCapabilities.codecs.findIndex(c => c.mimeType.toLowerCase() === 'video/vp8');
+                if (vp8Index > 0) {
+                  debugClient(`[joinSFU] Moving VP8 codec from position ${vp8Index} to position 0 for better compatibility`);
+                  const vp8Codec = routerRtpCapabilities.codecs.splice(vp8Index, 1)[0];
+                  routerRtpCapabilities.codecs.unshift(vp8Codec);
+                  log('🔧 Prioritized VP8 codec for better browser compatibility');
+                }
+                
+                // If browser is Edge, specifically force H264 profile level to a widely supported one
+                if (isEdge && wantsVideo) {
+                  routerRtpCapabilities.codecs.forEach(codec => {
+                    if (codec.mimeType.toLowerCase() === 'video/h264') {
+                      // Ensure baseline profile for maximum compatibility
+                      codec.parameters = codec.parameters || {};
+                      codec.parameters['profile-level-id'] = '42e01f';
+                      codec.parameters['level-asymmetry-allowed'] = 1;
+                      codec.parameters['packetization-mode'] = 1;
+                      debugClient(`[joinSFU] Modified H264 codec parameters for Edge compatibility`);
+                    }
+                  });
+                }
+              }
+            } catch (e) {
+              debugClient(`[joinSFU] Error modifying codecs: ${e.message}`);
+            }
+            
             await device.load({ routerRtpCapabilities });
             console.log('🔧 Device loaded with router capabilities');
             log('👍 Device loaded.');
+            
+            // Check if using Edge browser and force TURN directly
+            
+            // If Edge or explicitly requested to receive video but not send (novideo flag)
+            if (isEdge || (canReceiveVideo && !wantsVideo)) {
+              log(`${isEdge ? '🔍 Edge browser detected' : '🔍 Video receive mode'} - using optimized transport settings`);
+              
+              const turnOptions = {
+                iceTransportPolicy: isEdge ? 'relay' : 'all',
+                additionalIceServers: [
+                  {
+                    urls: 'turn:turn.webrtc.org:3478',
+                    username: 'webrtc',
+                    credential: 'turnserver'
+                  },
+                  {
+                    urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                    username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                    credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                  }
+                ]
+              };
+              
+              // Create both transports with optimized settings
+              log('🚚 Creating optimized send transport...');
+              sendTransport = await makeTransport('send', turnOptions);
+              console.log('🚚 send transport ready', sendTransport.id);
+              log(`👍 Optimized send transport created: ${sendTransport.id}`);
+              
+              log('📥 Creating optimized recv transport...');
+              recvTransport = await makeTransport('recv', turnOptions);
+              console.log('📥 recv transport ready', recvTransport.id);
+              log(`👍 Optimized recv transport created: ${recvTransport.id}`);
+            } else {
+              // Create both transports first - regular mode for non-Edge
+              log('🚚 Creating send transport...');
+              sendTransport = await makeTransport('send');
+              console.log('🚚 send transport ready', sendTransport.id);
+              log(`👍 Send transport created: ${sendTransport.id}`);
 
-            // Create both transports first
-            log('🚚 Creating send transport...');
-            sendTransport = await makeTransport('send');
-            console.log('🚚 send transport ready', sendTransport.id);
-            log(`👍 Send transport created: ${sendTransport.id}`);
-
-            log('📥 Creating recv transport...');
-            recvTransport = await makeTransport('recv');
-            console.log('📥 recv transport ready', recvTransport.id);
-            log(`👍 Recv transport created: ${recvTransport.id}`);
+              log('📥 Creating recv transport...');
+              recvTransport = await makeTransport('recv');
+              console.log('📥 recv transport ready', recvTransport.id);
+              log(`👍 Recv transport created: ${recvTransport.id}`);
+            }
+            
+            // Store transport IDs for verification
+            storeTransportIds(sendTransport.id, recvTransport.id);
             
             // Now that transports (especially recvTransport) are ready, process pending consumers
             await processPendingConsumers();
 
-            // Then produce local media
-            if (wantsVideo) {
+            // Then produce local media if we have tracks to send
+            if (wantsVideo && localStream) {
               const camTrack = localStream.getVideoTracks()[0];
               if (camTrack) {
                 log('📡 Producing video track...');
@@ -649,16 +2009,24 @@
                 console.log('📡 produced local video');
                 log('📡 Video produced.');
               } else {
-                log('⚠️ No video track found to produce, even though wantsVideo was true.');
-                console.warn('wantsVideo was true, but no video track found in localStream');
+                log('ℹ️ No video track available to produce.');
               }
             } else {
-              log('ℹ️ Skipping video production as per ?novideo flag.');
+              log(wantsVideo ? '⚠️ No local stream available for video.' : '🔇 Video production disabled by ?novideo flag.');
             }
             
-            // TODO: Implement audio production similarly if needed, or assume it's part of `sendTransport` handling if audio tracks are present.
-            // For now, focusing on conditional video.
-
+            // Always produce audio if available
+            if (localStream) {
+              const audioTrack = localStream.getAudioTracks()[0];
+              if (audioTrack) {
+                log('🎤 Producing audio track...');
+                await sendTransport.produce({ track: audioTrack, appData: { source: 'microphone' } });
+                log('🎤 Audio produced.');
+              } else {
+                log('ℹ️ No audio track available to produce.');
+              }
+            }
+            
             log('🎧 Listening for new producers (via global handler)...');
             aiGreeting();
 
@@ -667,6 +2035,9 @@
           } catch (err) {
             console.error('Error in joinSFU:', err);
             log(`❌ ERROR in joinSFU: ${err.message}`);
+          } finally {
+            // Reset the join progress flag
+            joinSfuInProgress = false;
           }
         }
         
@@ -726,6 +2097,351 @@
           }
         },1000);
         
+        // Start media connection monitoring to keep ICE alive
+        function monitorMediaConnection() {
+          // Data channel keepalive - critical for preventing NAT timeouts
+          let keepaliveInterval = null;
+          
+          // Start data channel keepalive for both transports
+          if (recvTransport && recvTransport.connectionState === 'connected') {
+            const recvChannel = createKeepaliveDataChannel(recvTransport, 'recv-keepalive');
+            if (recvChannel) {
+              debugClient('[monitorMedia] Created keepalive data channel for recv transport');
+            }
+          }
+          
+          if (sendTransport && sendTransport.connectionState === 'connected') {
+            const sendChannel = createKeepaliveDataChannel(sendTransport, 'send-keepalive');
+            if (sendChannel) {
+              debugClient('[monitorMedia] Created keepalive data channel for send transport');
+            }
+          }
+          
+          function createKeepaliveDataChannel(transport, label) {
+            if (!transport || !transport.handler || !transport.handler._pc) {
+              return null;
+            }
+            
+            const pc = transport.handler._pc;
+            
+            try {
+              // Create a data channel specifically for keepalive
+              const channel = pc.createDataChannel(label, {
+                ordered: true,
+                protocol: 'keepalive'
+              });
+              
+              channel.onopen = () => {
+                debugClient(`[iceKeepalive] Channel '${label}' open for ${transport.id}`);
+                
+                // Send small packets every 15 seconds to maintain NAT bindings
+                keepaliveInterval = setInterval(() => {
+                  if (channel.readyState === 'open') {
+                    try {
+                      channel.send(JSON.stringify({ type: 'keepalive', ts: Date.now() }));
+                      debugClient(`[iceKeepalive] Sent keepalive on ${label}`);
+                    } catch (e) {
+                      debugClient(`[iceKeepalive] Error sending keepalive: ${e.message}`);
+                    }
+                  } else {
+                    clearInterval(keepaliveInterval);
+                  }
+                }, 15000);
+              };
+              
+              return channel;
+            } catch (e) {
+              debugClient(`[iceKeepalive] Error creating channel: ${e.message}`);
+              return null;
+            }
+          }
+          
+          // Setup ICE connection monitoring with recovery
+          setupIceConnectionMonitoring();
+          
+          function setupIceConnectionMonitoring() {
+            // Monitor both transports for connection issues
+            monitorTransportIce(recvTransport, 'recv');
+            monitorTransportIce(sendTransport, 'send');
+            
+            function monitorTransportIce(transport, type) {
+              if (!transport || !transport.handler || !transport.handler._pc) return;
+              
+              const pc = transport.handler._pc;
+              const transportId = transport.id;
+              
+              // Track last known good state
+              let lastGoodState = Date.now();
+              let recoveryAttempted = false;
+              
+              // Check connection every 5 seconds
+              const monitor = setInterval(() => {
+                const connState = pc.iceConnectionState;
+                
+                if (connState === 'connected' || connState === 'completed') {
+                  // Connection is good, reset recovery flags
+                  lastGoodState = Date.now();
+                  recoveryAttempted = false;
+                  debugClient(`[iceMonitor] ${type} transport ${transportId} has good connection: ${connState}`);
+                } 
+                else if (['disconnected', 'failed', 'closed'].includes(connState)) {
+                  // Connection is bad, check how long it's been this way
+                  const disconnectedTime = (Date.now() - lastGoodState) / 1000;
+                  
+                  if (disconnectedTime > 10 && !recoveryAttempted) {
+                    // After 10 seconds of bad connection, try recovery
+                    log(`🛠️ ${type} transport has ${connState} ICE connection for ${Math.round(disconnectedTime)}s. Attempting recovery...`);
+                    recoveryAttempted = true;
+                    
+                    // Try ICE restart first - gentle recovery
+                    try {
+                      debugClient(`[iceMonitor] Attempting ICE restart for ${type} transport ${transportId}`);
+                      pc.restartIce();
+                      
+                      // If that doesn't work after 8 seconds, try more aggressive recovery
+                      setTimeout(() => {
+                        if (['disconnected', 'failed', 'closed'].includes(pc.iceConnectionState)) {
+                          debugClient(`[iceMonitor] ICE restart didn't fix ${type} transport, trying transport recreation`);
+                          log(`🔄 ICE restart insufficient, recreating ${type} transport...`);
+                          
+                          // More aggressive recovery - recreate the transport
+                          if (typeof refreshTransport === 'function') {
+                            refreshTransport(type);
+                          }
+                        }
+                      }, 8000);
+                    } catch (e) {
+                      debugClient(`[iceMonitor] Error during ICE restart: ${e.message}`);
+                      log(`❌ ICE restart failed: ${e.message}`);
+                      
+                      // Immediate aggressive recovery on restart failure
+                      if (typeof refreshTransport === 'function') {
+                        refreshTransport(type);
+                      }
+                    }
+                  }
+                }
+              }, 5000);
+              
+              // Clean up monitor when transport is closed
+              transport.on('close', () => {
+                clearInterval(monitor);
+                debugClient(`[iceMonitor] Cleared monitor for ${type} transport ${transportId}`);
+              });
+            }
+          }
+          
+          // Check for full connection failure
+          let fullConnectionChecks = 0;
+          const MAX_FULL_CHECKS = 5;
+          
+          function checkFullConnectionHealth() {
+            // If both transports have failed, try a complete restart
+            if ((!recvTransport || recvTransport.connectionState === 'failed' || recvTransport.connectionState === 'closed') &&
+                (!sendTransport || sendTransport.connectionState === 'failed' || sendTransport.connectionState === 'closed')) {
+              
+              fullConnectionChecks++;
+              
+              if (fullConnectionChecks <= MAX_FULL_CHECKS) {
+                log(`⚠️ Complete media connection failure detected. Attempting full reconnect (${fullConnectionChecks}/${MAX_FULL_CHECKS})...`);
+                
+                // Clean up existing transports
+                if (recvTransport) {
+                  try { recvTransport.close(); } catch (e) {}
+                  recvTransport = null;
+                }
+                
+                if (sendTransport) {
+                  try { sendTransport.close(); } catch (e) {}
+                  sendTransport = null;
+                }
+                
+                // Try to rejoin SFU
+                setTimeout(() => {
+                  joinSFU();
+                }, 2000);
+              } else {
+                log(`❌ Maximum reconnection attempts (${MAX_FULL_CHECKS}) reached. Please refresh the page.`);
+              }
+            } else {
+              // Reset counter when at least one transport is working
+              fullConnectionChecks = 0;
+            }
+            
+            // Continue checking every 30 seconds
+            setTimeout(checkFullConnectionHealth, 30000);
+          }
+          
+          // Start full connection health check
+          setTimeout(checkFullConnectionHealth, 30000);
+        }
+
+        // Helper to store and verify transport IDs
+        function storeTransportIds(sendId, recvId) {
+          window._transportIds = {
+            send: sendId,
+            recv: recvId,
+            timestamp: Date.now()
+          };
+          
+          // Save to localStorage for recovery across page loads
+          try {
+            localStorage.setItem('mediasoup_transport_ids', JSON.stringify(window._transportIds));
+          } catch (e) {
+            console.error('Error saving transport IDs to localStorage:', e);
+          }
+        }
+
+        // Helper to check if a transport ID is still valid
+        function isTransportValid(type, id) {
+          if (!window._transportIds) return false;
+          
+          // Check if transport ID matches what we stored
+          const isValid = window._transportIds[type] === id;
+          
+          // Check if it's not too old (> 1 hour = invalid)
+          const isNotTooOld = (Date.now() - window._transportIds.timestamp) < (60 * 60 * 1000);
+          
+          return isValid && isNotTooOld;
+        }
+
+        // Function to refresh a specific transport without full reconnection
+        let refreshTransport = async function(direction, forceTurn = false) {
+          debugClient(`[refreshTransport] Called for ${direction}, forceTurn=${forceTurn}`);
+          
+          try {
+            // Close the old transport
+            if (direction === 'recv' && recvTransport) {
+              try {
+                recvTransport.close();
+              } catch (e) {
+                debugClient(`[refreshTransport] Error closing receive transport: ${e.message}`);
+              }
+              recvTransport = null;
+            } else if (direction === 'send' && sendTransport) {
+              try {
+                sendTransport.close();
+              } catch (e) {
+                debugClient(`[refreshTransport] Error closing send transport: ${e.message}`);
+              }
+              sendTransport = null;
+            }
+            
+            // If forcing TURN, modify the iceTransportPolicy
+            if (forceTurn) {
+              debugClient(`[refreshTransport] Using TURN-only policy for ${direction} transport`);
+              log(`⚠️ Forcing TURN-only mode for better connectivity`);
+              
+              // Create a new transport with TURN-only policy
+              if (direction === 'recv') {
+                log('📥 Creating new TURN-only receive transport...');
+                const turnOptions = {
+                  iceTransportPolicy: 'relay', // Force TURN
+                  additionalIceServers: [
+                    {
+                      urls: 'turn:turn.webrtc.org:3478',
+                      username: 'webrtc',
+                      credential: 'turnserver'
+                    },
+                    {
+                      urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                      username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                      credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                    }
+                  ]
+                };
+                recvTransport = await makeTransport('recv', turnOptions);
+                
+                // Update stored ID
+                storeTransportIds(
+                  window._transportIds && window._transportIds.send ? window._transportIds.send : null,
+                  recvTransport.id
+                );
+                
+                log(`👍 New TURN-only receive transport created: ${recvTransport.id}`);
+                
+                processPendingConsumers();
+              } else if (direction === 'send') {
+                log('🚚 Creating new TURN-only send transport...');
+                const turnOptions = {
+                  iceTransportPolicy: 'relay', // Force TURN
+                  additionalIceServers: [
+                    {
+                      urls: 'turn:turn.webrtc.org:3478',
+                      username: 'webrtc',
+                      credential: 'turnserver'
+                    },
+                    {
+                      urls: 'turn:global.turn.twilio.com:3478?transport=udp',
+                      username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                      credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                    }
+                  ]
+                };
+                sendTransport = await makeTransport('send', turnOptions);
+                
+                // Update stored ID
+                storeTransportIds(
+                  sendTransport.id,
+                  window._transportIds && window._transportIds.recv ? window._transportIds.recv : null
+                );
+                
+                log(`👍 New TURN-only send transport created: ${sendTransport.id}`);
+                
+                // Re-produce local media if needed
+                if (wantsVideo && localStream) {
+                  const camTrack = localStream.getVideoTracks()[0];
+                  if (camTrack) {
+                    log('📡 Re-producing video track...');
+                    await sendTransport.produce({ track: camTrack, appData: { source: 'webcam' } });
+                    log('📡 Video re-produced.');
+                  }
+                }
+              }
+            } else {
+              // Create a new transport of the same type with normal settings
+              if (direction === 'recv') {
+                log('📥 Creating new receive transport...');
+                recvTransport = await makeTransport('recv');
+                
+                // Update stored ID
+                storeTransportIds(
+                  window._transportIds && window._transportIds.send ? window._transportIds.send : null,
+                  recvTransport.id
+                );
+                
+                log(`👍 New receive transport created: ${recvTransport.id}`);
+                
+                // Re-consume existing producers
+                processPendingConsumers();
+              } else if (direction === 'send') {
+                log('🚚 Creating new send transport...');
+                sendTransport = await makeTransport('send');
+                
+                // Update stored ID
+                storeTransportIds(
+                  sendTransport.id,
+                  window._transportIds && window._transportIds.recv ? window._transportIds.recv : null
+                );
+                
+                log(`👍 New send transport created: ${sendTransport.id}`);
+                
+                // Re-produce local media if needed
+                if (wantsVideo && localStream) {
+                  const camTrack = localStream.getVideoTracks()[0];
+                  if (camTrack) {
+                    log('📡 Re-producing video track...');
+                    await sendTransport.produce({ track: camTrack, appData: { source: 'webcam' } });
+                    log('📡 Video re-produced.');
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            debugClient(`[refreshTransport] Error refreshing ${direction} transport:`, err);
+            log(`❌ Failed to refresh ${direction} transport: ${err.message}`);
+          }
+        };
       }); // End of waitForDependencies callback
     </script>
   </body>

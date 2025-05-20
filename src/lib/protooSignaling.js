@@ -134,10 +134,20 @@ export async function initProtooSignaling(httpServer) {
   // const wsServer = new WebSocketServer({ server: httpServer, path: '/protoo' }); // OLD: Using 'ws' directly
   const protooWsServer = new protoo.WebSocketServer(httpServer, {
     path: '/protoo',
-    maxReceivedFrameSize      : 960000, // TODO: From config
-    maxReceivedMessageSize    : 960000,
+    maxReceivedFrameSize      : 2097152, // Increased from 960000 to 2MB
+    maxReceivedMessageSize    : 2097152, // Increased from 960000 to 2MB
     fragmentOutgoingMessages  : true,
-    fragmentationThreshold    : 960000
+    fragmentationThreshold    : 1048576, // Increased from 960000 to 1MB
+    keepalive: true,
+    keepaliveInterval: 15000, // Send keepalive more frequently (15 seconds)
+    keepaliveGracePeriod: 15000, // Wait 15 seconds before dropping connection
+    dropConnectionOnKeepaliveTimeout: true,
+    autoAcceptConnections: false, // Explicitly handle each connection
+    ignoreXForwardedFor: false, // Support proxied connections
+    closeTimeout: 5000, // 5 seconds to allow proper connection closing
+    maxConnections: 100, // Limit concurrent connections
+    clientTracking: true, // Keep track of connected clients
+    disableNagleAlgorithm: true // Disable Nagle's algorithm for better real-time performance
   });
 
   protooWsServer.on('connectionrequest', async (info, accept, reject) => {
@@ -158,27 +168,124 @@ export async function initProtooSignaling(httpServer) {
       const roomData = await getOrCreateRoom(roomId);
       const { protooRoom, mediasoupRouter } = roomData;
 
+      // Check if we already have this peer in the room (reconnection case)
+      const existingPeerData = roomData.peers.get(peerId);
+      
+      // If there's an existing peer with this ID, clean it up first
+      if (existingPeerData) {
+        debug(`Peer ${peerId} reconnecting - cleaning up old resources`);
+        
+        try {
+          // Save producer information for later use
+          const producerInfo = Array.from(existingPeerData.producers.values()).map(p => ({
+            id: p.id,
+            kind: p.kind,
+            appData: p.appData
+          }));
+          
+          // Store reconnection info in room data
+          if (!roomData.reconnectInfo) {
+            roomData.reconnectInfo = {};
+          }
+          
+          roomData.reconnectInfo[peerId] = {
+            producerInfo,
+            timestamp: Date.now()
+          };
+          
+          // Try to close transports and clean up peer resources
+          if (existingPeerData.transports) {
+            for (const transport of existingPeerData.transports.values()) {
+              try {
+                transport.close();
+              } catch (e) {
+                warn(`Error closing transport for reconnecting peer ${peerId}:`, e);
+              }
+            }
+          }
+          
+          // Remove from existing room structures
+          if (protooRoom.hasPeer(peerId)) {
+            debug(`Removing existing protoo peer ${peerId} for clean reconnection`);
+            if (typeof protooRoom.removePeer === 'function') {
+              protooRoom.removePeer(peerId);
+            } else if (protooRoom.peers && typeof protooRoom.peers.delete === 'function') {
+              protooRoom.peers.delete(peerId);
+            } else {
+              warn(`Could not find method to remove peer ${peerId} from protoo room`);
+              // If we can't remove, try to close the peer
+              const existingPeer = Array.from(protooRoom.peers || []).find(p => p.id === peerId);
+              if (existingPeer && typeof existingPeer.close === 'function') {
+                existingPeer.close();
+              }
+            }
+          }
+          
+          // Delete the peer data to allow clean reconnection
+          roomData.peers.delete(peerId);
+        } catch (cleanupErr) {
+          warn(`Error cleaning up existing peer ${peerId} for reconnection:`, cleanupErr);
+          // Continue anyway to allow reconnection
+        }
+      }
+
       // Accept the connection and get the Protoo transport instance.
       const protooTransport = accept(); // This is the key change
 
-      const protooPeer = await protooRoom.createPeer(peerId, protooTransport);
+      // Create the peer with the given ID
+      let protooPeer;
+      try {
+        protooPeer = await protooRoom.createPeer(peerId, protooTransport);
+      } catch (peerCreateErr) {
+        // Handle case where peer might still exist in room
+        warn(`Error creating peer ${peerId}, might already exist:`, peerCreateErr);
+        
+        // Try to get existing peer
+        if (protooRoom.hasPeer(peerId)) {
+          warn(`Peer ${peerId} already exists in protoo room, attempting to close and recreate`);
+          // Use the appropriate method to remove the peer
+          if (typeof protooRoom.removePeer === 'function') {
+            protooRoom.removePeer(peerId);
+          } else if (protooRoom.peers && typeof protooRoom.peers.delete === 'function') {
+            // Try using the peers Map directly
+            protooRoom.peers.delete(peerId);
+          } else {
+            warn(`Could not find method to remove peer ${peerId} from protoo room`);
+            // If we can't remove, try to close the peer
+            const existingPeer = Array.from(protooRoom.peers || []).find(p => p.id === peerId);
+            if (existingPeer && typeof existingPeer.close === 'function') {
+              existingPeer.close();
+            }
+          }
+          // Retry peer creation
+          protooPeer = await protooRoom.createPeer(peerId, protooTransport);
+        } else {
+          // If failed for another reason, just throw
+          throw peerCreateErr;
+        }
+      }
+      
       debug(`protoo peer created: ${peerId} in room ${roomId} with transportId ${protooTransport.id}`);
 
+      // Create fresh peer data structure
       roomData.peers.set(peerId, {
         protooPeer,
         transports: new Map(),
         producers: new Map(),
-        consumers: new Map()
+        consumers: new Map(),
+        lastActivity: Date.now()
       });
       
       // Check if this peer is reconnecting and had producers
       if (roomData.reconnectInfo && roomData.reconnectInfo[peerId]) {
         const reconnectData = roomData.reconnectInfo[peerId];
-        // Only use reconnect data if it's recent (within last 30 seconds)
-        if (Date.now() - reconnectData.timestamp < 30000) {
+        // Only use reconnect data if it's recent (within last 60 seconds)
+        if (Date.now() - reconnectData.timestamp < 60000) {
           debug(`Peer ${peerId} is reconnecting, will restore producer info`);
           // We'll tell this peer about other peers' producers in the existing loop below
-          // But don't need any special handling here
+          
+          // Note: We don't actually need to restore the producers here since
+          // clients will re-produce media after connection is established
         }
         // Clean up after using
         delete roomData.reconnectInfo[peerId];
@@ -224,26 +331,54 @@ export async function initProtooSignaling(httpServer) {
               const iceServers = await getIceServers();
               debug(`Got ${iceServers.length} ICE servers for transport`);
               
-              // Use forcing TURN relays as a fallback if needed
-              const useRelayOnly = true; // Set to true to force using TURN relays
+              // Only force TURN if proper TURN servers are available
+              const hasTurnServer = iceServers.some(server => {
+                const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+                return urls.some(url => url.startsWith('turn:'));
+              });
               
               // Use the actual public IP if available
               const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || null;
               
+              // Check if we are very likely in localhost development mode
+              const isLocalDevelopment = info && info.origin && (
+                info.origin.includes('localhost') || 
+                info.origin.includes('127.0.0.1')
+              );
+              
               const webRtcTransportOptions = {
                 listenIps: [
                   // Try with explicit IP announcement
-                  { ip: '0.0.0.0', announcedIp }
+                  { ip: '0.0.0.0', announcedIp },
+                  // Add a direct localhost IP for local development
+                  ...(isLocalDevelopment ? [{ ip: '127.0.0.1', announcedIp: '127.0.0.1' }] : [])
                 ],
                 enableUdp: true, 
                 enableTcp: true, 
                 preferUdp: true,
                 initialAvailableOutgoingBitrate: 1000000,
                 appData: { producing, consuming },
-                iceServers,
+                // Only include iceServers in production mode
+                ...((!isLocalDevelopment && hasTurnServer) ? { iceServers } : {}),
                 // Additional settings to improve NAT traversal
                 enableSctp: !!sctpCapabilities,
-                numSctpStreams: sctpCapabilities ? sctpCapabilities.numStreams : undefined
+                numSctpStreams: sctpCapabilities ? sctpCapabilities.numStreams : undefined,
+                // Special options for localhost connectivity
+                enableUdpSrflx: true, // Enable UDP Server Reflexive candidates
+                iceTransportPolicy: 'all', // Accept all ICE candidate types
+                additionalSettings: {
+                  iceCheckMinInterval: isLocalDevelopment ? 50 : 100, // Faster ICE checks in development
+                  // Add keep-alive settings to maintain long connections
+                  dtlsTimeoutInitial: 30000, // 30 seconds initial DTLS timeout
+                  dtlsTimeoutMax: 60000, // 60 seconds max DTLS timeout
+                  keepaliveIntervalMs: 2500, // Send ICE keep-alive packets every 2.5 seconds
+                  iceUnwritableTimeout: 30000, // 30 seconds before considering ICE unwritable
+                  iceInactiveTimeout: 30000, // 30 seconds inactive timeout
+                  iceFailedTimeout: 30000, // 30 seconds failure timeout
+                  // Connection health monitoring
+                  enableHealthMonitoring: true,
+                  healthCheckIntervalMs: 10000 // Check connection health every 10 seconds
+                }
               };
               
               // Log important options
@@ -384,6 +519,18 @@ export async function initProtooSignaling(httpServer) {
               acceptRequest({});
               break;
             }
+            case 'ping': {
+              // Simple ping-pong for connection keep-alive and health monitoring
+              debug(`Received ping from peer ${peerId}`);
+              
+              // Update last activity timestamp
+              if (peerData) {
+                peerData.lastActivity = Date.now();
+              }
+              
+              acceptRequest({ timestamp: Date.now() });
+              break;
+            }
             default: {
               error('unknown protoo request.method "%s"', requestMessage.method);
               rejectRequest(400, `unknown protoo request.method "${requestMessage.method}"`);
@@ -439,4 +586,72 @@ export async function initProtooSignaling(httpServer) {
   });
 
   debug('Protoo signaling server (using protoo.WebSocketServer) initialized and listening on /protoo');
+
+  // Add automatic connection health checking
+  if (typeof global.roomHealthInterval === 'undefined') {
+    global.roomHealthInterval = setInterval(async () => {
+      try {
+        // Check all rooms
+        for (const [roomId, roomData] of rooms.entries()) {
+          debug(`Health check for room: ${roomId}, peers: ${roomData.peers.size}`);
+          
+          // Check each peer's signaling connection
+          for (const [peerId, peerData] of roomData.peers.entries()) {
+            if (!peerData.protooPeer) continue;
+            
+            try {
+              // Test signaling connection with a ping
+              await peerData.protooPeer.request('ping', { timestamp: Date.now() })
+                .then(() => {
+                  // Connection is good, peer responded
+                  debug(`Peer ${peerId} responded to health check ping`);
+                })
+                .catch(err => {
+                  // Connection may be dead
+                  warn(`Peer ${peerId} failed health check ping: ${err.message}`);
+                  
+                  // Check last activity time
+                  const lastActivity = peerData.lastActivity || 0;
+                  const inactiveTime = Date.now() - lastActivity;
+                  
+                  // If peer has been inactive for more than 60 seconds, consider them disconnected
+                  if (inactiveTime > 60000) {
+                    warn(`Peer ${peerId} inactive for ${Math.floor(inactiveTime/1000)}s, removing from room ${roomId}`);
+                    
+                    // Close all transports for this peer
+                    if (peerData.transports && peerData.transports.size > 0) {
+                      for (const transport of peerData.transports.values()) {
+                        try {
+                          transport.close();
+                        } catch (e) {
+                          error(`Error closing transport for inactive peer ${peerId}:`, e);
+                        }
+                      }
+                    }
+                    
+                    // Remove peer from room
+                    roomData.peers.delete(peerId);
+                    roomData.protooRoom.hasPeer(peerId) && roomData.protooRoom.removePeer(peerId);
+                  }
+                });
+            } catch (pingErr) {
+              error(`Error during health check for peer ${peerId}:`, pingErr);
+            }
+            
+            // Record this connection check as activity
+            peerData.lastActivity = Date.now();
+          }
+          
+          // Clean up empty rooms
+          if (roomData.peers.size === 0) {
+            debug(`Room ${roomId} is empty, closing mediasoupRouter and removing room`);
+            roomData.mediasoupRouter.close();
+            rooms.delete(roomId);
+          }
+        }
+      } catch (e) {
+        error(`Error in room health check interval:`, e);
+      }
+    }, 30000); // Check every 30 seconds
+  }
 } 

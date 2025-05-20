@@ -70,7 +70,28 @@ if (!process.env.JEST_WORKER_ID) (async () => {
   // Bind only to loopback by default (safer behind a reverse-proxy). Override with HOST env if needed.
   const HOST = process.env.HOST || '127.0.0.1';
   const httpServer = createServer(app);
-  const io = new SocketIOServer(httpServer);
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"],
+      credentials: true,
+      allowedHeaders: ["Content-Type", "Authorization"]
+    },
+    maxHttpBufferSize: 1e8, // Increased buffer size (100 MB)
+    pingTimeout: 60000, // Increased ping timeout
+    pingInterval: 25000, // Send a ping every 25 seconds
+    transports: ['polling'], // Use only polling for reliable connections
+    allowEIO3: true, // Enable compatibility with older clients
+    cookie: false, // Don't use cookies for session tracking
+    connectTimeout: 30000, // 30 seconds connection timeout
+    perMessageDeflate: false, // Disable WebSocket per-message-deflate to avoid issues
+    httpCompression: true, // But keep HTTP compression for polling
+    upgradeTimeout: 20000, // More time for upgrades from polling to WebSocket
+    // Handle potential network interruptions better
+    path: '/socket.io/',
+    maxHttpBufferSize: 1e8, // Increased from default 1MB to 100MB
+    closeOnBeforeunload: false // Don't close WebSocket when page navigates
+  });
   const roomStartTimes = new Map();
 
   // WebRTC signaling logic
