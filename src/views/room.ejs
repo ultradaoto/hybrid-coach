@@ -196,49 +196,65 @@
             return;
           }
 
-          // Check stats every 5 seconds
-          const statsInterval = setInterval(async () => {
-            try {
-              if (!recvTransport || !sendTransport) {
-                debugClient('[webrtcStats] Transports closed, stopping stats interval');
-                clearInterval(statsInterval);
-                return;
-              }
-
-              // Log the connection state
-              const recvState = recvTransport.connectionState;
-              const sendState = sendTransport.connectionState;
-              debugClient(`[webrtcStats] Transport states - recv: ${recvState}, send: ${sendState}`);
-              
-              if (recvState !== 'connected' || sendState !== 'connected') {
-                log(`📊 Transport states: recv=${recvState}, send=${sendState}`);
-              }
-
-              // For WebRTC internals debugging
-              if (recvTransport.handler && recvTransport.handler._pc) {
-                const pc = recvTransport.handler._pc;
-                const stats = await pc.getStats();
-                let hasActiveCandidate = false;
-                let candidatePairs = [];
-
-                stats.forEach(stat => {
-                  if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
-                    hasActiveCandidate = true;
-                    candidatePairs.push(`${stat.localCandidateId} <-> ${stat.remoteCandidateId} (${stat.state})`);
-                  }
-                });
-
-                if (!hasActiveCandidate && (recvState !== 'connected' || sendState !== 'connected')) {
-                  debugClient('[webrtcStats] No active candidate pairs found. This indicates NAT traversal issues.');
-                  log('⚠️ NAT traversal issue detected. Check firewall settings.');
-                } else if (hasActiveCandidate) {
-                  debugClient(`[webrtcStats] Active candidate pairs: ${candidatePairs.join(', ')}`);
+          // Give more time for connection to establish - wait 10 seconds before first check
+          setTimeout(() => {
+            // Check stats every 5 seconds
+            const statsInterval = setInterval(async () => {
+              try {
+                if (!recvTransport || !sendTransport) {
+                  debugClient('[webrtcStats] Transports closed, stopping stats interval');
+                  clearInterval(statsInterval);
+                  return;
                 }
+
+                // Log the connection state
+                const recvState = recvTransport.connectionState;
+                const sendState = sendTransport.connectionState;
+                debugClient(`[webrtcStats] Transport states - recv: ${recvState}, send: ${sendState}`);
+                
+                if (recvState === 'connected' && sendState === 'connected') {
+                  log(`✅ WebRTC connection established successfully!`);
+                  // Once connected, we can reduce frequency of checks
+                  clearInterval(statsInterval);
+                  // Keep checking less frequently
+                  setInterval(() => {
+                    const rs = recvTransport.connectionState;
+                    const ss = sendTransport.connectionState;
+                    if (rs !== 'connected' || ss !== 'connected') {
+                      log(`⚠️ WebRTC connection changed: recv=${rs}, send=${ss}`);
+                    }
+                  }, 10000);
+                } else if (recvState !== 'connected' || sendState !== 'connected') {
+                  log(`📊 Transport states: recv=${recvState}, send=${sendState}`);
+                }
+
+                // For WebRTC internals debugging
+                if (recvTransport.handler && recvTransport.handler._pc) {
+                  const pc = recvTransport.handler._pc;
+                  const stats = await pc.getStats();
+                  let hasActiveCandidate = false;
+                  let candidatePairs = [];
+
+                  stats.forEach(stat => {
+                    if (stat.type === 'candidate-pair' && stat.state === 'succeeded') {
+                      hasActiveCandidate = true;
+                      candidatePairs.push(`${stat.localCandidateId} <-> ${stat.remoteCandidateId} (${stat.state})`);
+                    }
+                  });
+
+                  if (!hasActiveCandidate && (recvState !== 'connected' || sendState !== 'connected')) {
+                    debugClient('[webrtcStats] No active candidate pairs found. This indicates NAT traversal issues.');
+                    log('⚠️ NAT traversal issue detected. Check firewall settings.');
+                  } else if (hasActiveCandidate) {
+                    debugClient(`[webrtcStats] Active candidate pairs: ${candidatePairs.join(', ')}`);
+                    log('🔄 ICE candidate pairs established successfully.');
+                  }
+                }
+              } catch (e) {
+                debugClient('[webrtcStats] Error collecting stats:', e);
               }
-            } catch (e) {
-              debugClient('[webrtcStats] Error collecting stats:', e);
-            }
-          }, 5000);
+            }, 5000);
+          }, 10000); // Initial 10 second wait
         }
 
         async function makeTransport(direction) {
@@ -481,6 +497,29 @@
                     debugClient(`[attachTrackToVideo] MediaStream now has ${tracks.length} track(s).`);
                     tracks.forEach((t, index) => {
                         debugClient(`[attachTrackToVideo] Track ${index}: id=${t.id}, kind=${t.kind}, label='${t.label}', enabled=${t.enabled}, muted=${t.muted}, readyState=${t.readyState}`);
+                        
+                        // If track is muted, try to unmute after a short delay
+                        if (t.muted) {
+                            debugClient(`[attachTrackToVideo] Track ${index} is muted, will try to unmute shortly...`);
+                            log(`🔇 Remote track is muted, waiting for media...`);
+                            
+                            // Check muted state periodically
+                            let unmuteTries = 0;
+                            const maxTries = 30; // 30 seconds max
+                            const checkInterval = setInterval(() => {
+                                if (!t.muted || unmuteTries >= maxTries) {
+                                    if (!t.muted) {
+                                        debugClient(`[attachTrackToVideo] Track ${t.id} unmuted after ${unmuteTries} tries!`);
+                                        log(`🔊 Remote media flowing now!`);
+                                    } else {
+                                        debugClient(`[attachTrackToVideo] Track ${t.id} still muted after ${maxTries} tries.`);
+                                        log(`⚠️ Remote media still muted after ${maxTries} seconds.`);
+                                    }
+                                    clearInterval(checkInterval);
+                                }
+                                unmuteTries++;
+                            }, 1000);
+                        }
                     });
                 } else {
                     debugClient(`[attachTrackToVideo] remoteVideo.srcObject is null/undefined after new MediaStream assignment.`);

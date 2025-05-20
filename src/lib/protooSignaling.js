@@ -9,6 +9,7 @@ import mediasoup from 'mediasoup';
 import { URL } from 'url';
 import createDebug from 'debug';
 import { getTwilioIceServers } from '../services/turnService.js';
+import https from 'https';
 
 const debug = createDebug('hybrid-coach:protooSignaling');
 const warn = createDebug('hybrid-coach:protooSignaling:WARN');
@@ -93,8 +94,42 @@ async function getIceServers() {
   }
 }
 
+// Add this function to detect the server's public IP address
+async function getPublicIpAddress() {
+  return new Promise((resolve, reject) => {
+    https.get('https://api.ipify.org', (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        resolve(data.trim());
+      });
+    }).on('error', (err) => {
+      error('Error fetching public IP:', err);
+      reject(err);
+    });
+  });
+}
+
 export async function initProtooSignaling(httpServer) {
   await getOrCreateWorker();
+
+  // Log and verify the announced IP
+  const configuredAnnouncedIp = process.env.MEDIASOUP_ANNOUNCED_IP;
+  let actualAnnouncedIp = configuredAnnouncedIp;
+  
+  if (!configuredAnnouncedIp) {
+    try {
+      actualAnnouncedIp = await getPublicIpAddress();
+      debug(`No MEDIASOUP_ANNOUNCED_IP set in .env, detected public IP as: ${actualAnnouncedIp}`);
+      process.env.MEDIASOUP_ANNOUNCED_IP = actualAnnouncedIp;
+    } catch (err) {
+      error('Failed to auto-detect public IP, WebRTC may fail:', err);
+    }
+  } else {
+    debug(`Using configured MEDIASOUP_ANNOUNCED_IP: ${configuredAnnouncedIp}`);
+  }
 
   // const wsServer = new WebSocketServer({ server: httpServer, path: '/protoo' }); // OLD: Using 'ws' directly
   const protooWsServer = new protoo.WebSocketServer(httpServer, {
@@ -192,8 +227,14 @@ export async function initProtooSignaling(httpServer) {
               // Use forcing TURN relays as a fallback if needed
               const useRelayOnly = true; // Set to true to force using TURN relays
               
+              // Use the actual public IP if available
+              const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || null;
+              
               const webRtcTransportOptions = {
-                listenIps: [{ ip: '0.0.0.0', announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP || null }],
+                listenIps: [
+                  // Try with explicit IP announcement
+                  { ip: '0.0.0.0', announcedIp }
+                ],
                 enableUdp: true, 
                 enableTcp: true, 
                 preferUdp: true,
