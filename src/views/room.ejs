@@ -238,6 +238,30 @@
         async function makeTransport(direction) {
           try {
             debugClient(`[makeTransport] Requesting server to create ${direction} transport...`);
+            
+            // Get TURN credentials from server
+            let iceServersToUse = stunServers;
+            try {
+              const turnResponse = await fetch('/api/turn-credentials');
+              if (turnResponse.ok) {
+                const turnData = await turnResponse.json();
+                if (turnData.iceServers && turnData.iceServers.length > 0) {
+                  iceServersToUse = turnData.iceServers;
+                  debugClient(`[makeTransport] Successfully fetched Twilio ICE servers: ${iceServersToUse.length} servers`);
+                  log(`🌐 Using Twilio TURN/STUN servers`);
+                } else {
+                  debugClient('[makeTransport] No ICE servers returned from Twilio, using fallback STUN servers');
+                  log(`⚠️ Using fallback STUN servers only`);
+                }
+              } else {
+                debugClient('[makeTransport] Failed to fetch TURN credentials, using fallback STUN servers');
+                log(`⚠️ Using fallback STUN servers only`);
+              }
+            } catch (e) {
+              debugClient('[makeTransport] Error fetching TURN credentials:', e);
+              log(`⚠️ Using fallback STUN servers only`);
+            }
+            
             const serverResponse = await protooRequest('createWebRtcTransport', {
               producing: direction === 'send',
               consuming: direction === 'recv',
@@ -262,7 +286,7 @@
               iceCandidates,
               dtlsParameters,
               sctpParameters,
-              iceServers: stunServers,
+              iceServers: iceServersToUse, // Use the Twilio servers if available
               iceTransportPolicy: 'all',
               // Add additional properties for debugging
               additionalSettings: {

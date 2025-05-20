@@ -8,6 +8,7 @@ import mediasoup from 'mediasoup';
 // import { WebSocketServer } from 'ws'; // No longer need WebSocketServer from 'ws' directly for Protoo
 import { URL } from 'url';
 import createDebug from 'debug';
+import { getTwilioIceServers } from '../services/turnService.js';
 
 const debug = createDebug('hybrid-coach:protooSignaling');
 const warn = createDebug('hybrid-coach:protooSignaling:WARN');
@@ -58,6 +59,25 @@ async function getOrCreateRoom(roomId) {
   // router.on('close', () => rooms.delete(roomId)); 
 
   return roomData;
+}
+
+async function getIceServers() {
+  try {
+    // Try to get Twilio ICE servers first
+    const twilioServers = await getTwilioIceServers();
+    debug('Successfully fetched Twilio ICE servers');
+    return twilioServers;
+  } catch (err) {
+    error('Error fetching Twilio ICE servers, using fallback STUN servers:', err);
+    // Fallback to public STUN if Twilio fails
+    return [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' }
+    ];
+  }
 }
 
 export async function initProtooSignaling(httpServer) {
@@ -151,23 +171,23 @@ export async function initProtooSignaling(httpServer) {
             }
             case 'createWebRtcTransport': {
               const { producing, consuming, sctpCapabilities } = requestMessage.data;
+              
+              // Get ICE servers on demand for each transport
+              const iceServers = await getIceServers();
+              
               const webRtcTransportOptions = {
                 listenIps: [{ ip: '0.0.0.0', announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP || null }],
                 enableUdp: true, enableTcp: true, preferUdp: true,
                 initialAvailableOutgoingBitrate: 1000000, 
                 appData: { producing, consuming },
-                iceServers: [
-                  { urls: 'stun:stun.l.google.com:19302' },
-                  { urls: 'stun:stun1.l.google.com:19302' },
-                  { urls: 'stun:stun2.l.google.com:19302' },
-                  { urls: 'stun:stun3.l.google.com:19302' },
-                  { urls: 'stun:stun4.l.google.com:19302' }
-                ]
+                iceServers
               };
+              
               if (sctpCapabilities) {
                 webRtcTransportOptions.enableSctp = true;
                 webRtcTransportOptions.numSctpStreams = sctpCapabilities.numStreams;
               }
+              
               const transport = await mediasoupRouter.createWebRtcTransport(webRtcTransportOptions);
               debug(`[SERVER createWebRtcTransport] WebRtcTransport created: transport.id = ${transport.id}`);
               if (!transport.id) {

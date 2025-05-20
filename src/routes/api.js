@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { chat } from '../services/aiService.js';
 import { synth } from '../services/ttsService.js';
+import { getTwilioIceServers } from '../services/turnService.js';
 import profileRouter from './api/profile.js';
 import { jwtAuth } from '../middlewares/jwtAuth.js';
 import messageRouter from './api/message.js';
@@ -9,6 +10,18 @@ const router = Router();
 
 router.use('/profile', profileRouter);
 router.use('/message', messageRouter);
+
+// Add TURN credentials endpoint - no auth required as these are temporary
+router.get('/turn-credentials', async (req, res, next) => {
+  try {
+    const iceServers = await getTwilioIceServers();
+    res.json({ iceServers });
+  } catch (err) {
+    console.error('Error in /turn-credentials:', err);
+    res.status(500).json({ error: 'Failed to get TURN credentials' });
+    next(err);
+  }
+});
 
 router.post('/chat', async (req, res, next) => {
   const { message, userId, sessionId } = req.body;
