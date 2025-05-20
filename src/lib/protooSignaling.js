@@ -142,28 +142,41 @@ export async function initProtooSignaling(httpServer) {
                 listenIps: [{ ip: '0.0.0.0', announcedIp: process.env.MEDIASOUP_ANNOUNCED_IP || null }],
                 enableUdp: true, enableTcp: true, preferUdp: true,
                 initialAvailableOutgoingBitrate: 1000000, 
-                appData: { producing, consuming }
+                appData: { producing, consuming },
+                iceServers: [
+                  { urls: 'stun:stun.l.google.com:19302' },
+                  { urls: 'stun:stun1.l.google.com:19302' },
+                  { urls: 'stun:stun2.l.google.com:19302' },
+                  { urls: 'stun:stun3.l.google.com:19302' },
+                  { urls: 'stun:stun4.l.google.com:19302' }
+                ]
               };
               if (sctpCapabilities) {
                 webRtcTransportOptions.enableSctp = true;
                 webRtcTransportOptions.numSctpStreams = sctpCapabilities.numStreams;
               }
               const transport = await mediasoupRouter.createWebRtcTransport(webRtcTransportOptions);
-              debug('WebRtcTransport created:', transport.id);
+              debug(`[SERVER createWebRtcTransport] WebRtcTransport created: transport.id = ${transport.id}`);
+              if (!transport.id) {
+                error('[SERVER createWebRtcTransport] CRITICAL: transport.id is missing after creation!');
+              }
               peerData.transports.set(transport.id, transport);
+
               transport.on('dtlsstatechange', (dtlsState) => {
                 if (dtlsState === 'closed') {
                   debug('WebRtcTransport DTLS state closed:', transport.id);
                   transport.close();
                 }
               });
-              acceptRequest({
+              const responseData = {
                 id: transport.id,
                 iceParameters: transport.iceParameters,
                 iceCandidates: transport.iceCandidates,
                 dtlsParameters: transport.dtlsParameters,
                 sctpParameters: transport.sctpParameters
-              });
+              };
+              debug('[SERVER createWebRtcTransport] Accepting request with data:',responseData);
+              acceptRequest(responseData);
               break;
             }
             case 'connectWebRtcTransport': {
@@ -243,6 +256,17 @@ export async function initProtooSignaling(httpServer) {
                 kind: consumer.kind,
                 rtpParameters: consumer.rtpParameters
               });
+              break;
+            }
+            case 'resumeConsumer': {
+              const { consumerId } = requestMessage.data;
+              const consumer = peerData.consumers.get(consumerId);
+              if (!consumer) {
+                throw new Error(`consumer with id "${consumerId}" not found`);
+              }
+              await consumer.resume();
+              debug(`Consumer resumed: ${consumerId}`);
+              acceptRequest({});
               break;
             }
             default: {

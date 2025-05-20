@@ -96,15 +96,27 @@
 
         const peerId = `pid_${Math.random().toString(36).substr(2, 9)}`;
         let protooPeer;
-
-        function log(msg){ messages.innerHTML += msg + '<br>'; }
-
-        socket.emit('join-room', { roomId, name: userName });
-
         let localStream;
         let sendTransport, recvTransport, device;
         const localVideo = document.getElementById('localVideo');
         const remoteVideo = document.getElementById('remoteVideo');
+        
+        const wantsVideo = !window.location.search.includes('novideo');
+        const stunServers = [ // Public STUN servers
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun4.l.google.com:19302' }
+        ];
+        debugClient(`Client wantsVideo: ${wantsVideo}`);
+
+        let pendingProducersToConsume = [];
+
+        function log(msg){ messages.innerHTML += msg + '<br>'; }
+        function debugClient(message) { console.log('[CLIENT DEBUG]', message); }
+
+        socket.emit('join-room', { roomId, name: userName });
 
         document.getElementById('localLabel').innerText = userName + ' (You)';
         if(userRole === 'coach'){
@@ -126,18 +138,21 @@
           reject(501, 'Client does not handle requests'); 
         });
 
-        // Duplicated protooPeer.on('notification', ...) was here, ensure only one remains after merge
-        // The one inside joinSFU for newProducer is more specific and should be kept if different.
-        // This one is a general handler if needed.
-        protooPeer.on('notification', (notification) => {
-            console.log('Received global Protoo notification from server:', notification);
-             if (notification.method === 'newProducer' && !device.loaded) {
-                 // This might be an issue if newProducer comes before device is loaded.
-                 // The handler inside joinSFU is better placed.
-                 console.warn('Global newProducer notification received, but joinSFU handles this.');
-             }
+        // Generic notification handler - primarily for newProducers
+        protooPeer.on('notification', async (notification) => {
+          debugClient(`Received Protoo notification: ${notification.method}`);
+          if (notification.method === 'newProducer') {
+            const producerInfo = notification.data;
+            if (device && device.loaded) {
+              debugClient('Device is loaded, consuming producer immediately:', producerInfo.producerId);
+              await consumeProducer(producerInfo);
+            } else {
+              debugClient('Device not loaded yet, queueing producer:', producerInfo.producerId);
+              pendingProducersToConsume.push(producerInfo);
+              log('⚠️ Device not loaded, producer queued: ' + producerInfo.producerId);
+            }
+          }
         });
-
 
         protooPeer.on('failed', (currentAttempt, maxAttempts) => {
           console.error(`Protoo connection attempt ${currentAttempt} of ${maxAttempts} failed. URL: ${protooWebSocketUrl}`);
@@ -165,47 +180,237 @@
         }
 
         async function makeTransport(direction) {
-          console.log(`makeTransport called for ${direction}, needs Protoo implementation`);
-          const { id, iceParameters, iceCandidates, dtlsParameters, sctpParameters } =
-            await protooRequest('createWebRtcTransport', { producing: direction === 'send', consuming: direction === 'recv' });
+          try {
+            debugClient(`[makeTransport] Requesting server to create ${direction} transport...`);
+            const serverResponse = await protooRequest('createWebRtcTransport', {
+              producing: direction === 'send',
+              consuming: direction === 'recv',
+              // sctpCapabilities: device.sctpCapabilities
+            });
+            debugClient(`[makeTransport] Raw response from server for createWebRtcTransport (${direction}):`, JSON.parse(JSON.stringify(serverResponse))); // Log the raw response
 
-          const transport = direction === 'send'
-            ? device.createSendTransport({ id, iceParameters, iceCandidates, dtlsParameters, sctpParameters })
-            : device.createRecvTransport({ id, iceParameters, iceCandidates, dtlsParameters, sctpParameters });
-
-          transport.on('connect', async ({ dtlsParameters: connectDtlsParameters }, callback, errback) => {
-            try {
-              await protooRequest('connectWebRtcTransport', { transportId: transport.id, dtlsParameters: connectDtlsParameters });
-              callback();
-            } catch (error) {
-              errback(error);
+            if (!serverResponse || !serverResponse.id) {
+              const errorMsg = 'missing id in server response for createWebRtcTransport';
+              console.error(`[makeTransport] ${errorMsg}`, serverResponse);
+              log(`❌ ${errorMsg}`);
+              throw new Error(errorMsg);
             }
-          });
 
-          if (direction === 'send') {
-            transport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
+            const { id: transportId, iceParameters, iceCandidates, dtlsParameters, sctpParameters } = serverResponse;
+            debugClient(`[makeTransport] Server created ${direction} transport, (client-side transportId will be): ${transportId}`);
+
+            const transportOptions = {
+              id: transportId,
+              iceParameters,
+              iceCandidates,
+              dtlsParameters,
+              sctpParameters,
+              iceServers: stunServers, // Add STUN servers here
+              iceTransportPolicy: 'all', // Default is 'all'
+              // proprietaryConstraints: undefined,
+              // appData: { producing: direction === 'send', consuming: direction === 'recv' } // Optional appData
+            };
+            
+            debugClient(`[makeTransport] Using transportOptions for ${direction} transport:`, JSON.parse(JSON.stringify(transportOptions))); // Log the options
+
+            const transport = direction === 'send' ?
+              device.createSendTransport(transportOptions) :
+              device.createRecvTransport(transportOptions);
+
+            debugClient(`[makeTransport] Client-side ${direction} transport created: ${transport.id}`);
+
+            transport.on('connect', async ({ dtlsParameters: connectDtlsParameters }, callback, errback) => {
               try {
-                const { id: producerId } = await protooRequest('produce', { transportId: transport.id, kind, rtpParameters, appData });
-                callback({ id: producerId });
+                debugClient(`[transport ${direction} ${transport.id}] 'connect' event. DtlsParameters:`, connectDtlsParameters);
+                await protooRequest('connectWebRtcTransport', { transportId: transport.id, dtlsParameters: connectDtlsParameters });
+                debugClient(`[transport ${direction} ${transport.id}] Server acknowledged 'connectWebRtcTransport'.`);
+                callback();
               } catch (error) {
+                console.error(`[transport ${direction} ${transport.id}] 'connect' error:`, error);
+                log(`❌ Error connecting ${direction} transport: ${error.message}`);
                 errback(error);
               }
             });
+
+            if (direction === 'send') {
+              transport.on('produce', async ({ kind, rtpParameters, appData }, callback, errback) => {
+                try {
+                  debugClient(`[transport send ${transport.id}] 'produce' event. Kind: ${kind}, RtpParameters:`, rtpParameters, 'AppData:', appData);
+                  const { id: producerId } = await protooRequest('produce', { transportId: transport.id, kind, rtpParameters, appData });
+                  debugClient(`[transport send ${transport.id}] Server created producer: ${producerId} for kind ${kind}`);
+                  callback({ id: producerId });
+                } catch (error) {
+                  console.error(`[transport send ${transport.id}] 'produce' error:`, error);
+                  log(`❌ Error producing ${kind}: ${error.message}`);
+                  errback(error);
+                }
+              });
+            }
+
+            transport.on('connectionstatechange', (state) => {
+              console.log(`[transport ${direction} ${transport.id}] connection state changed to ${state}`);
+              log(`🔁 ${direction.charAt(0).toUpperCase() + direction.slice(1)} transport connection state: ${state}`);
+              if (state === 'failed' || state === 'closed' || state === 'disconnected') {
+                // Handle transport failure, maybe notify user or attempt reconnection
+                console.warn(`[transport ${direction} ${transport.id}] Transport ${state}.`);
+                // For now, just log. In a real app, might want to clean up or retry.
+              }
+            });
+            
+            transport.on('icecandidate', (candidate) => {
+                debugClient(`[transport ${direction} ${transport.id}] ICE candidate:`, candidate);
+                // In a typical client-server model with an SFU, you don't usually send ICE candidates
+                // from client to server *after* initial transport creation, as the server provides its candidates.
+                // However, some SFU designs might expect trickle ICE from client. Mediasoup-demo usually doesn't.
+            });
+
+
+            return transport;
+          } catch (error) {
+            console.error(`[makeTransport] Error in makeTransport(${direction}):`, error);
+            log(`❌ Error creating ${direction} transport: ${error.message}`);
+            throw error; // Re-throw to be caught by joinSFU
           }
-          return transport;
+        }
+
+        async function processPendingConsumers() {
+          debugClient(`Processing ${pendingProducersToConsume.length} pending producers to consume.`);
+          if (pendingProducersToConsume.length === 0) return;
+
+          const producersToProcess = [...pendingProducersToConsume];
+          pendingProducersToConsume = []; // Clear queue before processing to avoid re-entrancy issues
+          debugClient(`Cleared pendingProducersToConsume queue. Now processing ${producersToProcess.length} producers.`);
+
+          for (const producerInfo of producersToProcess) {
+            debugClient(`Calling consumeProducer for queued producer: ${producerInfo.producerId}`);
+            await consumeProducer(producerInfo);
+          }
+          debugClient(`Finished processing ${producersToProcess.length} pending producers.`);
+        }
+
+        async function consumeProducer(producerInfo) {
+          const { peerId: producerPeerId, producerId, kind, appData } = producerInfo;
+          debugClient(`[consumeProducer] START for producerId: ${producerId} from peer ${producerPeerId}`);
+          console.log('🆕 consuming new producer notification', producerId, kind, appData, 'from peer', producerPeerId);
+          log(`🆕 Seeing new producer: ${producerId} (${kind}) from peer ${producerPeerId}`);
+          try {
+            if (!device.loaded) { // Double check, though queueing should prevent this primarily
+              console.warn('ConsumeProducer called but device not loaded. ProducerId:', producerId);
+              log('⚠️ Device not loaded at consumeProducer call for ' + producerId);
+              return;
+            }
+            if (!recvTransport) {
+              console.warn('Receive transport not ready, cannot consume. ProducerId:', producerId);
+              log('⚠️ Receive transport not ready for ' + producerId);
+              return;
+            }
+
+            const { id: consumerId, producerId: remoteProducerIdReturned, kind: remoteKind, rtpParameters } = await protooRequest('consume', {
+              rtpCapabilities: device.rtpCapabilities,
+              producerId,
+            });
+            const consumer = await recvTransport.consume({
+              id: consumerId,
+              producerId: remoteProducerIdReturned, 
+              kind: remoteKind, 
+              rtpParameters: rtpParameters,
+            });
+            
+            log(`🎧 Consuming remote stream: ${producerId}`);
+            debugClient(`[consumeProducer] Consumer ${consumer.id} created for producer ${producerId}. Initial client state: paused=${consumer.paused}, track=${!!consumer.track}`);
+            
+            await protooRequest('resumeConsumer', { consumerId: consumer.id });
+            debugClient(`[consumeProducer] Server acknowledged resume request for consumer ${consumer.id}`);
+            
+            consumer.resume();
+            log(`▶️ Resumed remote stream: ${producerId}`);
+            debugClient(`[consumeProducer] Client-side consumer.resume() called for ${consumer.id}. New client state: paused=${consumer.paused}, track=${!!consumer.track}`);
+
+            function attachTrackToVideo(track) {
+                if (!track || track.readyState !== 'live') {
+                    debugClient(`[consumeProducer] Track for consumer ${consumer.id} is not live. State: ${track ? track.readyState : 'no track'}`);
+                    log(`⚠️ Remote track for ${producerId} not live.`);
+                    return;
+                }
+                debugClient(`[consumeProducer] Track for consumer ${consumer.id} is live. Attaching to remoteVideo.`);
+                
+                // Simplest assignment: Create a new MediaStream with just this track
+                remoteVideo.srcObject = new MediaStream([track]);
+                
+                debugClient(`[attachTrackToVideo] remoteVideo.srcObject assigned with new MediaStream.`);
+                // Add the detailed logging for tracks *after* assignment
+                const stream = remoteVideo.srcObject;
+                if (stream && typeof stream.getTracks === 'function') {
+                    const tracks = stream.getTracks();
+                    debugClient(`[attachTrackToVideo] MediaStream now has ${tracks.length} track(s).`);
+                    tracks.forEach((t, index) => {
+                        debugClient(`[attachTrackToVideo] Track ${index}: id=${t.id}, kind=${t.kind}, label='${t.label}', enabled=${t.enabled}, muted=${t.muted}, readyState=${t.readyState}`);
+                    });
+                } else {
+                    debugClient(`[attachTrackToVideo] remoteVideo.srcObject is null/undefined after new MediaStream assignment.`);
+                }
+
+                remoteVideo.play().then(() => {
+                    debugClient(`[consumeProducer] remoteVideo.play() resolved for ${producerId}`);
+                }).catch(e => {
+                    console.warn(`[consumeProducer] remoteVideo.play() failed for ${producerId}:`, e);
+                    log(`⚠️ Could not play remote video for ${producerId}. Autoplay might be blocked.`);
+                });
+                log(`🖼️ Displaying remote stream: ${producerId}`);
+            }
+
+            if (consumer.track) {
+                attachTrackToVideo(consumer.track);
+            } else {
+                debugClient(`[consumeProducer] Track for consumer ${consumer.id} not immediately available after resume. Listening for 'trackstart'.`);
+                consumer.once('trackstart', () => {
+                    debugClient(`[consumeProducer] 'trackstart' event received for consumer ${consumer.id}.`);
+                    attachTrackToVideo(consumer.track);
+                });
+            }
+            
+            consumer.on('trackended', () => {
+                debugClient(`[consumeProducer] Consumer ${consumer.id} track ended. Clearing remote video.`);
+                log(`🚫 Remote stream ended: ${producerId}`);
+                if (remoteVideo.srcObject && typeof remoteVideo.srcObject.getTracks === 'function') {
+                    const stream = remoteVideo.srcObject;
+                    stream.getTracks().forEach(t => {
+                        if (t.id === consumer.track.id) {
+                            stream.removeTrack(t);
+                        }
+                    });
+                    if (stream.getTracks().length === 0) {
+                        remoteVideo.srcObject = null;
+                    }
+                }
+            });
+            consumer.on('producerpause', () => {
+                debugClient(`[consumeProducer] Producer for consumer ${consumer.id} paused.`);
+                log(`⏸️ Remote stream paused: ${producerId}`);
+            });
+            consumer.on('producerresume', () => {
+                debugClient(`[consumeProducer] Producer for consumer ${consumer.id} resumed.`);
+                log(`▶️ Remote stream resumed by producer: ${producerId}`);
+            });
+
+          } catch (err) {
+            console.error('Error consuming new producer:', producerId, err);
+            log(`❌ ERROR consuming producer ${producerId}: ${err.message}`);
+          }
+          debugClient(`[consumeProducer] END for producerId: ${producerId}`);
         }
 
         async function joinSFU(){
           log('📹 Attempting to join SFU...'); 
           console.log('📹 requesting camera');
           try {
-            localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-            localVideo.srcObject = localStream;
-            log('🎥 Got local stream.');
-            console.log('🎥 got local stream, connecting to SFU via Protoo');
+            log(wantsVideo ? '🎥 Requesting video & audio...' : '🎤 Requesting audio only...');
+            localStream = await navigator.mediaDevices.getUserMedia({video: wantsVideo, audio:true});
+            localVideo.srcObject = localStream; // Show local audio/video regardless
+            log('🎤 Got local media stream.');
+            console.log('🎤 got local media stream, wantsVideo:', wantsVideo);
             
-            // Ensure mediasoupClient is available
-            if (!window.mediasoupClient || !window.mediasoupClient.Device) { // Check for Device property too
+            if (!window.mediasoupClient || !window.mediasoupClient.Device) { 
                 const errMsg = 'mediasoupClient or mediasoupClient.Device is not available on window.';
                 console.error(errMsg, window.mediasoupClient);
                 log(`❌ ERROR: ${errMsg}`);
@@ -222,65 +427,41 @@
             console.log('🔧 Device loaded with router capabilities');
             log('👍 Device loaded.');
 
+            // Create both transports first
             log('🚚 Creating send transport...');
             sendTransport = await makeTransport('send');
             console.log('🚚 send transport ready', sendTransport.id);
             log(`👍 Send transport created: ${sendTransport.id}`);
-            const camTrack = localStream.getVideoTracks()[0];
-            await sendTransport.produce({ track: camTrack }); 
-            console.log('📡 produced local video');
-            log('📡 Video produced.');
 
             log('📥 Creating recv transport...');
             recvTransport = await makeTransport('recv');
             console.log('📥 recv transport ready', recvTransport.id);
             log(`👍 Recv transport created: ${recvTransport.id}`);
+            
+            // Now that transports (especially recvTransport) are ready, process pending consumers
+            await processPendingConsumers();
 
-            // This specific notification handler for newProducer should be inside joinSFU
-            // if it relies on `device` or `recvTransport` which are scoped/initialized here.
-            // Remove or ensure the global one doesn't conflict.
-            // For now, let's assume this is the primary one.
-            protooPeer.off('notification'); // Remove any generic/previous ones
-            protooPeer.on('notification', async (notification) => {
-              console.log('Received Protoo notification (specific to joinSFU):', notification);
-              if (notification.method === 'newProducer') {
-                const { producerId, kind, appData } = notification.data; 
-                console.log('🆕 new producer notification', producerId, kind, appData);
-                log(`🆕 Seeing new producer: ${producerId} (${kind})`);
-                try {
-                  if (!device.loaded) {
-                    console.warn('Device not loaded yet, cannot consume. ProducerId:', producerId);
-                    log('⚠️ Device not loaded, cannot consume yet.');
-                    return;
-                  }
-                  if (!recvTransport) {
-                    console.warn('Receive transport not ready, cannot consume. ProducerId:', producerId);
-                    log('⚠️ Receive transport not ready, cannot consume yet.');
-                    return;
-                  }
-
-                  const { id: consumerId, producerId: remoteProducerId, kind: remoteKind, rtpParameters } = await protooRequest('consume', {
-                    rtpCapabilities: device.rtpCapabilities,
-                    producerId,
-                  });
-                  const consumer = await recvTransport.consume({
-                    id: consumerId,
-                    producerId: remoteProducerId, 
-                    kind: remoteKind, 
-                    rtpParameters,
-                  });
-                  const ms = new MediaStream([consumer.track]);
-                  remoteVideo.srcObject = ms;
-                  log(`🎧 Consuming remote stream: ${producerId}`);
-                  // await protooRequest('resumeConsumer', { consumerId }); 
-                } catch (err) {
-                  console.error('Error consuming new producer:', err);
-                  log(`❌ ERROR consuming producer ${producerId}: ${err.message}`);
-                }
+            // Then produce local media
+            if (wantsVideo) {
+              const camTrack = localStream.getVideoTracks()[0];
+              if (camTrack) {
+                log('📡 Producing video track...');
+                await sendTransport.produce({ track: camTrack, appData: { source: 'webcam' } }); 
+                console.log('📡 produced local video');
+                log('📡 Video produced.');
+              } else {
+                log('⚠️ No video track found to produce, even though wantsVideo was true.');
+                console.warn('wantsVideo was true, but no video track found in localStream');
               }
-            });
-            log('🎧 Listening for new producers...');
-            aiGreeting(); // Call AI greeting once SFU setup is initiated
+            } else {
+              log('ℹ️ Skipping video production as per ?novideo flag.');
+            }
+            
+            // TODO: Implement audio production similarly if needed, or assume it's part of `sendTransport` handling if audio tracks are present.
+            // For now, focusing on conditional video.
+
+            log('🎧 Listening for new producers (via global handler)...');
+            aiGreeting();
 
           } catch (err) {
             console.error('Error in joinSFU:', err);
