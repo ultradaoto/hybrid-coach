@@ -3,6 +3,8 @@ import { ensureAuthenticated } from '../middlewares/auth.js';
 import { randomUUID } from 'crypto';
 import { issueToken } from '../middlewares/jwtAuth.js';
 import { prisma } from '../lib/prisma.js';
+import { generateJwtWithExpiry } from '../utils/jwtUtils.js';
+import { getOrCreateSessionId } from '../utils/sessionUtils.js';
 
 const router = Router();
 
@@ -85,6 +87,26 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// Add a new route for the fallback room
+router.get('/:roomId/fallback', ensureAuthenticated, async (req, res) => {
+  const { roomId } = req.params;
+  
+  // Generate a JWT token for the room with a 2-hour expiration
+  const jwt = generateJwtWithExpiry(req.user, '2h');
+  
+  // Get or create a session ID for the room
+  const sessionId = await getOrCreateSessionId(roomId);
+  
+  // Render the fallback room template
+  res.render('room-fallback', { 
+    title: 'Coaching Call',
+    roomId,
+    jwt,
+    sessionId,
+    user: req.user
+  });
 });
 
 export default router;

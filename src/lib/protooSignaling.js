@@ -132,418 +132,399 @@ export async function initProtooSignaling(httpServer) {
   }
 
   // const wsServer = new WebSocketServer({ server: httpServer, path: '/protoo' }); // OLD: Using 'ws' directly
-  const protooWsServer = new protoo.WebSocketServer(httpServer, {
-    path: '/protoo',
-    maxReceivedFrameSize      : 2097152, // Increased from 960000 to 2MB
-    maxReceivedMessageSize    : 2097152, // Increased from 960000 to 2MB
-    fragmentOutgoingMessages  : true,
-    fragmentationThreshold    : 1048576, // Increased from 960000 to 1MB
-    keepalive: true,
-    keepaliveInterval: 15000, // Send keepalive more frequently (15 seconds)
-    keepaliveGracePeriod: 15000, // Wait 15 seconds before dropping connection
-    dropConnectionOnKeepaliveTimeout: true,
-    autoAcceptConnections: false, // Explicitly handle each connection
-    ignoreXForwardedFor: false, // Support proxied connections
-    closeTimeout: 5000, // 5 seconds to allow proper connection closing
-    maxConnections: 100, // Limit concurrent connections
-    clientTracking: true, // Keep track of connected clients
-    disableNagleAlgorithm: true // Disable Nagle's algorithm for better real-time performance
+  
+  // Log the protoo server options for debugging
+  console.log('[PROTOO] Initializing WebSocketServer with path: /protoo');
+  
+  // SWITCH TO NATIVE WEBSOCKET IMPLEMENTATION
+  const WebSocketServer = require('ws').Server;
+  const wsServer = new WebSocketServer({ 
+    noServer: true // Use noServer mode to manually handle upgrades
   });
-
-  protooWsServer.on('connectionrequest', async (info, accept, reject) => {
-    // The 'ws' (WebSocket instance) is indirectly available via 'accept()' or info.socket
-    // For Protoo, we typically get the transport by calling accept().
-    const u = new URL(info.request.url, `ws://${info.request.headers.host}`);
-    const roomId = u.searchParams.get('roomId');
-    const peerId = u.searchParams.get('peerId');
-
-    debug(`protoo connection request for roomId "${roomId}", peerId "${peerId}" from origin ${info.origin}`);
-
-    if (!roomId || !peerId) {
-      reject(400, 'Connection request without roomId and/or peerId');
-      return;
+  
+  console.log('[PROTOO] Using native WebSocket server with noServer mode');
+  
+  // Create a Map to store active WebSocket connections by roomId and peerId
+  const wsConnections = new Map();
+  
+  // Add upgrade handler to httpServer
+  httpServer.on('upgrade', (request, socket, head) => {
+    // Only handle connections to /protoo path
+    if (request.url.startsWith('/protoo')) {
+      console.log(`[PROTOO] Handling upgrade for: ${request.url}`);
+      
+      wsServer.handleUpgrade(request, socket, head, (ws) => {
+        wsServer.emit('connection', ws, request);
+      });
     }
-
+  });
+  
+  // Handle WebSocket connections directly
+  wsServer.on('connection', async (ws, req) => {
+    console.log(`[PROTOO-WS] Raw WebSocket connection: ${req.url}`);
+    
     try {
-      const roomData = await getOrCreateRoom(roomId);
-      const { protooRoom, mediasoupRouter } = roomData;
-
-      // Check if we already have this peer in the room (reconnection case)
-      const existingPeerData = roomData.peers.get(peerId);
+      // Parse URL parameters
+      const urlStr = req.url;
+      const u = new URL(urlStr, `ws://${req.headers.host}`);
+      const roomId = u.searchParams.get('roomId');
+      const peerId = u.searchParams.get('peerId');
       
-      // If there's an existing peer with this ID, clean it up first
-      if (existingPeerData) {
-        debug(`Peer ${peerId} reconnecting - cleaning up old resources`);
-        
-        try {
-          // Save producer information for later use
-          const producerInfo = Array.from(existingPeerData.producers.values()).map(p => ({
-            id: p.id,
-            kind: p.kind,
-            appData: p.appData
-          }));
-          
-          // Store reconnection info in room data
-          if (!roomData.reconnectInfo) {
-            roomData.reconnectInfo = {};
-          }
-          
-          roomData.reconnectInfo[peerId] = {
-            producerInfo,
-            timestamp: Date.now()
-          };
-          
-          // Try to close transports and clean up peer resources
-          if (existingPeerData.transports) {
-            for (const transport of existingPeerData.transports.values()) {
-              try {
-                transport.close();
-              } catch (e) {
-                warn(`Error closing transport for reconnecting peer ${peerId}:`, e);
-              }
-            }
-          }
-          
-          // Remove from existing room structures
-          if (protooRoom.hasPeer(peerId)) {
-            debug(`Removing existing protoo peer ${peerId} for clean reconnection`);
-            if (typeof protooRoom.removePeer === 'function') {
-              protooRoom.removePeer(peerId);
-            } else if (protooRoom.peers && typeof protooRoom.peers.delete === 'function') {
-              protooRoom.peers.delete(peerId);
-            } else {
-              warn(`Could not find method to remove peer ${peerId} from protoo room`);
-              // If we can't remove, try to close the peer
-              const existingPeer = Array.from(protooRoom.peers || []).find(p => p.id === peerId);
-              if (existingPeer && typeof existingPeer.close === 'function') {
-                existingPeer.close();
-              }
-            }
-          }
-          
-          // Delete the peer data to allow clean reconnection
-          roomData.peers.delete(peerId);
-        } catch (cleanupErr) {
-          warn(`Error cleaning up existing peer ${peerId} for reconnection:`, cleanupErr);
-          // Continue anyway to allow reconnection
-        }
+      if (!roomId || !peerId) {
+        console.log(`[PROTOO-WS] Missing roomId or peerId, closing connection`);
+        ws.close(4000, 'Missing roomId or peerId');
+        return;
       }
-
-      // Accept the connection and get the Protoo transport instance.
-      const protooTransport = accept(); // This is the key change
-
-      // Create the peer with the given ID
-      let protooPeer;
-      try {
-        protooPeer = await protooRoom.createPeer(peerId, protooTransport);
-      } catch (peerCreateErr) {
-        // Handle case where peer might still exist in room
-        warn(`Error creating peer ${peerId}, might already exist:`, peerCreateErr);
-        
-        // Try to get existing peer
-        if (protooRoom.hasPeer(peerId)) {
-          warn(`Peer ${peerId} already exists in protoo room, attempting to close and recreate`);
-          // Use the appropriate method to remove the peer
-          if (typeof protooRoom.removePeer === 'function') {
-            protooRoom.removePeer(peerId);
-          } else if (protooRoom.peers && typeof protooRoom.peers.delete === 'function') {
-            // Try using the peers Map directly
-            protooRoom.peers.delete(peerId);
-          } else {
-            warn(`Could not find method to remove peer ${peerId} from protoo room`);
-            // If we can't remove, try to close the peer
-            const existingPeer = Array.from(protooRoom.peers || []).find(p => p.id === peerId);
-            if (existingPeer && typeof existingPeer.close === 'function') {
-              existingPeer.close();
-            }
+      
+      console.log(`[PROTOO-WS] Connection established for room ${roomId}, peer ${peerId}`);
+      
+      // Setup ping/pong for keepalive
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocketServer.OPEN) {
+          try {
+            ws.ping();
+          } catch (err) {
+            console.error(`[PROTOO-WS] Error sending ping to peer ${peerId}:`, err);
           }
-          // Retry peer creation
-          protooPeer = await protooRoom.createPeer(peerId, protooTransport);
         } else {
-          // If failed for another reason, just throw
-          throw peerCreateErr;
+          clearInterval(pingInterval);
         }
-      }
+      }, 5000);
       
-      debug(`protoo peer created: ${peerId} in room ${roomId} with transportId ${protooTransport.id}`);
-
-      // Create fresh peer data structure
-      roomData.peers.set(peerId, {
-        protooPeer,
-        transports: new Map(),
-        producers: new Map(),
-        consumers: new Map(),
-        lastActivity: Date.now()
+      ws.on('pong', () => {
+        // Update last activity timestamp
+        if (!wsConnections.has(roomId)) {
+          wsConnections.set(roomId, new Map());
+        }
+        const roomPeers = wsConnections.get(roomId);
+        
+        if (!roomPeers.has(peerId)) {
+          roomPeers.set(peerId, { ws, lastActivity: Date.now() });
+        } else {
+          const peerData = roomPeers.get(peerId);
+          peerData.lastActivity = Date.now();
+        }
       });
       
-      // Check if this peer is reconnecting and had producers
-      if (roomData.reconnectInfo && roomData.reconnectInfo[peerId]) {
-        const reconnectData = roomData.reconnectInfo[peerId];
-        // Only use reconnect data if it's recent (within last 60 seconds)
-        if (Date.now() - reconnectData.timestamp < 60000) {
-          debug(`Peer ${peerId} is reconnecting, will restore producer info`);
-          // We'll tell this peer about other peers' producers in the existing loop below
-          
-          // Note: We don't actually need to restore the producers here since
-          // clients will re-produce media after connection is established
-        }
-        // Clean up after using
-        delete roomData.reconnectInfo[peerId];
+      // Store the connection
+      if (!wsConnections.has(roomId)) {
+        wsConnections.set(roomId, new Map());
       }
+      const roomPeers = wsConnections.get(roomId);
+      roomPeers.set(peerId, { ws, lastActivity: Date.now() });
       
-      // Inform the new peer about existing producers in the room
-      for (const existingPeerData of roomData.peers.values()) {
-        if (existingPeerData.protooPeer.id === peerId) continue; // Don't tell about self, though it has no producers yet
-        for (const producer of existingPeerData.producers.values()) {
-          try {
-            protooPeer.notify('newProducer', { 
-              peerId: existingPeerData.protooPeer.id, 
-              producerId: producer.id,
-              kind: producer.kind,
-              appData: producer.appData
-            }).catch(err => {
-              error(`Error notifying new peer ${peerId} of existing producer ${producer.id}: %o`, err);
-            });
-          } catch (notifyError) {
-            error(`Error trying to notify new peer ${peerId} of existing producer ${producer.id}: %o`, notifyError);
-          }
-        }
-      }
+      // Get or create room data
+      const roomData = await getOrCreateRoom(roomId);
+      const { protooRoom, mediasoupRouter } = roomData;
       
-      protooPeer.on('request', async (requestMessage, acceptRequest, rejectRequest) => {
-        debug(`protoo request from ${peerId} (transportId: ${protooTransport.id}): method "%s", data: %o`, requestMessage.method, requestMessage.data);
-        const peerData = roomData.peers.get(peerId);
-        if (!peerData) {
-          error('cannot find peerData for peerId', peerId);
-          rejectRequest(404, 'peer not found');
-          return;
-        }
+      // Create a protoo room if it doesn't exist yet
+      let protooPeer = null;
+      
+      // Handle messages
+      ws.on('message', async (message) => {
         try {
-          switch (requestMessage.method) {
-            case 'getRouterRtpCapabilities': {
-              acceptRequest(mediasoupRouter.rtpCapabilities);
-              break;
+          // Debug raw message
+          console.log(`[PROTOO-WS] RAW message received: ${message.toString('utf8').substring(0, 100)}...`);
+          
+          const msg = JSON.parse(message);
+          console.log(`[PROTOO-WS] Received message from peer ${peerId}:`, msg.method || 'notification');
+          
+          // Handle requests
+          if (msg.method) {
+            const peerData = roomData.peers.get(peerId);
+            if (!peerData && msg.method !== 'getRouterRtpCapabilities') {
+              console.error(`[PROTOO-WS] Cannot find peer data for ${peerId}`);
+              sendResponse(ws, msg.id, { error: 'Peer not found' });
+              return;
             }
-            case 'createWebRtcTransport': {
-              const { producing, consuming, sctpCapabilities } = requestMessage.data;
-              
-              // Get ICE servers on demand for each transport
-              const iceServers = await getIceServers();
-              debug(`Got ${iceServers.length} ICE servers for transport`);
-              
-              // Only force TURN if proper TURN servers are available
-              const hasTurnServer = iceServers.some(server => {
-                const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
-                return urls.some(url => url.startsWith('turn:'));
-              });
-              
-              // Use the actual public IP if available
-              const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || null;
-              
-              // Check if we are very likely in localhost development mode
-              const isLocalDevelopment = info && info.origin && (
-                info.origin.includes('localhost') || 
-                info.origin.includes('127.0.0.1')
-              );
-              
-              const webRtcTransportOptions = {
-                listenIps: [
-                  // Try with explicit IP announcement
-                  { ip: '0.0.0.0', announcedIp },
-                  // Add a direct localhost IP for local development
-                  ...(isLocalDevelopment ? [{ ip: '127.0.0.1', announcedIp: '127.0.0.1' }] : [])
-                ],
-                enableUdp: true, 
-                enableTcp: true, 
-                preferUdp: true,
-                initialAvailableOutgoingBitrate: 1000000,
-                appData: { producing, consuming },
-                // Only include iceServers in production mode
-                ...((!isLocalDevelopment && hasTurnServer) ? { iceServers } : {}),
-                // Additional settings to improve NAT traversal
-                enableSctp: !!sctpCapabilities,
-                numSctpStreams: sctpCapabilities ? sctpCapabilities.numStreams : undefined,
-                // Special options for localhost connectivity
-                enableUdpSrflx: true, // Enable UDP Server Reflexive candidates
-                iceTransportPolicy: 'all', // Accept all ICE candidate types
-                additionalSettings: {
-                  iceCheckMinInterval: isLocalDevelopment ? 50 : 100, // Faster ICE checks in development
-                  // Add keep-alive settings to maintain long connections
-                  dtlsTimeoutInitial: 30000, // 30 seconds initial DTLS timeout
-                  dtlsTimeoutMax: 60000, // 60 seconds max DTLS timeout
-                  keepaliveIntervalMs: 2500, // Send ICE keep-alive packets every 2.5 seconds
-                  iceUnwritableTimeout: 30000, // 30 seconds before considering ICE unwritable
-                  iceInactiveTimeout: 30000, // 30 seconds inactive timeout
-                  iceFailedTimeout: 30000, // 30 seconds failure timeout
-                  // Connection health monitoring
-                  enableHealthMonitoring: true,
-                  healthCheckIntervalMs: 10000 // Check connection health every 10 seconds
-                }
-              };
-              
-              // Log important options
-              debug(`Creating transport with options: listenIps=${JSON.stringify(webRtcTransportOptions.listenIps)}, enableUdp=${webRtcTransportOptions.enableUdp}, enableTcp=${webRtcTransportOptions.enableTcp}`);
-              
-              const transport = await mediasoupRouter.createWebRtcTransport(webRtcTransportOptions);
-              debug(`[SERVER createWebRtcTransport] WebRtcTransport created: transport.id = ${transport.id}`);
-              if (!transport.id) {
-                error('[SERVER createWebRtcTransport] CRITICAL: transport.id is missing after creation!');
-              }
-              peerData.transports.set(transport.id, transport);
-
-              transport.on('dtlsstatechange', (dtlsState) => {
-                if (dtlsState === 'closed') {
-                  debug('WebRtcTransport DTLS state closed:', transport.id);
-                  transport.close();
-                }
-              });
-              const responseData = {
-                id: transport.id,
-                iceParameters: transport.iceParameters,
-                iceCandidates: transport.iceCandidates,
-                dtlsParameters: transport.dtlsParameters,
-                sctpParameters: transport.sctpParameters
-              };
-              debug('[SERVER createWebRtcTransport] Accepting request with data:',responseData);
-              acceptRequest(responseData);
-              break;
-            }
-            case 'connectWebRtcTransport': {
-              const { transportId, dtlsParameters } = requestMessage.data;
-              const transport = peerData.transports.get(transportId);
-
-              if (!transport) {
-                throw new Error(`transport with id "${transportId}" not found`);
-              }
-
-              await transport.connect({ dtlsParameters });
-              debug(`WebRtcTransport connected: ${transportId}`);
-              acceptRequest({}); // mediasoup-demo sends empty object on success
-              break;
-            }
-            case 'produce': {
-              const { transportId, kind, rtpParameters, appData } = requestMessage.data;
-              const transport = peerData.transports.get(transportId);
-              if (!transport) {
-                throw new Error(`transport with id "${transportId}" not found for producing`);
-              }
-              const producer = await transport.produce({ kind, rtpParameters, appData });
-              peerData.producers.set(producer.id, producer);
-              debug(`Producer created: ${producer.id} on transport ${transportId}`);
-
-              acceptRequest({ id: producer.id });
-
-              // Notify other peers in the same room (excluding the producer itself)
-              for (const otherPeerData of roomData.peers.values()) {
-                if (otherPeerData.protooPeer.id === peerId) continue;
-                try {
-                  otherPeerData.protooPeer.notify('newProducer', { 
-                    peerId, // Let them know who produced
-                    producerId: producer.id, 
-                    kind: producer.kind, 
-                    appData: producer.appData 
-                  }).catch(err => {
-                    error(`Error notifying peer ${otherPeerData.protooPeer.id} of new producer: %o`, err);
+            
+            switch (msg.method) {
+              case 'getRouterRtpCapabilities':
+                // First request when connecting - create the peer if it doesn't exist
+                if (!roomData.peers.has(peerId)) {
+                  // Create a new peer data structure
+                  roomData.peers.set(peerId, {
+                    transports: new Map(),
+                    producers: new Map(),
+                    consumers: new Map(),
+                    lastActivity: Date.now()
                   });
-                } catch (notifyError) {
-                   error(`Error trying to notify peer ${otherPeerData.protooPeer.id}: %o`, notifyError);
+                  console.log(`[PROTOO-WS] Created peer data for ${peerId}`);
                 }
-              }
-              break;
-            }
-            case 'consume': {
-              const { rtpCapabilities, producerId } = requestMessage.data;
-              // Find a suitable transport - ensure it's a consuming transport
-              const consumerTransport = Array.from(peerData.transports.values())
-                .find(t => t.appData && t.appData.consuming === true);
-
-              if (!consumerTransport) {
-                debug(`No suitable (consuming) transport found for peer ${peerId} to consume producer ${producerId}. Available transports:`, 
-                  Array.from(peerData.transports.values()).map(t => `${t.id}(consuming:${!!t.appData.consuming})`));
-                throw new Error(`no suitable (consuming) transport found for peer ${peerId} to consume producer ${producerId}`);
-              }
-              
-              // Find the producer across all peers in the room
-              let producer = null;
-              for (const [otherPeerId, otherPeerData] of roomData.peers.entries()) {
-                const foundProducer = otherPeerData.producers.get(producerId);
-                if (foundProducer) {
-                  producer = foundProducer;
-                  debug(`Found producer ${producerId} from peer ${otherPeerId}`);
-                  break;
+                
+                console.log(`[PROTOO-WS] Sending RTP capabilities to ${peerId}`);
+                
+                sendResponse(ws, msg.id, mediasoupRouter.rtpCapabilities);
+                break;
+                
+              case 'createWebRtcTransport':
+                const { producing, consuming, sctpCapabilities } = msg.data;
+                
+                try {
+                  console.log(`[PROTOO-WS] START createWebRtcTransport for peer ${peerId} (producing: ${producing}, consuming: ${consuming})`);
+                  
+                  // Get ICE servers on demand for each transport
+                  const iceServers = await getIceServers();
+                  console.log(`[PROTOO-WS] Got ${iceServers.length} ICE servers for transport`);
+                  
+                  // Use the actual public IP if available
+                  const announcedIp = process.env.MEDIASOUP_ANNOUNCED_IP || null;
+                  
+                  // Check if we are very likely in localhost development mode
+                  const isLocalDevelopment = req.headers.host && (
+                    req.headers.host.includes('localhost') || 
+                    req.headers.host.includes('127.0.0.1')
+                  );
+                  
+                  const webRtcTransportOptions = {
+                    listenIps: [
+                      // Try with explicit IP announcement
+                      { ip: '0.0.0.0', announcedIp },
+                      // Add a direct localhost IP for local development
+                      ...(isLocalDevelopment ? [{ ip: '127.0.0.1', announcedIp: '127.0.0.1' }] : [])
+                    ],
+                    enableUdp: true, 
+                    enableTcp: true, 
+                    preferUdp: true,
+                    initialAvailableOutgoingBitrate: 1000000,
+                    appData: { producing, consuming },
+                    // CRITICAL FIX: ALWAYS include ICE servers, regardless of environment
+                    iceServers: iceServers,
+                    // Additional settings to improve NAT traversal
+                    enableSctp: !!sctpCapabilities,
+                    numSctpStreams: sctpCapabilities ? sctpCapabilities.numStreams : undefined,
+                    // Special options for localhost connectivity
+                    enableUdpSrflx: true, // Enable UDP Server Reflexive candidates
+                    iceTransportPolicy: 'all'
+                  };
+                  
+                  console.log(`[PROTOO-WS] Creating transport for peer ${peerId} (producing: ${producing}, consuming: ${consuming})`);
+                  const transport = await mediasoupRouter.createWebRtcTransport(webRtcTransportOptions);
+                  peerData.transports.set(transport.id, transport);
+                  
+                  transport.on('dtlsstatechange', (dtlsState) => {
+                    if (dtlsState === 'closed') {
+                      console.log(`[PROTOO-WS] WebRtcTransport DTLS state closed: ${transport.id}`);
+                      transport.close();
+                    }
+                  });
+                  
+                  const responseData = {
+                    id: transport.id,
+                    iceParameters: transport.iceParameters,
+                    iceCandidates: transport.iceCandidates,
+                    dtlsParameters: transport.dtlsParameters,
+                    sctpParameters: transport.sctpParameters
+                  };
+                  
+                  console.log(`[PROTOO-WS] WebRtcTransport created successfully with ID ${transport.id}`);
+                  console.log(`[PROTOO-WS] Sending transport info with ${transport.iceCandidates.length} ICE candidates`);
+                  
+                  // Send formatted response via helper
+                  console.log(`[PROTOO-WS] Response data structure:`, JSON.stringify(responseData));
+                  sendResponse(ws, msg.id, responseData);
+                } catch (transportErr) {
+                  console.error(`[PROTOO-WS] Error creating WebRtcTransport:`, transportErr);
+                  sendResponse(ws, msg.id, { error: transportErr.message || 'Error creating transport' });
                 }
-              }
-              
-              if (!producer) {
-                debug(`Producer ${producerId} not found in any peer`);
-                throw new Error(`producer ${producerId} not found`);
-              }
-              
-              if (!mediasoupRouter.canConsume({ producerId, rtpCapabilities })) {
-                throw new Error(`peer ${peerId} cannot consume producer ${producerId}`);
-              }
-
-              const consumer = await consumerTransport.consume({
-                producerId,
-                rtpCapabilities,
-                paused: true // mediasoup-demo typically creates consumers paused
-              });
-              peerData.consumers.set(consumer.id, consumer);
-              debug(`Consumer created: ${consumer.id} for producer ${producerId} on transport ${consumerTransport.id}`);
-
-              consumer.on('transportclose', () => {
-                debug(`Consumer ${consumer.id} transport closed`);
-                consumer.close();
-              });
-              consumer.on('producerclose', () => {
-                debug(`Consumer ${consumer.id} producer closed`);
-                consumer.close();
-              });
-
-              acceptRequest({
-                id: consumer.id,
-                producerId: producerId,
-                kind: consumer.kind,
-                rtpParameters: consumer.rtpParameters
-              });
-              break;
-            }
-            case 'resumeConsumer': {
-              const { consumerId } = requestMessage.data;
-              const consumer = peerData.consumers.get(consumerId);
-              if (!consumer) {
-                throw new Error(`consumer with id "${consumerId}" not found`);
-              }
-              await consumer.resume();
-              debug(`Consumer resumed: ${consumerId}`);
-              acceptRequest({});
-              break;
-            }
-            case 'ping': {
-              // Simple ping-pong for connection keep-alive and health monitoring
-              debug(`Received ping from peer ${peerId}`);
-              
-              // Update last activity timestamp
-              if (peerData) {
-                peerData.lastActivity = Date.now();
-              }
-              
-              acceptRequest({ timestamp: Date.now() });
-              break;
-            }
-            default: {
-              error('unknown protoo request.method "%s"', requestMessage.method);
-              rejectRequest(400, `unknown protoo request.method "${requestMessage.method}"`);
+                break;
+                
+              case 'connectWebRtcTransport':
+                const { transportId, dtlsParameters } = msg.data;
+                
+                try {
+                  console.log(`[PROTOO-WS] START connectWebRtcTransport for peer ${peerId}, transportId: ${transportId}`);
+                  
+                  const connectTransport = peerData.transports.get(transportId);
+                  
+                  if (!connectTransport) {
+                    console.error(`[PROTOO-WS] Transport with id "${transportId}" not found for peer ${peerId}`);
+                    sendResponse(ws, msg.id, { error: `Transport with id "${transportId}" not found` });
+                    return;
+                  }
+                  
+                  await connectTransport.connect({ dtlsParameters });
+                  console.log(`[PROTOO-WS] WebRtcTransport connected successfully: ${transportId}`);
+                  
+                  // Acknowledge successful connection
+                  sendResponse(ws, msg.id, {});
+                  console.log(`[PROTOO-WS] Sent connectWebRtcTransport response for request ${msg.id}`);
+                } catch (connectErr) {
+                  console.error(`[PROTOO-WS] Error connecting WebRtcTransport:`, connectErr);
+                  sendResponse(ws, msg.id, { error: connectErr.message || 'Error connecting transport' });
+                }
+                break;
+                
+              case 'produce':
+                const { transportId: produceTransportId, kind, rtpParameters, appData } = msg.data;
+                const produceTransport = peerData.transports.get(produceTransportId);
+                
+                if (!produceTransport) {
+                  sendResponse(ws, msg.id, { error: `Transport with id "${produceTransportId}" not found for producing` });
+                  return;
+                }
+                
+                const producerInstance = await produceTransport.produce({ kind, rtpParameters, appData });
+                peerData.producers.set(producerInstance.id, producerInstance);
+                console.log(`[PROTOO-WS] Producer created: ${producerInstance.id} on transport ${produceTransportId}`);
+                
+                sendResponse(ws, msg.id, { id: producerInstance.id });
+                
+                // Notify other peers in the same room
+                for (const [otherPeerId, otherPeerData] of roomData.peers.entries()) {
+                  if (otherPeerId === peerId) continue;
+                  
+                  // Get the WebSocket for the other peer
+                  const roomPeers = wsConnections.get(roomId);
+                  if (roomPeers && roomPeers.has(otherPeerId)) {
+                    const otherWs = roomPeers.get(otherPeerId).ws;
+                    
+                    try {
+                      if (otherWs.readyState === WebSocketServer.OPEN) {
+                        sendNotification(otherWs, 'newProducer', {
+                          peerId,
+                          producerId: producerInstance.id,
+                          kind: producerInstance.kind,
+                          appData: producerInstance.appData
+                        });
+                      }
+                    } catch (notifyError) {
+                      console.error(`[PROTOO-WS] Error notifying peer ${otherPeerId}:`, notifyError);
+                    }
+                  }
+                }
+                break;
+                
+              case 'consume':
+                const { rtpCapabilities, producerId } = msg.data;
+                
+                // Find a suitable transport - ensure it's a consuming transport
+                const consumerTransport = Array.from(peerData.transports.values())
+                  .find(t => t.appData && t.appData.consuming === true);
+                
+                if (!consumerTransport) {
+                  sendResponse(ws, msg.id, { error: `No suitable (consuming) transport found for peer ${peerId} to consume producer ${producerId}` });
+                  return;
+                }
+                
+                // Find the producer across all peers in the room
+                let producerToConsume = null;
+                for (const [otherPeerId, otherPeerData] of roomData.peers.entries()) {
+                  const foundProducer = otherPeerData.producers.get(producerId);
+                  if (foundProducer) {
+                    producerToConsume = foundProducer;
+                    console.log(`[PROTOO-WS] Found producer ${producerId} from peer ${otherPeerId}`);
+                    break;
+                  }
+                }
+                
+                if (!producerToConsume) {
+                  sendResponse(ws, msg.id, { error: `Producer ${producerId} not found` });
+                  return;
+                }
+                
+                if (!mediasoupRouter.canConsume({ producerId, rtpCapabilities })) {
+                  sendResponse(ws, msg.id, { error: `Peer ${peerId} cannot consume producer ${producerId}` });
+                  return;
+                }
+                
+                const consumerInstance = await consumerTransport.consume({
+                  producerId,
+                  rtpCapabilities,
+                  paused: true // Create consumers paused
+                });
+                
+                peerData.consumers.set(consumerInstance.id, consumerInstance);
+                console.log(`[PROTOO-WS] Consumer created: ${consumerInstance.id} for producer ${producerId} on transport ${consumerTransport.id}`);
+                
+                consumerInstance.on('transportclose', () => {
+                  console.log(`[PROTOO-WS] Consumer ${consumerInstance.id} transport closed`);
+                  consumerInstance.close();
+                });
+                
+                consumerInstance.on('producerclose', () => {
+                  console.log(`[PROTOO-WS] Consumer ${consumerInstance.id} producer closed`);
+                  consumerInstance.close();
+                });
+                
+                sendResponse(ws, msg.id, {
+                  id: consumerInstance.id,
+                  producerId: producerId,
+                  kind: consumerInstance.kind,
+                  rtpParameters: consumerInstance.rtpParameters
+                });
+                break;
+                
+              case 'resumeConsumer':
+                const { consumerId } = msg.data;
+                const consumerToResume = peerData.consumers.get(consumerId);
+                
+                if (!consumerToResume) {
+                  sendResponse(ws, msg.id, { error: `Consumer with id "${consumerId}" not found` });
+                  return;
+                }
+                
+                await consumerToResume.resume();
+                console.log(`[PROTOO-WS] Consumer resumed: ${consumerId}`);
+                sendResponse(ws, msg.id, {});
+                break;
+                
+              case 'ping':
+                // Simple ping-pong for connection keep-alive and health monitoring
+                console.log(`[PROTOO-WS] Received ping from peer ${peerId}`);
+                
+                // Update last activity timestamp
+                const peerInfo = roomPeers.get(peerId);
+                if (peerInfo) {
+                  peerInfo.lastActivity = Date.now();
+                }
+                
+                // Also update in roomData
+                if (peerData) {
+                  peerData.lastActivity = Date.now();
+                }
+                
+                sendResponse(ws, msg.id, { timestamp: Date.now() });
+                break;
+                
+              default:
+                console.error(`[PROTOO-WS] Unknown request method "${msg.method}"`);
+                sendResponse(ws, msg.id, { error: `Unknown request method "${msg.method}"` });
             }
           }
         } catch (err) {
-          error('protoo request failed: %o', err);
-          rejectRequest(500, err.message);
+          console.error(`[PROTOO-WS] Error processing message from peer ${peerId}:`, err);
+          // If it was a request with ID, try to send error response
+          if (message && typeof message === 'string') {
+            try {
+              const msg = JSON.parse(message);
+              if (msg.id) {
+                sendResponse(ws, msg.id, { error: err.message || 'Internal server error' });
+              }
+            } catch (e) {
+              // Ignore parse errors here
+            }
+          }
         }
       });
-
-      protooPeer.on('close', () => {
-        debug(`protoo peer closed: ${peerId} (transportId: ${protooTransport.id})`);
+      
+      // Handle WebSocket closure
+      ws.on('close', (code, reason) => {
+        console.log(`[PROTOO-WS] Connection closed for peer ${peerId} in room ${roomId}: [${code}] ${reason || 'No reason'}`);
+        
+        // Clear ping interval
+        clearInterval(pingInterval);
+        
+        // Remove from connections map
+        const roomPeers = wsConnections.get(roomId);
+        if (roomPeers) {
+          roomPeers.delete(peerId);
+          if (roomPeers.size === 0) {
+            wsConnections.delete(roomId);
+          }
+        }
+        
+        // Clean up peer resources
         const peerData = roomData.peers.get(peerId);
         if (peerData) {
           // Store information about producers for potential reconnection
@@ -562,7 +543,7 @@ export async function initProtooSignaling(httpServer) {
           
           // Store reconnection info for a short time
           setTimeout(() => {
-            debug(`Storing reconnection info for ${peerId}`);
+            console.log(`[PROTOO-WS] Storing reconnection info for ${peerId}`);
             roomData.reconnectInfo = roomData.reconnectInfo || {};
             roomData.reconnectInfo[peerId] = {
               producerInfo,
@@ -571,21 +552,91 @@ export async function initProtooSignaling(httpServer) {
           }, 100);
         }
         
-        // Optional: If room becomes empty, close the mediasoupRouter and delete the room
-        if (roomData.peers.size === 0 && roomData.protooRoom.peers.length === 0) {
-          debug(`room ${roomId} is empty, closing mediasoupRouter`);
+        // Clean up empty rooms
+        if (roomData.peers.size === 0) {
+          console.log(`[PROTOO-WS] Room ${roomId} is empty, closing mediasoupRouter`);
           mediasoupRouter.close();
           rooms.delete(roomId);
         }
       });
-
+      
+      // Handle WebSocket errors
+      ws.on('error', (err) => {
+        console.error(`[PROTOO-WS] WebSocket error for peer ${peerId}:`, err);
+      });
+      
+      // Send initial success message
+      const welcomeMsg = JSON.stringify({
+        notification: true,
+        method: 'welcomeNotification',
+        data: { message: 'Welcome to protoo WebSocket server', timestamp: Date.now() }
+      });
+      
+      ws.send(welcomeMsg);
     } catch (err) {
-      error(`Error processing protoo connectionrequest for ${peerId} in room ${roomId}: %s`, err.message, err.stack);
-      reject(500, err.message || 'Error processing connection request'); // Reject the connection request itself
+      console.error('[PROTOO-WS] Error handling WebSocket connection:', err);
+      ws.close(1011, err.message);
     }
   });
+  
+  // Helper function to send a response
+  function sendResponse(ws, requestId, data) {
+    // Ready state 1 === OPEN (see https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState)
+    if (!ws || ws.readyState !== 1) return;
 
-  debug('Protoo signaling server (using protoo.WebSocketServer) initialized and listening on /protoo');
+    try {
+      // Build message using the canonical protoo response format
+      const isError = data && data.error;
+
+      const response = {
+        response: true,
+        id: requestId,
+        ok: !isError
+      };
+
+      if (isError) {
+        response.errorCode = 500;
+        response.errorReason = data.error;
+      } else {
+        response.data = data;
+      }
+
+      const responseStr = JSON.stringify(response);
+      console.log(`[PROTOO-WS] Sending response id=${requestId}, ok=${response.ok}, payloadKeys=${Object.keys(data || {}).join(',')}`);
+      ws.send(responseStr);
+    } catch (err) {
+      console.error('[PROTOO-WS] Error sending response:', err);
+    }
+  }
+  
+  // Helper function to send a notification
+  function sendNotification(ws, method, data) {
+    // Ready state 1 === OPEN (see https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState)
+    if (!ws || ws.readyState !== 1) return;
+    
+    try {
+      // Format notification according to protoo protocol
+      const notification = {
+        notification: true,
+        method,
+        data
+      };
+      
+      const notificationStr = JSON.stringify(notification);
+      console.log(`[PROTOO-WS] Sending notification: ${method}, data: ${JSON.stringify(data).substring(0, 100)}...`);
+      ws.send(notificationStr);
+    } catch (err) {
+      console.error('[PROTOO-WS] Error sending notification:', err);
+    }
+  }
+
+  console.log('[PROTOO-WS] WebSocket server initialized and listening on path /protoo');
+
+  // Use our WebSocket server instead of protoo
+  const protooWsServer = {
+    // Dummy methods to satisfy existing code
+    on: () => {}, // No-op for connectionrequest
+  };
 
   // Add automatic connection health checking
   if (typeof global.roomHealthInterval === 'undefined') {

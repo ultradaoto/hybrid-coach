@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= title %> (Fallback Mode)</title>
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: #f9fafb;
+        flex-direction: column;
+      }
+      #videoContainer { display:flex; }
+      #videoContainer.reverse{ flex-direction:row-reverse; }
+      video, canvas {
+        width: 45%;
+        max-width: 480px;
+        border: 2px solid #2d3748;
+        margin: 0.5rem;
+        position: relative;
+      }
+      #messages { height:120px; overflow:auto; width:90%; margin-top:1rem; background:#fff; padding:0.5rem; border:1px solid #ccc; }
+      .status-indicator {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0,0,0,0.5);
+        color: white;
+        padding: 5px;
+        border-radius: 5px;
+        font-size: 12px;
+      }
+      .error { color: red; }
+      .success { color: green; }
+    </style>
+  </head>
+  <body>
+    <h2>Hybrid Coaching Call (Fallback Mode)</h2>
+    <div id="videoContainer">
+      <div style="position: relative;">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <span class="status-indicator" id="localStatus">Initializing...</span>
+      </div>
+      <div style="position: relative;">
+        <canvas id="remoteVideo" height="240" width="320"></canvas>
+        <span class="status-indicator" id="remoteStatus">Waiting for remote...</span>
+      </div>
+      <div style="display:flex; width:100%; justify-content:center;">
+        <span id="localLabel" style="width:45%; text-align:center;"></span>
+        <span id="remoteLabel" style="width:45%; text-align:center;"></span>
+      </div>
+    </div>
+    <div id="messages"></div>
+    <div style="margin-top:0.5rem; width:90%; display:flex;">
+      <input id="msgInput" style="flex:1; padding:0.5rem" placeholder="Type a message to Hybrid AI..." />
+      <button id="sendBtn">Send</button>
+    </div>
+    <div style="margin-top:0.5rem; font-weight:bold;" id="callTimer">00:00</div>
+    <div style="margin-top:1rem;">
+      <button id="switchModeBtn">Switch to WebRTC Mode</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const roomId = "<%= roomId %>";
+      const userRole = "<%= user.role %>";
+      const userName = "<%= user.displayName || user.email %>";
+      const jwtToken = "<%= jwt %>";
+      const sessionId = "<%= sessionId %>";
+      
+      // Store auth token
+      localStorage.setItem('jwt', jwtToken);
+      
+      // Connect to Socket.io
+      const socket = io(window.location.origin, {
+        path: '/socket.io/',
+        transports: ['polling', 'websocket'],
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        timeout: 20000,
+        auth: { token: jwtToken }
+      });
+
+      // DOM Elements
+      const messages = document.getElementById('messages');
+      const localVideo = document.getElementById('localVideo');
+      const remoteVideo = document.getElementById('remoteVideo');
+      const localStatus = document.getElementById('localStatus');
+      const remoteStatus = document.getElementById('remoteStatus');
+      const localLabel = document.getElementById('localLabel');
+      const remoteLabel = document.getElementById('remoteLabel');
+      
+      // Set labels
+      localLabel.innerText = userName + ' (You)';
+      if(userRole === 'coach'){
+        document.getElementById('videoContainer').classList.add('reverse');
+      }
+      
+      // Utility function to log messages
+      function log(msg) { 
+        messages.innerHTML += msg + '<br>'; 
+        messages.scrollTop = messages.scrollHeight;
+      }
+      
+      // Initialize local video
+      let localStream;
+      let canvasContext = remoteVideo.getContext('2d');
+      let ws;
+      
+      // Socket.io Events
+      socket.emit('join-room', { roomId, name: userName });
+      
+      // Initialize camera
+      async function initCamera() {
+        try {
+          localStatus.innerText = "Requesting camera...";
+          localStream = await navigator.mediaDevices.getUserMedia({ 
+            video: {
+              width: { ideal: 320 },
+              height: { ideal: 240 }
+            }, 
+            audio: true 
+          });
+          
+          localVideo.srcObject = localStream;
+          localStatus.innerText = "Camera connected";
+          localStatus.className = "status-indicator success";
+          log('🎥 Local video initialized');
+          
+          // Start sending video frames via WebSocket
+          initWebSocketConnection();
+        } catch (err) {
+          localStatus.innerText = "Camera error: " + err.message;
+          localStatus.className = "status-indicator error";
+          log('❌ Error accessing camera: ' + err.message);
+        }
+      }
+      
+      // Connect to WebSocket video relay
+      function initWebSocketConnection() {
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        // Add the JWT token to the URL to help with authentication
+        const wsUrl = `${protocol}${window.location.host}/ws-relay?token=${encodeURIComponent(jwtToken)}&roomId=${roomId}`;
+        
+        log('🔌 Connecting to WebSocket relay...');
+        remoteStatus.innerText = "Connecting...";
+        
+        try {
+          // Close existing connection if any
+          if (ws) {
+            try { ws.close(); } catch (e) {}
+          }
+          
+          ws = new WebSocket(wsUrl);
+          
+          // Add more detailed logging
+          console.log(`Creating WebSocket connection to ${wsUrl.split('?')[0]}`);
+          
+          // Add connection timeout - if not connected in 5 seconds, retry
+          const connectionTimeout = setTimeout(() => {
+            if (ws.readyState !== 1) { // Not OPEN
+              log('⏱️ Connection timeout, retrying...');
+              try { ws.close(); } catch (e) {}
+              setTimeout(initWebSocketConnection, 1000);
+            }
+          }, 5000);
+          
+          // WebSocket connection setup - continue with existing handlers
+          ws.onopen = () => {
+            console.log('WebSocket connection opened successfully');
+            log('✅ WebSocket relay connected');
+            remoteStatus.innerText = "Connected, waiting for video...";
+            clearTimeout(connectionTimeout);
+            
+            // Send join message
+            try {
+              const joinMsg = JSON.stringify({
+                type: 'join',
+                roomId,
+                peerId: socket.id,
+                userRole,
+                auth: { token: jwtToken } // Include auth token in join message too
+              });
+              console.log(`Sending join message: ${joinMsg.substring(0, 100)}...`);
+              ws.send(joinMsg);
+              
+              // Start sending video frames
+              startVideoFrameSending();
+            } catch (e) {
+              console.error('Error sending join message:', e);
+              log(`❌ Error joining room: ${e.message || 'Unknown error'}`);
+            }
+          };
+          
+          ws.onmessage = (event) => {
+            try {
+              console.log(`Received WebSocket message: ${event.data.substring(0, 50)}...`);
+              const msg = JSON.parse(event.data);
+              
+              if (msg.type === 'welcome') {
+                log(`✅ Server confirms connection: ${msg.message}`);
+              }
+              else if (msg.type === 'videoFrame' && msg.peerId !== socket.id) {
+                // Don't log video frames (too verbose)
+                // Draw the received frame to the canvas
+                const img = new Image();
+                img.onload = () => {
+                  canvasContext.drawImage(img, 0, 0, remoteVideo.width, remoteVideo.height);
+                  remoteStatus.innerText = "Receiving video";
+                  remoteStatus.className = "status-indicator success";
+                };
+                img.src = `data:image/jpeg;base64,${msg.data}`;
+              }
+              else if (msg.type === 'userJoined' && msg.peerId !== socket.id) {
+                console.log('Received userJoined message:', msg);
+                log(`🔔 ${msg.userRole === 'coach' ? 'Coach' : 'Client'} joined the room`);
+                remoteLabel.innerText = `${msg.userRole === 'coach' ? 'Coach' : 'Client'}`;
+              }
+              else if (msg.type === 'userLeft' && msg.peerId !== socket.id) {
+                console.log('Received userLeft message:', msg);
+                log(`🔔 Remote user left the room`);
+                remoteStatus.innerText = "Remote user disconnected";
+                remoteStatus.className = "status-indicator error";
+              }
+              else if (msg.type === 'chat' && msg.peerId !== socket.id) {
+                console.log('Received chat message:', msg);
+                log(`AI: ${msg.text}`);
+              }
+            } catch (err) {
+              console.error('Error processing WebSocket message:', err);
+            }
+          };
+          
+          ws.onclose = (event) => {
+            console.log(`WebSocket connection closed: ${event.code} - ${event.reason || 'No reason'}`);
+            log(`🔌 WebSocket relay disconnected (${event.code})`);
+            remoteStatus.innerText = "Connection lost";
+            remoteStatus.className = "status-indicator error";
+            clearTimeout(connectionTimeout);
+            
+            // Try to reconnect after delay - exponential backoff
+            const reconnectDelay = (ws._reconnectAttempts || 0) * 1000 + 1000;
+            ws._reconnectAttempts = (ws._reconnectAttempts || 0) + 1;
+            
+            if (ws._reconnectAttempts < 10) {
+              log(`🔄 Reconnecting in ${reconnectDelay/1000} seconds... (attempt ${ws._reconnectAttempts})`);
+              setTimeout(initWebSocketConnection, reconnectDelay);
+            } else {
+              log(`❌ Failed to reconnect after ${ws._reconnectAttempts} attempts.`);
+              remoteStatus.innerText = "Connection failed";
+            }
+          };
+          
+          ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            log(`❌ WebSocket error: ${error.message || 'Unknown error'}`);
+            remoteStatus.innerText = "Connection error";
+            remoteStatus.className = "status-indicator error";
+            
+            // Error doesn't automatically close the connection
+            try { ws.close(); } catch (e) {}
+          };
+          
+          // Prepare for heartbeats/pings
+          ws._pingInterval = setInterval(() => {
+            if (ws.readyState === 1) { // OPEN
+              ws.send(JSON.stringify({ type: 'ping' }));
+            }
+          }, 30000); // Every 30 seconds
+          
+          // Clear ping interval on close
+          const originalOnClose = ws.onclose;
+          ws.onclose = (event) => {
+            clearInterval(ws._pingInterval);
+            if (originalOnClose) originalOnClose(event);
+          };
+          
+        } catch (err) {
+          console.error('Error creating WebSocket connection:', err);
+          log(`❌ Error creating WebSocket: ${err.message || 'Unknown error'}`);
+          remoteStatus.innerText = "Connection failed";
+          remoteStatus.className = "status-indicator error";
+          
+          // Try to reconnect after delay
+          setTimeout(initWebSocketConnection, 5000);
+        }
+      }
+      
+      // Send video frames via WebSocket
+      function startVideoFrameSending() {
+        if (!localStream || !ws || ws.readyState !== WebSocket.OPEN) return;
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 240;
+        const ctx = canvas.getContext('2d');
+        
+        // Track the frame sender interval
+        let frameInterval = null;
+        
+        // Function to send a single frame
+        const sendFrame = () => {
+          if (!localStream || !ws || ws.readyState !== WebSocket.OPEN) {
+            console.log('Stopping frame sending - connection lost');
+            if (frameInterval) clearInterval(frameInterval);
+            return;
+          }
+          
+          try {
+            // Draw current video frame to canvas
+            ctx.drawImage(localVideo, 0, 0, canvas.width, canvas.height);
+            
+            // Convert to JPEG and send
+            canvas.toBlob((blob) => {
+              if (blob && ws && ws.readyState === WebSocket.OPEN) {
+                // Convert blob to base64
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                  try {
+                    const base64data = reader.result.split(',')[1];
+                    // Only send if still connected
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                      ws.send(JSON.stringify({
+                        type: 'videoFrame',
+                        data: base64data,
+                        roomId,
+                        peerId: socket.id
+                      }));
+                    }
+                  } catch (err) {
+                    console.error('Error in reader onloadend:', err);
+                  }
+                };
+                reader.onerror = (err) => {
+                  console.error('FileReader error:', err);
+                };
+                reader.readAsDataURL(blob);
+              }
+            }, 'image/jpeg', 0.5); // Lower quality for better performance
+          } catch (err) {
+            console.error('Error sending video frame:', err);
+          }
+        };
+        
+        // Monitor WebSocket connection status
+        const checkConnection = () => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            console.log('WebSocket connection lost, stopping frame sending');
+            if (frameInterval) clearInterval(frameInterval);
+            frameInterval = null;
+            return false;
+          }
+          return true;
+        };
+        
+        // Start sending frames
+        log('📹 Starting video frame transmission');
+        
+        // Send first frame immediately
+        sendFrame();
+        
+        // Then send frames regularly
+        frameInterval = setInterval(() => {
+          if (checkConnection()) {
+            sendFrame();
+          }
+        }, 333); // ~3 frames per second
+        
+        // Handle connection closing
+        ws.addEventListener('close', () => {
+          console.log('WebSocket closed, stopping frame sender');
+          if (frameInterval) clearInterval(frameInterval);
+          frameInterval = null;
+        });
+      }
+      
+      // Chat functionality
+      const inputEl = document.getElementById('msgInput');
+      document.getElementById('sendBtn').onclick = async () => {
+        const text = inputEl.value.trim();
+        if (!text) return;
+        
+        log('You: ' + text);
+        inputEl.value = '';
+        
+        // Send via Socket.io to server
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, userId: '<%= user.id %>', sessionId })
+        });
+        
+        const data = await res.json();
+        log('AI: ' + data.reply);
+        
+        // Also relay via WebSocket for other participants
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'chat',
+            text: data.reply,
+            roomId,
+            peerId: socket.id
+          }));
+        }
+      };
+      
+      // Call timer
+      const timerEl = document.getElementById('callTimer');
+      let originTs = null;
+      socket.on('room-start', ts => { originTs = ts; });
+      
+      let fifteenFired = false;
+      setInterval(async () => {
+        if (originTs === null) return;
+        
+        const elapsed = Math.floor((Date.now() - originTs) / 1000);
+        const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const ss = String(elapsed % 60).padStart(2, '0');
+        timerEl.textContent = `${mm}:${ss}`;
+        
+        if (!fifteenFired && elapsed >= 900) { // 15 minutes = 900 seconds
+          fifteenFired = true;
+          
+          const note = 'System: The coach has another call in 5 minutes and will step away soon. Please provide any final recommendations for the next week of Ultra use.';
+          
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: note, userId: '<%= user.id %>', sessionId })
+          });
+          
+          const data = await res.json();
+          log('AI: ' + data.reply);
+          
+          // Also relay via WebSocket
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'chat',
+              text: data.reply,
+              roomId,
+              peerId: socket.id
+            }));
+          }
+        }
+      }, 1000);
+      
+      // Mode switching
+      document.getElementById('switchModeBtn').onclick = () => {
+        window.location.href = `/room/${roomId}`;
+      };
+      
+      // Initialize camera and connection
+      initCamera();
+      
+      // AI greeting after initialization
+      async function aiGreeting() {
+        const greetingPrompt = `Say: Hello ${userName}. Welcome to the session! How are things going with Ultra so far?`;
+        
+        const res = await fetch('/api/chat', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ message: greetingPrompt, userId: '<%= user.id %>', sessionId }) 
+        });
+        
+        const data = await res.json();
+        log('AI: ' + data.reply);
+        
+        // Also relay via WebSocket
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'chat',
+            text: data.reply,
+            roomId,
+            peerId: socket.id
+          }));
+        }
+      }
+      
+      // Delay AI greeting to allow connection to establish
+      setTimeout(aiGreeting, 3000);
+    </script>
+  </body>
+</html> 

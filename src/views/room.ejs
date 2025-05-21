@@ -42,6 +42,9 @@
       <button id="sendBtn">Send</button>
     </div>
     <div style="margin-top:0.5rem; font-weight:bold;" id="callTimer">00:00</div>
+    <div style="margin-top:1rem;">
+      <a href="/room/<%= roomId %>/fallback" class="fallback-link">Switch to Simple WebSocket Mode</a>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
 
@@ -158,6 +161,93 @@
         const protooWebSocketUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/protoo?roomId=${roomId}&peerId=${peerId}`;
         const transport = new window.protooClient.WebSocketTransport(protooWebSocketUrl);
         protooPeer = new window.protooClient.Peer(transport);
+        
+        // CRITICAL FIX: Intercept WebSocket messages to handle response format issues
+        if (transport._ws) {
+          const originalOnMessage = transport._ws.onmessage;
+          transport._ws.onmessage = function(event) {
+            try {
+              // Check if this looks like a server response
+              const response = JSON.parse(event.data);
+              if (response && typeof response === 'object' && response.id) {
+                debugClient(`[WebSocketFix] Intercepted WebSocket message for ID ${response.id}:`, event.data.substring(0, 100) + '...');
+                
+                // If it's an empty response where it shouldn't be, try to inspect and fix
+                if (response.ok === true && (!response.response || Object.keys(response.response).length === 0)) {
+                  // This might be a protocol mismatch - log it
+                  console.warn(`[WebSocketFix] Detected potentially problematic empty response for ID ${response.id}`);
+                  
+                  // If this is for createWebRtcTransport, check if we can extract data from event.data
+                  try {
+                    const rawData = JSON.parse(event.data);
+                    console.log(`[WebSocketFix] Raw message:`, rawData);
+                    
+                    // If we have a response field with useful data inside the event, use it
+                    if (rawData.response && typeof rawData.response === 'object' && rawData.response.id) {
+                      debugClient(`[WebSocketFix] Found useful response data in message`);
+                      // Create a new event with the fixed data
+                      const newEvent = new MessageEvent('message', {
+                        data: JSON.stringify(rawData.response)
+                      });
+                      // Call the original handler with our fixed event
+                      originalOnMessage.call(this, newEvent);
+                      return; // Skip original handler for this event
+                    }
+                  } catch (e) {
+                    console.error(`[WebSocketFix] Error parsing/fixing response:`, e);
+                  }
+                }
+              }
+            } catch (e) {
+              // Not JSON or other error, just let original handler deal with it
+            }
+            
+            // Call original handler for unmodified events
+            originalOnMessage.call(this, event);
+          };
+          debugClient(`[WebSocketFix] WebSocket message interceptor installed`);
+        } else {
+          debugClient(`[WebSocketFix] Cannot access WebSocket to install interceptor`);
+        }
+        
+        // CRITICAL FIX: Patch protoo Peer.request method to fix protocol issues
+        if (protooPeer && protooPeer.request) {
+          // Store original method
+          const originalRequest = protooPeer.request;
+          
+          // Replace with our fixed version
+          protooPeer.request = function(method, data) {
+            debugClient(`[ProtooFix] Intercepted request for method: ${method}`);
+            
+            // Use the original request method
+            return originalRequest.call(this, method, data)
+              .then(response => {
+                // Check if response needs fixing
+                debugClient(`[ProtooFix] Raw response for ${method}:`, response);
+                
+                // For createWebRtcTransport, ensure we have a properly formed response
+                if (method === 'createWebRtcTransport') {
+                  if (!response || typeof response !== 'object' || !response.id) {
+                    console.warn(`[ProtooFix] Invalid response for ${method}:`, response);
+                    
+                    // If response.response exists with an ID, use that instead
+                    if (response && typeof response === 'object' && 
+                        response.response && typeof response.response === 'object' && 
+                        response.response.id) {
+                      console.log(`[ProtooFix] Using nested response:`, response.response);
+                      return response.response;
+                    }
+                  }
+                }
+                
+                return response;
+              });
+          };
+          
+          debugClient(`[ProtooFix] Successfully patched Peer.request method`);
+        } else {
+          console.error(`[ProtooFix] Failed to patch Peer.request - method not found`);
+        }
         
         // Keep track of reconnection attempts
         let protooReconnectAttempts = 0;
@@ -406,6 +496,96 @@
             return Promise.reject(new Error(errorMsg));
           }
           
+          // Enhanced request handling with retries for critical operations
+          if (method === 'createWebRtcTransport' || method === 'connectWebRtcTransport') {
+            log(`🔄 Sending ${method} with extended timeout...`);
+            
+            return new Promise((resolve, reject) => {
+              // First attempt with longer timeout
+              let resolved = false;
+              let rejected = false;
+              
+              // Create a custom timeout - longer than default for transport operations
+              const timeoutMs = method === 'createWebRtcTransport' ? 15000 : 10000;
+              
+              // Keep track of attempts
+              let attemptNum = 1;
+              const maxAttempts = 3;
+              
+              function attemptRequest() {
+                if (resolved || rejected) return;
+                
+                log(`🔄 Attempt #${attemptNum} for ${method}...`);
+                
+                // Create timeout handler
+                const timeoutId = setTimeout(() => {
+                  if (!resolved && !rejected) {
+                    console.warn(`[protooRequest] Timeout for ${method} (attempt ${attemptNum}/${maxAttempts})`);
+                    
+                    // If we haven't reached max attempts, try again
+                    if (attemptNum < maxAttempts) {
+                      attemptNum++;
+                      log(`⏳ Request timeout, retrying ${method}...`);
+                      attemptRequest(); // Recursive retry
+                    } else {
+                      rejected = true;
+                      reject(new Error(`request timeout after ${maxAttempts} attempts`));
+                    }
+                  }
+                }, timeoutMs);
+                
+                // Send the actual request
+                protooPeer.request(method, data)
+                  .then((result) => {
+                    if (!rejected) {
+                      clearTimeout(timeoutId);
+                      resolved = true;
+                      
+                      // CRITICAL FIX: Debug the response structure
+                      console.log(`[protooRequest] ${method} response received:`, result);
+                      
+                      // For createWebRtcTransport, verify we have an id
+                      if (method === 'createWebRtcTransport') {
+                        if (!result || typeof result !== 'object' || !result.id) {
+                          console.error(`[protooRequest] Invalid ${method} response:`, result);
+                          log(`⚠️ Invalid response format, fixing...`);
+                          
+                          // Attempt to fix missing ID issue
+                          if (result && typeof result === 'object' && result.response && result.response.id) {
+                            // The server sent { response: { id: ... } } but we need { id: ... }
+                            result = result.response;
+                            console.log(`[protooRequest] Fixed response format:`, result);
+                          }
+                        }
+                      }
+                      
+                      log(`✅ ${method} succeeded on attempt #${attemptNum}`);
+                      resolve(result);
+                    }
+                  })
+                  .catch((error) => {
+                    if (!rejected) {
+                      clearTimeout(timeoutId);
+                      
+                      // If it's a timeout error and we haven't reached max attempts, retry
+                      if (error.message.includes('timeout') && attemptNum < maxAttempts) {
+                        attemptNum++;
+                        log(`⏳ Request error: ${error.message}, retrying ${method}...`);
+                        setTimeout(() => attemptRequest(), 1000); // Wait a second before retry
+                      } else {
+                        rejected = true;
+                        reject(error);
+                      }
+                    }
+                  });
+              }
+              
+              // Start the first attempt
+              attemptRequest();
+            });
+          }
+          
+          // For other requests, use standard behavior
           return protooPeer.request(method, data);
         }
 
@@ -697,10 +877,13 @@
           try {
             debugClient(`[makeTransport] Requesting server to create ${direction} transport...`);
             
-            // Get TURN credentials from server
+            // Get TURN credentials from server - always fetch fresh credentials
             let iceServersToUse = stunServers;
             try {
-              const turnResponse = await fetch('/api/turn-credentials');
+              log('🔄 Fetching fresh TURN credentials...');
+              // Fetch with cache busting to ensure we get fresh credentials
+              const cacheBuster = Date.now();
+              const turnResponse = await fetch(`/api/turn-credentials?t=${cacheBuster}`);
               if (turnResponse.ok) {
                 const turnData = await turnResponse.json();
                 if (turnData.iceServers && turnData.iceServers.length > 0) {
@@ -721,10 +904,10 @@
                     }
                   });
                   
-                  // Combine STUN and TURN servers rather than replacing entirely
-                  iceServersToUse = [...stunServers, ...turnData.iceServers];
-                  debugClient(`[makeTransport] Using combined STUN/TURN servers: ${iceServersToUse.length} servers`);
-                  log(`🌐 Using Twilio + Public TURN/STUN servers`);
+                  // Use just the servers we got from Twilio - they should have valid credentials
+                  iceServersToUse = turnData.iceServers;
+                  debugClient(`[makeTransport] Using only Twilio ICE servers: ${iceServersToUse.length} servers`);
+                  log(`🌐 Using fresh Twilio TURN/STUN servers`);
                 } else {
                   debugClient('[makeTransport] No ICE servers returned from Twilio, using fallback STUN servers');
                   log(`⚠️ Using fallback STUN servers only`);
@@ -738,36 +921,69 @@
               log(`⚠️ Using fallback STUN servers only`);
             }
             
-            // Always add reliable public TURN servers
-            debugClient('[makeTransport] Adding reliable public TURN servers for maximum compatibility');
-            iceServersToUse = [
-              ...stunServers, // Use minimal STUN servers
-              // TCP TURN servers (more reliable through firewalls)
-              {
-                urls: 'turn:global.turn.twilio.com:443?transport=tcp',
-                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-              },
-              {
-                urls: 'turns:global.turn.twilio.com:443?transport=tcp',
-                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
-                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
-              }
-            ];
-            log(`🌐 Using TCP TURN servers for better firewall traversal`);
-            
-            // Add additional ICE servers if provided
-            if (options && options.additionalIceServers) {
-              debugClient('[makeTransport] Adding additional ICE servers');
-              iceServersToUse = [...iceServersToUse, ...options.additionalIceServers];
+            // ALWAYS use our guaranteed ICE servers
+            // If iceServersToUse is empty or has less than 2 servers, add fallback servers
+            if (!iceServersToUse || iceServersToUse.length < 2) {
+              log(`⚠️ No ICE servers from API, using hardcoded fallbacks`);
+              iceServersToUse = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun.stunprotocol.org:3478' }
+              ];
             }
             
+            // CRITICAL FIX: Force add Twilio TURN servers for guaranteed connectivity
+            const hasTurnServer = iceServersToUse.some(server => {
+              const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+              return urls.some(url => url.startsWith('turn:'));
+            });
+            
+            if (!hasTurnServer) {
+              log(`🌐 Adding TCP TURN fallbacks for firewall compatibility`);
+              iceServersToUse.push(
+                {
+                  urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
+                  username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                  credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                },
+                {
+                  urls: 'turns:global.turn.twilio.com:443?transport=tcp',
+                  username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                  credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+                }
+              );
+            }
+
+            log(`🌐 Using TCP TURN for firewall compatibility`);
+            
+            // Use the server response without modification
             const serverResponse = await protooRequest('createWebRtcTransport', {
               producing: direction === 'send',
               consuming: direction === 'recv',
               // Include SCTP capabilities (for data channels)
-              sctpCapabilities: device.sctpCapabilities || undefined
+              sctpCapabilities: device.sctpCapabilities || undefined,
+              // Add a flag to request forced TCP mode on server
+              forceTcp: true
             });
+            
+            // CRITICAL DEBUG: Log the exact server response format
+            console.log(`[makeTransport] Raw server response for ${direction} transport:`, JSON.stringify(serverResponse));
+            
+            // Check if response needs to be unwrapped (protoo protocol format fix)
+            if (serverResponse && typeof serverResponse === 'object') {
+              // Check for empty response but with transportData field
+              if ((!serverResponse.id || Object.keys(serverResponse).length === 0) && 
+                   serverResponse.transportData && typeof serverResponse.transportData === 'object') {
+                console.log(`[makeTransport] Found transportData field, using it directly`, serverResponse.transportData);
+                serverResponse = serverResponse.transportData;
+              }
+              // Check for nested response format (protoo standard)
+              else if (serverResponse.response && typeof serverResponse.response === 'object' && serverResponse.response.id) {
+                debugClient(`[makeTransport] Found nested response format, unwrapping`);
+                serverResponse = serverResponse.response;
+              }
+            }
+            
             debugClient(`[makeTransport] Raw response from server for createWebRtcTransport (${direction}):`, JSON.parse(JSON.stringify(serverResponse))); // Log the raw response
 
             if (!serverResponse || !serverResponse.id) {
@@ -789,6 +1005,7 @@
               iceCandidates,
               dtlsParameters,
               sctpParameters,
+              // IMPORTANT: Always use our explicit ICE servers, not from response
               iceServers: iceServersToUse,
               // Default to TCP in high-latency scenarios
               iceTransportPolicy: 'all',
@@ -988,9 +1205,18 @@
           }
         }
 
+        // After transports have been created and we're about to process pending consumers
         async function processPendingConsumers() {
           debugClient(`Processing ${pendingProducersToConsume.length} pending producers to consume.`);
           if (pendingProducersToConsume.length === 0) return;
+
+          // Check if WebRTC is likely to be blocked based on previous errors
+          if (window._webrtcFailures && window._webrtcFailures > 3) {
+            debugClient('[processPendingConsumers] WebRTC appears to be blocked, using WebSocket fallback');
+            log('⚠️ WebRTC appears to be blocked. Using WebSocket fallback mode.');
+            setupWebSocketFallback();
+            return;
+          }
 
           // First verify that the receive transport is ready
           if (!recvTransport || recvTransport.connectionState === 'failed' || recvTransport.connectionState === 'closed') {
@@ -1011,6 +1237,18 @@
             } catch (e) {
               debugClient(`[processPendingConsumers] Failed to recreate transport: ${e.message}`);
               log(`❌ Failed to recreate receive transport: ${e.message}`);
+              
+              // Count WebRTC failures
+              if (!window._webrtcFailures) window._webrtcFailures = 1;
+              else window._webrtcFailures++;
+              
+              // Try WebSocket fallback if WebRTC keeps failing
+              if (window._webrtcFailures > 2) {
+                debugClient('[processPendingConsumers] Multiple WebRTC failures, trying WebSocket fallback');
+                log('⚠️ WebRTC seems blocked. Trying WebSocket fallback mode...');
+                setupWebSocketFallback();
+                return;
+              }
               
               // Try again later
               setTimeout(processPendingConsumers, 5000);
@@ -1809,6 +2047,20 @@
           log('📹 Attempting to join SFU...'); 
           console.log('📹 requesting camera');
           try {
+            // Add a global error tracking counter to detect persistent failures
+            if (typeof window._sfu_errors === 'undefined') {
+              window._sfu_errors = 0;
+            }
+            
+            // Check if we've had too many errors and should try a fallback approach
+            const MAX_SFU_ERRORS = 3;
+            if (window._sfu_errors >= MAX_SFU_ERRORS) {
+              log('⚠️ Too many SFU connection failures. Using simplified connection mode...');
+              setupSimplifiedRtcMode();
+              joinSfuInProgress = false;
+              return;
+            }
+            
             // Properly clean up existing transports first to avoid stale handlers
             if (recvTransport) {
               debugClient('[joinSFU] Cleaning up existing receive transport');
@@ -2011,6 +2263,16 @@
           } catch (err) {
             console.error('Error in joinSFU:', err);
             log(`❌ ERROR in joinSFU: ${err.message}`);
+            
+            // Track errors for fallback system
+            window._sfu_errors = (window._sfu_errors || 0) + 1;
+            console.warn(`SFU connection error count: ${window._sfu_errors}/${MAX_SFU_ERRORS}`);
+            
+            // If too many errors have occurred, switch to simplified mode on next attempt
+            if (window._sfu_errors >= MAX_SFU_ERRORS) {
+              log(`⚠️ Multiple SFU connection failures detected.`);
+              log(`🔄 Next attempt will use simplified connection mode.`);
+            }
           } finally {
             // Reset the join progress flag
             joinSfuInProgress = false;
@@ -2428,6 +2690,276 @@
             log(`❌ Failed to refresh ${direction} transport: ${err.message}`);
           }
         };
+
+        // WebSocket fallback mode for environments where WebRTC is completely blocked
+        function setupWebSocketFallback() {
+          // Clean up any existing WebRTC resources
+          if (recvTransport) {
+            try { recvTransport.close(); } catch(e) {}
+            recvTransport = null;
+          }
+          
+          if (sendTransport) {
+            try { sendTransport.close(); } catch(e) {}
+            sendTransport = null;
+          }
+          
+          // Set up WebSocket relay mode
+          log('🔄 Setting up WebSocket relay mode...');
+          
+          if (!window._wsRelay) {
+            // Create WebSocket connection for relaying media frames
+            const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws-relay`;
+            const wsRelay = new WebSocket(wsUrl);
+            
+            wsRelay.onopen = () => {
+              log('✅ WebSocket relay connected');
+              
+              // Send join message with room info
+              wsRelay.send(JSON.stringify({
+                type: 'join',
+                roomId,
+                peerId: peerId,
+                userRole: userRole
+              }));
+              
+              // Set up local video snapshot sending
+              if (localVideo && localVideo.srcObject) {
+                setupVideoFrameSending(wsRelay);
+              }
+              
+              // Set up relay mode for receiving
+              setupWebSocketReceiving(wsRelay);
+            };
+            
+            wsRelay.onclose = () => {
+              log('🔴 WebSocket relay disconnected');
+              // Try to reconnect after a delay
+              setTimeout(() => {
+                log('🔄 Attempting to reconnect WebSocket relay...');
+                setupWebSocketFallback();
+              }, 3000);
+            };
+            
+            wsRelay.onerror = (err) => {
+              log(`❌ WebSocket relay error: ${err.message || 'Unknown error'}`);
+            };
+            
+            window._wsRelay = wsRelay;
+          }
+        }
+        
+        // Function to send local video frames via WebSocket relay
+        function setupVideoFrameSending(wsRelay) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 320;  // Reduced size for WebSocket efficiency
+          canvas.height = 240;
+          const ctx = canvas.getContext('2d');
+          
+          log('📡 Starting WebSocket video relay...');
+          
+          // Capture and send frames at a reduced rate (3fps)
+          const sendInterval = setInterval(() => {
+            if (!wsRelay || wsRelay.readyState !== WebSocket.OPEN) {
+              clearInterval(sendInterval);
+              return;
+            }
+            
+            try {
+              // Draw video frame to canvas at reduced size
+              ctx.drawImage(localVideo, 0, 0, 320, 240);
+              
+              // Convert to JPEG and send
+              canvas.toBlob((blob) => {
+                if (blob && wsRelay.readyState === WebSocket.OPEN) {
+                  // Create a reader to convert blob to base64
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    const base64data = reader.result.split(',')[1];
+                    wsRelay.send(JSON.stringify({
+                      type: 'videoFrame',
+                      data: base64data,
+                      roomId: roomId,
+                      peerId: peerId
+                    }));
+                  };
+                  reader.readAsDataURL(blob);
+                }
+              }, 'image/jpeg', 0.5);  // 50% quality for bandwidth efficiency
+            } catch (e) {
+              console.error('Error sending frame:', e);
+            }
+          }, 333);  // ~3fps
+        }
+        
+        // Function to receive and display video frames via WebSocket relay
+        function setupWebSocketReceiving(wsRelay) {
+          if (!remoteVideo) return;
+          
+          // Create a canvas for rendering received frames
+          const canvas = document.createElement('canvas');
+          canvas.width = 320;
+          canvas.height = 240;
+          
+          // Replace video element with canvas
+          remoteVideo.style.display = 'none';
+          canvas.style.border = remoteVideo.style.border;
+          canvas.style.margin = remoteVideo.style.margin;
+          canvas.style.width = remoteVideo.style.width;
+          remoteVideo.parentNode.insertBefore(canvas, remoteVideo);
+          
+          const ctx = canvas.getContext('2d');
+          
+          // Handle incoming WebSocket messages
+          wsRelay.onmessage = (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              
+              if (msg.type === 'videoFrame') {
+                // Someone else's video frame
+                if (msg.peerId !== peerId) {
+                  // Convert base64 to image
+                  const img = new Image();
+                  img.onload = () => {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  };
+                  img.src = `data:image/jpeg;base64,${msg.data}`;
+                }
+              }
+              else if (msg.type === 'chat') {
+                // Chat messages
+                if (msg.peerId !== peerId) {
+                  log(`AI: ${msg.text}`);
+                }
+              }
+            } catch (e) {
+              console.error('Error processing WebSocket message:', e);
+            }
+          };
+        }
+
+        // Simplified peer connection mode as fallback when SFU fails repeatedly
+        function setupSimplifiedRtcMode() {
+          log('🔄 Setting up simplified peer-to-peer mode...');
+          
+          // When we switch to simplified mode, we'll use direct WebRTC connections
+          const simplePeerConnection = new RTCPeerConnection({
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              {
+                urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
+                username: 'f4b4035eaa76f77e3423b4d0982bda7854d311ec95e6f4b0ad0f641259f0f000',
+                credential: 'w1WpuQdnuKlG/JP2n7RdO+fBB6wE0gVBZ/kBPjLmrG8='
+              }
+            ],
+            sdpSemantics: 'unified-plan',
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require',
+            iceTransportPolicy: 'all'
+          });
+          
+          log('📲 Created simplified peer connection');
+          
+          // Add event listeners for connection state changes
+          simplePeerConnection.addEventListener('iceconnectionstatechange', () => {
+            log(`🧊 ICE connection state: ${simplePeerConnection.iceConnectionState}`);
+          });
+          
+          // Get local media (only audio for simplified mode)
+          if (!localStream) {
+            log('🎤 Requesting audio for simplified mode...');
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+              .then(stream => {
+                localStream = stream;
+                localVideo.srcObject = stream;
+                log('🎤 Got local audio stream for simplified mode');
+                
+                // Add local tracks to the connection
+                stream.getTracks().forEach(track => {
+                  simplePeerConnection.addTrack(track, stream);
+                  log(`➕ Added ${track.kind} track to simplified connection`);
+                });
+                
+                // Create and send offer
+                simplePeerConnection.createOffer()
+                  .then(offer => {
+                    log('📤 Created offer for simplified mode');
+                    return simplePeerConnection.setLocalDescription(offer);
+                  })
+                  .then(() => {
+                    log('📝 Set local description for simplified connection');
+                    
+                    // Send offer through socket.io instead of protoo
+                    socket.emit('signal', {
+                      target: 'server', 
+                      signal: { 
+                        type: 'offer',
+                        sdp: simplePeerConnection.localDescription
+                      }
+                    });
+                    log('📡 Sent offer through socket.io');
+                  })
+                  .catch(err => {
+                    console.error('Error setting up simplified offer:', err);
+                    log(`❌ Error in simplified offer: ${err.message}`);
+                  });
+              })
+              .catch(err => {
+                console.error('Error getting media for simplified mode:', err);
+                log(`❌ Media error in simplified mode: ${err.message}`);
+              });
+          }
+          
+          // Handle ICE candidates
+          simplePeerConnection.onicecandidate = event => {
+            if (event.candidate) {
+              socket.emit('signal', {
+                target: 'server',
+                signal: {
+                  type: 'candidate',
+                  candidate: event.candidate
+                }
+              });
+            }
+          };
+          
+          // Handle incoming tracks
+          simplePeerConnection.ontrack = event => {
+            log(`📥 Received ${event.track.kind} track in simplified mode`);
+            if (remoteVideo.srcObject) {
+              remoteVideo.srcObject.addTrack(event.track);
+            } else {
+              remoteVideo.srcObject = new MediaStream([event.track]);
+            }
+            log('▶️ Playing remote media in simplified mode');
+          };
+          
+          // Listen for answer and candidates from server
+          socket.on('signal', data => {
+            if (data.signal.type === 'answer') {
+              log('📩 Received answer in simplified mode');
+              const answer = new RTCSessionDescription(data.signal);
+              simplePeerConnection.setRemoteDescription(answer)
+                .then(() => {
+                  log('📝 Set remote description from answer');
+                })
+                .catch(err => {
+                  console.error('Error setting remote description:', err);
+                  log(`❌ Error with remote description: ${err.message}`);
+                });
+            } else if (data.signal.type === 'candidate') {
+              log('🧊 Received ICE candidate in simplified mode');
+              simplePeerConnection.addIceCandidate(new RTCIceCandidate(data.signal.candidate))
+                .catch(err => {
+                  console.error('Error adding ICE candidate:', err);
+                  log(`❌ Error adding ICE candidate: ${err.message}`);
+                });
+            }
+          });
+          
+          log('🔌 Simplified peer connection mode ready');
+        }
       }); // End of waitForDependencies callback
     </script>
   </body>

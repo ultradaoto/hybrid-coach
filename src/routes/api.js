@@ -5,11 +5,19 @@ import { getTwilioIceServers } from '../services/turnService.js';
 import profileRouter from './api/profile.js';
 import { jwtAuth } from '../middlewares/jwtAuth.js';
 import messageRouter from './api/message.js';
+import { router as wsRelayRouter } from './api/ws-relay.js';
+import { router as wsTestRouter } from './api/websocket-test.js';
+import { router as protooTestRouter } from './api/protoo-test.js';
+import { router as directWsTestRouter } from './api/direct-ws-test.js';
 
 const router = Router();
 
 router.use('/profile', profileRouter);
 router.use('/message', messageRouter);
+router.use('/ws-relay', wsRelayRouter);
+router.use('/ws-test', wsTestRouter);
+router.use('/protoo-test', protooTestRouter);
+router.use('/direct-ws-test', directWsTestRouter);
 
 // Add TURN credentials endpoint - no auth required as these are temporary
 router.get('/turn-credentials', async (req, res, next) => {
