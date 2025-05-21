@@ -22,7 +22,7 @@ export async function getOrCreateSessionId(roomId) {
         roomId: roomId
       },
       orderBy: {
-        createdAt: 'desc'
+        startedAt: 'desc'
       }
     });
     
