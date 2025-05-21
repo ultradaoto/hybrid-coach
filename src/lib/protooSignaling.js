@@ -12,6 +12,7 @@ import { getTwilioIceServers } from '../services/turnService.js';
 import https from 'https';
 
 const debug = createDebug('hybrid-coach:protooSignaling');
+debug('📡 protooSignaling module (rev2) loaded');
 const warn = createDebug('hybrid-coach:protooSignaling:WARN');
 const error = createDebug('hybrid-coach:protooSignaling:ERROR');
 
