@@ -36,37 +36,52 @@ export function initSimpleWebSocket(httpServer) {
         
         switch (data.type) {
           case 'join':
+            // Check if this user is already in the room
+            const existingUser = Array.from(room).find(u => u.userId === data.userId);
+            if (existingUser && existingUser.ws !== ws) {
+              console.log(`[SimpleWS] User ${data.userName} already in room, removing old connection`);
+              room.delete(existingUser);
+            }
+            
             currentUser = {
               ws,
               userId: data.userId,
               userName: data.userName
             };
             
-            // Check if room already has someone
-            const existingUsers = Array.from(room);
-            const otherUser = existingUsers.find(u => u.userId !== data.userId);
-            
             room.add(currentUser);
             
-            // Notify the new user about existing users
-            if (otherUser) {
+            // Get all other users in room
+            const otherUsers = Array.from(room).filter(u => u.userId !== data.userId);
+            
+            if (otherUsers.length > 0) {
+              // New user joins existing room
+              const firstOtherUser = otherUsers[0];
+              
+              console.log(`[SimpleWS] ${data.userName} joining room with ${firstOtherUser.userName}`);
+              
+              // Tell new user about existing user - they should create offer
               ws.send(JSON.stringify({
                 type: 'user-joined',
-                userId: otherUser.userId,
-                userName: otherUser.userName,
+                userId: firstOtherUser.userId,
+                userName: firstOtherUser.userName,
                 shouldCreateOffer: true
               }));
               
-              // Notify existing user about new user
-              otherUser.ws.send(JSON.stringify({
-                type: 'user-joined',
-                userId: data.userId,
-                userName: data.userName,
-                shouldCreateOffer: false
-              }));
+              // Tell existing user about new user - they should wait for offer
+              if (firstOtherUser.ws.readyState === ws.OPEN) {
+                firstOtherUser.ws.send(JSON.stringify({
+                  type: 'user-joined',
+                  userId: data.userId,
+                  userName: data.userName,
+                  shouldCreateOffer: false
+                }));
+              }
+            } else {
+              console.log(`[SimpleWS] ${data.userName} is first in room ${roomId}`);
             }
             
-            console.log(`[SimpleWS] ${data.userName} joined room ${roomId}. Room size: ${room.size}`);
+            console.log(`[SimpleWS] Room ${roomId} now has ${room.size} user(s)`);
             break;
             
           case 'offer':
@@ -94,6 +109,13 @@ export function initSimpleWebSocket(httpServer) {
             
           case 'leave':
             handleDisconnect();
+            break;
+            
+          case 'ping':
+            // Just acknowledge the ping to keep connection alive
+            if (ws.readyState === ws.OPEN) {
+              ws.send(JSON.stringify({ type: 'pong' }));
+            }
             break;
         }
       } catch (err) {

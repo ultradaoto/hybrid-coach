@@ -199,6 +199,7 @@
         let turnCredentials = null;
         let isOfferer = false;
         let remoteUserId = null;
+        let heartbeatInterval = null;
         
         // UI Elements
         const localVideo = document.getElementById('localVideo');
@@ -276,31 +277,40 @@
                     localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 } catch (err) {
                     debugLog('Failed with ideal constraints, trying basic', err);
-                    // Fallback to basic constraints
-                    localStream = await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: true
-                    });
+                    try {
+                        // Fallback to basic constraints
+                        localStream = await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: true
+                        });
+                    } catch (err2) {
+                        debugLog('Failed to get any media, continuing without local stream', err2);
+                        // Continue without local stream - we can still receive
+                        localStream = null;
+                        updateStatus('No camera/mic access - receive only mode', 'error');
+                    }
                 }
                 
-                localVideo.srcObject = localStream;
-                updateStatus('Camera ready', 'success');
+                if (localStream) {
+                    localVideo.srcObject = localStream;
+                    updateStatus('Camera ready', 'success');
+                    
+                    // Log media tracks
+                    debugLog('Local tracks:', {
+                        video: localStream.getVideoTracks().length,
+                        audio: localStream.getAudioTracks().length
+                    });
+                    
+                    // Setup control buttons
+                    setupControls();
+                }
                 
-                // Log media tracks
-                debugLog('Local tracks:', {
-                    video: localStream.getVideoTracks().length,
-                    audio: localStream.getAudioTracks().length
-                });
-                
-                // Setup control buttons
-                setupControls();
-                
-                // Connect to signaling server
+                // Connect to signaling server regardless of media status
                 connectWebSocket();
                 
             } catch (err) {
-                console.error('Media error:', err);
-                updateStatus('Failed to access camera/microphone: ' + err.message, 'error');
+                console.error('Media initialization error:', err);
+                updateStatus('Media error: ' + err.message, 'error');
                 
                 // Still try to connect for receive-only
                 connectWebSocket();
@@ -313,6 +323,12 @@
             const wsUrl = `${protocol}//${window.location.host}/ws-simple/${roomId}`;
             
             updateStatus('Connecting to server...');
+            
+            // Clear any existing heartbeat
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
             
             ws = new WebSocket(wsUrl);
             
@@ -327,65 +343,87 @@
                     userId: userId,
                     userName: userName
                 });
+                
+                // Start heartbeat to prevent timeout
+                heartbeatInterval = setInterval(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        sendMessage({ type: 'ping' });
+                    }
+                }, 20000); // Send ping every 20 seconds
             };
             
             ws.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
-                console.log('Received:', data.type);
-                debugLog(`Received ${data.type} message`);
-                
-                switch (data.type) {
-                    case 'user-joined':
-                        remoteUserId = data.userId;
-                        remoteLabel.textContent = data.userName || 'Peer';
-                        updateStatus(`${data.userName} joined the room`, 'success');
-                        
-                        // If we're told to create offer, we're the initiator
-                        if (data.shouldCreateOffer) {
-                            isOfferer = true;
-                            debugLog('I am the offerer - creating peer connection and offer');
-                            updateDebugInfo('Role: OFFERER (will create offer)');
+                try {
+                    let data;
+                    
+                    // Handle both text and blob messages
+                    if (event.data instanceof Blob) {
+                        debugLog('Received Blob data, converting to text...');
+                        const text = await event.data.text();
+                        data = JSON.parse(text);
+                    } else {
+                        data = JSON.parse(event.data);
+                    }
+                    
+                    console.log('Received:', data.type);
+                    debugLog(`Received ${data.type} message`);
+                    
+                    switch (data.type) {
+                        case 'user-joined':
+                            remoteUserId = data.userId;
+                            remoteLabel.textContent = data.userName || 'Peer';
+                            updateStatus(`${data.userName} joined the room`, 'success');
                             
-                            // Small delay to ensure both sides are ready
-                            await new Promise(resolve => setTimeout(resolve, 500));
+                            // If we're told to create offer, we're the initiator
+                            if (data.shouldCreateOffer) {
+                                isOfferer = true;
+                                debugLog('I am the offerer - creating peer connection and offer');
+                                updateDebugInfo('Role: OFFERER (will create offer)');
+                                
+                                // Small delay to ensure both sides are ready
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                                
+                                // Create peer connection and offer
+                                await createPeerConnection();
+                                await createOffer();
+                            } else {
+                                isOfferer = false;
+                                debugLog('I am the answerer - waiting for offer');
+                                updateDebugInfo('Role: ANSWERER (waiting for offer)');
+                                
+                                // Don't create peer connection yet - wait for offer
+                                // await createPeerConnection();
+                            }
+                            break;
                             
-                            // Create peer connection and offer
-                            await createPeerConnection();
-                            await createOffer();
-                        } else {
-                            isOfferer = false;
-                            debugLog('I am the answerer - waiting for offer');
-                            updateDebugInfo('Role: ANSWERER (waiting for offer)');
+                        case 'offer':
+                            debugLog('Received offer from peer');
+                            updateDebugInfo('Received OFFER - creating answer...');
+                            await handleOffer(data);
+                            break;
                             
-                            // Don't create peer connection yet - wait for offer
-                            // await createPeerConnection();
-                        }
-                        break;
-                        
-                    case 'offer':
-                        debugLog('Received offer from peer');
-                        updateDebugInfo('Received OFFER - creating answer...');
-                        await handleOffer(data);
-                        break;
-                        
-                    case 'answer':
-                        debugLog('Received answer from peer');
-                        updateDebugInfo('Received ANSWER - finalizing connection...');
-                        await handleAnswer(data);
-                        break;
-                        
-                    case 'ice-candidate':
-                        debugLog('Received ICE candidate');
-                        await handleIceCandidate(data);
-                        break;
-                        
-                    case 'user-left':
-                        handleUserLeft();
-                        break;
-                        
-                    case 'error':
-                        updateStatus('Error: ' + data.message, 'error');
-                        break;
+                        case 'answer':
+                            debugLog('Received answer from peer');
+                            updateDebugInfo('Received ANSWER - finalizing connection...');
+                            await handleAnswer(data);
+                            break;
+                            
+                        case 'ice-candidate':
+                            debugLog('Received ICE candidate');
+                            await handleIceCandidate(data);
+                            break;
+                            
+                        case 'user-left':
+                            handleUserLeft();
+                            break;
+                            
+                        case 'error':
+                            updateStatus('Error: ' + data.message, 'error');
+                            break;
+                    }
+                } catch (err) {
+                    console.error('Error handling WebSocket message:', err);
+                    debugLog('WebSocket message error: ' + err.message);
                 }
             };
             
@@ -396,6 +434,12 @@
             
             ws.onclose = () => {
                 updateStatus('Disconnected from server', 'error');
+                
+                // Clear heartbeat
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = null;
+                }
                 
                 // Attempt reconnection after 3 seconds
                 setTimeout(() => {
@@ -462,6 +506,8 @@
                     debugLog(`Adding local ${track.kind} track`);
                     peerConnection.addTrack(track, localStream);
                 });
+            } else {
+                debugLog('No local stream available - receive only mode');
             }
             
             // Handle remote stream
@@ -747,6 +793,10 @@
         
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+            }
+            
             if (ws) {
                 sendMessage({ type: 'leave' });
                 ws.close();
