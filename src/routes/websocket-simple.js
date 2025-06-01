@@ -73,11 +73,23 @@ export function initSimpleWebSocket(httpServer) {
           case 'answer':
           case 'ice-candidate':
             // Relay to other user in room
+            console.log(`[SimpleWS] Relaying ${data.type} in room ${roomId}`);
+            let relayCount = 0;
             room.forEach(user => {
               if (user.ws !== ws && user.ws.readyState === ws.OPEN) {
+                console.log(`[SimpleWS] Sending ${data.type} to ${user.userName}`);
                 user.ws.send(message);
+                relayCount++;
               }
             });
+            
+            if (relayCount === 0) {
+              console.log(`[SimpleWS] WARNING: No other users to relay ${data.type} to!`);
+              console.log(`[SimpleWS] Room ${roomId} has ${room.size} users`);
+              room.forEach(user => {
+                console.log(`[SimpleWS]   - ${user.userName} (${user.userId}) - same as sender: ${user.ws === ws}`);
+              });
+            }
             break;
             
           case 'leave':

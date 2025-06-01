@@ -171,10 +171,12 @@
             
             debugInfo.innerHTML = `
                 <div>Browser: ${isIOS ? 'iOS' : 'Desktop'} ${isSafari ? 'Safari' : 'Other'}</div>
+                <div>Role: ${isOfferer ? 'OFFERER' : 'ANSWERER'}</div>
                 <div>Local Stream: ${localStream ? 'YES' : 'NO'}</div>
                 <div>WebSocket: ${ws && ws.readyState === WebSocket.OPEN ? 'CONNECTED' : 'DISCONNECTED'}</div>
                 <div>TURN Servers: ${turnStatus}</div>
                 <div>PeerConnection: ${peerConnection ? peerConnection.connectionState : 'NULL'}</div>
+                <div>Signaling State: ${peerConnection ? peerConnection.signalingState : 'NULL'}</div>
                 <div>ICE State: ${peerConnection ? peerConnection.iceConnectionState : 'NULL'}</div>
                 <div>ICE Gathering: ${peerConnection ? peerConnection.iceGatheringState : 'NULL'}</div>
                 ${info ? `<div style="color: yellow;">${info}</div>` : ''}
@@ -195,6 +197,8 @@
         let connectionAttempts = 0;
         let iceGatheringComplete = false;
         let turnCredentials = null;
+        let isOfferer = false;
+        let remoteUserId = null;
         
         // UI Elements
         const localVideo = document.getElementById('localVideo');
@@ -328,28 +332,50 @@
             ws.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
                 console.log('Received:', data.type);
+                debugLog(`Received ${data.type} message`);
                 
                 switch (data.type) {
                     case 'user-joined':
+                        remoteUserId = data.userId;
                         remoteLabel.textContent = data.userName || 'Peer';
                         updateStatus(`${data.userName} joined the room`, 'success');
                         
-                        // If we're the first user (coach), create offer
+                        // If we're told to create offer, we're the initiator
                         if (data.shouldCreateOffer) {
+                            isOfferer = true;
+                            debugLog('I am the offerer - creating peer connection and offer');
+                            updateDebugInfo('Role: OFFERER (will create offer)');
+                            
+                            // Small delay to ensure both sides are ready
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            // Create peer connection and offer
                             await createPeerConnection();
                             await createOffer();
+                        } else {
+                            isOfferer = false;
+                            debugLog('I am the answerer - waiting for offer');
+                            updateDebugInfo('Role: ANSWERER (waiting for offer)');
+                            
+                            // Don't create peer connection yet - wait for offer
+                            // await createPeerConnection();
                         }
                         break;
                         
                     case 'offer':
+                        debugLog('Received offer from peer');
+                        updateDebugInfo('Received OFFER - creating answer...');
                         await handleOffer(data);
                         break;
                         
                     case 'answer':
+                        debugLog('Received answer from peer');
+                        updateDebugInfo('Received ANSWER - finalizing connection...');
                         await handleAnswer(data);
                         break;
                         
                     case 'ice-candidate':
+                        debugLog('Received ICE candidate');
                         await handleIceCandidate(data);
                         break;
                         
@@ -545,7 +571,15 @@
         // Create offer
         async function createOffer() {
             try {
+                if (!peerConnection) {
+                    debugLog('ERROR: No peer connection when trying to create offer');
+                    updateDebugInfo('ERROR: No peer connection!');
+                    return;
+                }
+                
                 debugLog('Creating offer...');
+                updateStatus('Creating call...');
+                
                 const offer = await peerConnection.createOffer({
                     offerToReceiveVideo: true,
                     offerToReceiveAudio: true
@@ -554,19 +588,21 @@
                 debugLog('Setting local description...');
                 await peerConnection.setLocalDescription(offer);
                 
-                // Wait a bit for ICE gathering to start
-                setTimeout(() => {
-                    debugLog('Sending offer to peer');
-                    sendMessage({
-                        type: 'offer',
-                        offer: offer
-                    });
-                }, 100);
+                // Wait for ICE gathering to start
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                debugLog('Sending offer to peer');
+                sendMessage({
+                    type: 'offer',
+                    offer: peerConnection.localDescription // Use the actual local description
+                });
                 
                 updateStatus('Calling peer...');
+                updateDebugInfo('Offer sent - waiting for answer...');
             } catch (err) {
                 console.error('Error creating offer:', err);
                 updateStatus('Failed to create call: ' + err.message, 'error');
+                updateDebugInfo('ERROR creating offer: ' + err.message);
             }
         }
         
@@ -574,11 +610,17 @@
         async function handleOffer(data) {
             try {
                 if (!peerConnection) {
+                    debugLog('Creating peer connection to handle offer');
                     await createPeerConnection();
+                }
+                
+                if (peerConnection.signalingState !== 'stable') {
+                    debugLog(`WARNING: Signaling state is ${peerConnection.signalingState}, not stable`);
                 }
                 
                 debugLog('Setting remote description (offer)...');
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                updateDebugInfo('Remote description set - creating answer...');
                 
                 debugLog('Creating answer...');
                 const answer = await peerConnection.createAnswer();
@@ -591,16 +633,18 @@
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
                 
+                debugLog('Sending answer to peer');
                 sendMessage({
                     type: 'answer',
-                    answer: answer
+                    answer: peerConnection.localDescription // Use actual local description
                 });
                 
                 updateStatus('Answering call...');
+                updateDebugInfo('Answer sent - establishing connection...');
             } catch (err) {
                 console.error('Error handling offer:', err);
                 updateStatus('Failed to answer call: ' + err.message, 'error');
-                updateDebugInfo('ERROR: ' + err.message);
+                updateDebugInfo('ERROR handling offer: ' + err.message);
             }
         }
         
