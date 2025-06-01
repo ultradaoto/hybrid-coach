@@ -147,9 +147,40 @@
     </div>
     
     <div id="status" class="status"></div>
+    
+    <!-- Debug panel for connection diagnostics -->
+    <div id="debugPanel" style="position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.8); color: #0f0; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 4px; max-width: 400px; display: none;">
+        <div style="margin-bottom: 5px; color: #fff;">Connection Debug Info:</div>
+        <div id="debugInfo"></div>
+        <button onclick="document.getElementById('debugPanel').style.display='none'" style="margin-top: 5px; font-size: 10px;">Hide</button>
+    </div>
+    
+    <button onclick="document.getElementById('debugPanel').style.display='block'" style="position: fixed; bottom: 10px; right: 10px; background: #333; color: #fff; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px;">Show Debug</button>
 
     <!-- Single WebSocket implementation using native WebSocket -->
     <script>
+        // Detect iOS Safari
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const debugInfo = document.getElementById('debugInfo');
+        
+        // Update debug info
+        function updateDebugInfo(info) {
+            const turnStatus = turnCredentials && turnCredentials.length > 0 ? 
+                `YES (${turnCredentials.length})` : 'NO';
+            
+            debugInfo.innerHTML = `
+                <div>Browser: ${isIOS ? 'iOS' : 'Desktop'} ${isSafari ? 'Safari' : 'Other'}</div>
+                <div>Local Stream: ${localStream ? 'YES' : 'NO'}</div>
+                <div>WebSocket: ${ws && ws.readyState === WebSocket.OPEN ? 'CONNECTED' : 'DISCONNECTED'}</div>
+                <div>TURN Servers: ${turnStatus}</div>
+                <div>PeerConnection: ${peerConnection ? peerConnection.connectionState : 'NULL'}</div>
+                <div>ICE State: ${peerConnection ? peerConnection.iceConnectionState : 'NULL'}</div>
+                <div>ICE Gathering: ${peerConnection ? peerConnection.iceGatheringState : 'NULL'}</div>
+                ${info ? `<div style="color: yellow;">${info}</div>` : ''}
+            `;
+        }
+        
         // Configuration
         const roomId = "<%= roomId %>";
         const userName = "<%= user.displayName || user.email %>";
@@ -161,6 +192,9 @@
         let ws = null;
         let isVideoEnabled = true;
         let isAudioEnabled = true;
+        let connectionAttempts = 0;
+        let iceGatheringComplete = false;
+        let turnCredentials = null;
         
         // UI Elements
         const localVideo = document.getElementById('localVideo');
@@ -182,15 +216,48 @@
             }
         }
         
+        // Debug helper
+        function debugLog(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`[${timestamp}] ${message}`, data || '');
+        }
+        
+        // Fetch TURN credentials
+        async function fetchTurnCredentials() {
+            try {
+                debugLog('Fetching TURN credentials...');
+                const response = await fetch('/api/turn-credentials');
+                const data = await response.json();
+                turnCredentials = data.iceServers;
+                debugLog('TURN credentials received:', turnCredentials.length + ' servers');
+                updateDebugInfo('TURN servers loaded: ' + turnCredentials.length);
+                return turnCredentials;
+            } catch (err) {
+                console.error('Failed to fetch TURN credentials:', err);
+                debugLog('TURN fetch failed, using STUN only');
+                return null;
+            }
+        }
+        
         // Initialize media
         async function initializeMedia() {
             try {
                 updateStatus('Accessing camera and microphone...');
                 
-                localStream = await navigator.mediaDevices.getUserMedia({
+                // Fetch TURN credentials first
+                await fetchTurnCredentials();
+                
+                // iOS Safari specific handling
+                if (isIOS && isSafari) {
+                    debugLog('iOS Safari detected - using special handling');
+                    updateDebugInfo('iOS Safari - special media handling');
+                }
+                
+                // More permissive constraints for better compatibility
+                const constraints = {
                     video: { 
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
+                        width: { ideal: 640, max: 1280 },
+                        height: { ideal: 480, max: 720 },
                         facingMode: 'user'
                     },
                     audio: {
@@ -198,10 +265,28 @@
                         noiseSuppression: true,
                         autoGainControl: true
                     }
-                });
+                };
+                
+                // Try to get media with fallbacks
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (err) {
+                    debugLog('Failed with ideal constraints, trying basic', err);
+                    // Fallback to basic constraints
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true
+                    });
+                }
                 
                 localVideo.srcObject = localStream;
                 updateStatus('Camera ready', 'success');
+                
+                // Log media tracks
+                debugLog('Local tracks:', {
+                    video: localStream.getVideoTracks().length,
+                    audio: localStream.getAudioTracks().length
+                });
                 
                 // Setup control buttons
                 setupControls();
@@ -212,6 +297,9 @@
             } catch (err) {
                 console.error('Media error:', err);
                 updateStatus('Failed to access camera/microphone: ' + err.message, 'error');
+                
+                // Still try to connect for receive-only
+                connectWebSocket();
             }
         }
         
@@ -301,83 +389,207 @@
         
         // Create peer connection
         async function createPeerConnection() {
+            // Start with STUN servers
+            let iceServers = [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
+            ];
+            
+            // Add TURN servers if available
+            if (turnCredentials && turnCredentials.length > 0) {
+                debugLog('Adding TURN servers to configuration');
+                iceServers = [...iceServers, ...turnCredentials];
+                updateDebugInfo('Using TURN servers from Twilio');
+            } else {
+                debugLog('No TURN servers available, using STUN only');
+                updateDebugInfo('WARNING: No TURN servers - may fail on restricted networks');
+            }
+            
+            // Enhanced ICE servers configuration
             const configuration = {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
+                iceServers: iceServers,
+                iceCandidatePoolSize: 10,
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require',
+                iceTransportPolicy: 'all' // Use both STUN and TURN
             };
+            
+            // iOS Safari specific settings
+            if (isIOS && isSafari) {
+                configuration.sdpSemantics = 'unified-plan';
+            }
+            
+            debugLog('Creating RTCPeerConnection with config:', {
+                iceServersCount: configuration.iceServers.length,
+                hasStun: configuration.iceServers.some(s => s.urls.toString().includes('stun:')),
+                hasTurn: configuration.iceServers.some(s => s.urls.toString().includes('turn:'))
+            });
             
             peerConnection = new RTCPeerConnection(configuration);
             
-            // Add local stream
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
+            // Add local stream if available
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    debugLog(`Adding local ${track.kind} track`);
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
             
             // Handle remote stream
             peerConnection.ontrack = (event) => {
-                console.log('Received remote track');
-                remoteVideo.srcObject = event.streams[0];
-                updateStatus('Video connected!', 'success');
+                debugLog('Received remote track:', event.track.kind);
+                if (event.streams && event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    updateStatus('Video connected!', 'success');
+                } else {
+                    debugLog('No streams in track event');
+                }
             };
             
-            // Handle ICE candidates
+            // ICE candidate handling with debugging
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
+                    const candidateType = event.candidate.candidate.includes('relay') ? 'TURN' : 
+                                        event.candidate.candidate.includes('srflx') ? 'STUN' : 'HOST';
+                    
+                    debugLog(`Local ICE candidate (${candidateType}):`, {
+                        type: event.candidate.type,
+                        protocol: event.candidate.protocol,
+                        address: event.candidate.address
+                    });
+                    
+                    if (candidateType === 'TURN') {
+                        updateDebugInfo('TURN relay candidate found! 🎉');
+                    }
+                    
                     sendMessage({
                         type: 'ice-candidate',
                         candidate: event.candidate
                     });
+                } else {
+                    debugLog('ICE gathering complete');
+                    iceGatheringComplete = true;
+                }
+            };
+            
+            // Monitor ICE connection state
+            peerConnection.oniceconnectionstatechange = () => {
+                const state = peerConnection.iceConnectionState;
+                debugLog('ICE connection state:', state);
+                
+                switch (state) {
+                    case 'checking':
+                        updateStatus('Connecting to peer...');
+                        break;
+                    case 'connected':
+                    case 'completed':
+                        updateStatus('Connected!', 'success');
+                        connectionAttempts = 0;
+                        break;
+                    case 'failed':
+                        updateStatus('Connection failed - trying again...', 'error');
+                        handleConnectionFailure();
+                        break;
+                    case 'disconnected':
+                        updateStatus('Connection lost - reconnecting...', 'error');
+                        break;
                 }
             };
             
             // Monitor connection state
             peerConnection.onconnectionstatechange = () => {
-                console.log('Connection state:', peerConnection.connectionState);
-                
-                switch (peerConnection.connectionState) {
-                    case 'connected':
-                        updateStatus('Peer connected!', 'success');
-                        break;
-                    case 'failed':
-                        updateStatus('Connection failed', 'error');
-                        break;
-                    case 'disconnected':
-                        updateStatus('Peer disconnected', 'error');
-                        break;
-                }
+                debugLog('Connection state:', peerConnection.connectionState);
             };
+            
+            // Monitor signaling state
+            peerConnection.onsignalingstatechange = () => {
+                debugLog('Signaling state:', peerConnection.signalingState);
+            };
+            
+            // ICE gathering state
+            peerConnection.onicegatheringstatechange = () => {
+                debugLog('ICE gathering state:', peerConnection.iceGatheringState);
+            };
+        }
+        
+        // Handle connection failure
+        async function handleConnectionFailure() {
+            connectionAttempts++;
+            
+            if (connectionAttempts < 3) {
+                debugLog(`Connection attempt ${connectionAttempts} failed, retrying...`);
+                
+                // Close existing connection
+                if (peerConnection) {
+                    peerConnection.close();
+                }
+                
+                // Wait a bit then recreate
+                setTimeout(async () => {
+                    await createPeerConnection();
+                    
+                    // If we were the offerer, create new offer
+                    if (peerConnection.localDescription && peerConnection.localDescription.type === 'offer') {
+                        await createOffer();
+                    }
+                }, 2000);
+            } else {
+                updateStatus('Connection failed after 3 attempts. Please check your network.', 'error');
+                debugLog('Max connection attempts reached');
+            }
         }
         
         // Create offer
         async function createOffer() {
             try {
-                const offer = await peerConnection.createOffer();
+                debugLog('Creating offer...');
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveVideo: true,
+                    offerToReceiveAudio: true
+                });
+                
+                debugLog('Setting local description...');
                 await peerConnection.setLocalDescription(offer);
                 
-                sendMessage({
-                    type: 'offer',
-                    offer: offer
-                });
+                // Wait a bit for ICE gathering to start
+                setTimeout(() => {
+                    debugLog('Sending offer to peer');
+                    sendMessage({
+                        type: 'offer',
+                        offer: offer
+                    });
+                }, 100);
                 
                 updateStatus('Calling peer...');
             } catch (err) {
                 console.error('Error creating offer:', err);
-                updateStatus('Failed to create call', 'error');
+                updateStatus('Failed to create call: ' + err.message, 'error');
             }
         }
         
-        // Handle offer
+        // Handle offer with iOS fixes
         async function handleOffer(data) {
             try {
                 if (!peerConnection) {
                     await createPeerConnection();
                 }
                 
-                await peerConnection.setRemoteDescription(data.offer);
+                debugLog('Setting remote description (offer)...');
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                
+                debugLog('Creating answer...');
                 const answer = await peerConnection.createAnswer();
+                
+                debugLog('Setting local description (answer)...');
                 await peerConnection.setLocalDescription(answer);
+                
+                // iOS Safari needs a delay before sending answer
+                if (isIOS && isSafari) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
                 
                 sendMessage({
                     type: 'answer',
@@ -387,26 +599,35 @@
                 updateStatus('Answering call...');
             } catch (err) {
                 console.error('Error handling offer:', err);
-                updateStatus('Failed to answer call', 'error');
+                updateStatus('Failed to answer call: ' + err.message, 'error');
+                updateDebugInfo('ERROR: ' + err.message);
             }
         }
         
-        // Handle answer
+        // Handle answer with iOS fixes
         async function handleAnswer(data) {
             try {
-                await peerConnection.setRemoteDescription(data.answer);
+                debugLog('Setting remote description (answer)...');
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
                 updateStatus('Call established');
             } catch (err) {
                 console.error('Error handling answer:', err);
-                updateStatus('Failed to establish call', 'error');
+                updateStatus('Failed to establish call: ' + err.message, 'error');
+                updateDebugInfo('ERROR: ' + err.message);
             }
         }
         
-        // Handle ICE candidate
+        // Enhanced ICE candidate handling
         async function handleIceCandidate(data) {
             try {
-                if (peerConnection) {
+                if (peerConnection && peerConnection.remoteDescription) {
+                    debugLog('Adding remote ICE candidate:', {
+                        type: data.candidate.type,
+                        protocol: data.candidate.protocol
+                    });
                     await peerConnection.addIceCandidate(data.candidate);
+                } else {
+                    debugLog('Cannot add ICE candidate - no remote description yet');
                 }
             } catch (err) {
                 console.error('Error adding ICE candidate:', err);
@@ -496,8 +717,43 @@
             }
         });
         
+        // Add connection diagnostics
+        function startConnectionDiagnostics() {
+            setInterval(async () => {
+                if (peerConnection) {
+                    try {
+                        const stats = await peerConnection.getStats();
+                        let hasConnectedCandidate = false;
+                        
+                        stats.forEach(report => {
+                            if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                                hasConnectedCandidate = true;
+                                debugLog('Active connection:', {
+                                    local: report.localCandidateId,
+                                    remote: report.remoteCandidateId,
+                                    state: report.state
+                                });
+                            }
+                        });
+                        
+                        if (!hasConnectedCandidate && peerConnection.iceConnectionState === 'checking') {
+                            debugLog('No successful candidate pairs yet');
+                        }
+                    } catch (err) {
+                        debugLog('Error getting stats:', err);
+                    }
+                }
+            }, 5000); // Check every 5 seconds
+        }
+        
         // Start the application
         initializeMedia();
+        startConnectionDiagnostics();
+        
+        // Update debug info periodically
+        setInterval(() => {
+            updateDebugInfo();
+        }, 1000);
     </script>
 </body>
 </html> 

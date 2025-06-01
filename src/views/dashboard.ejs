@@ -1,4 +1,17 @@
 <section>
+  <style>
+    .appointment-item {
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: #f5f5f5;
+      border-radius: 8px;
+      border-left: 4px solid #28a745;
+    }
+    .appointment-item.coach {
+      border-left-color: #007bff;
+    }
+  </style>
+  
   <h2>Welcome, <%= user.displayName %></h2>
   <p>Your email: <%= user.email ?? 'N/A' %></p>
 
@@ -53,7 +66,7 @@
   <% if (appointments && appointments.length) { %>
     <ul style="list-style: none; padding: 0;">
       <% appointments.forEach(a => { %>
-        <li style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px; border-left: 4px solid <%= user.role === 'coach' ? '#007bff' : '#28a745' %>;">
+        <li class="appointment-item <%= user.role === 'coach' ? 'coach' : '' %>">
           <strong>📅 <%= new Date(a.scheduledFor).toLocaleString() %></strong>
           <% if (user.role === 'coach' && a.client) { %>
             <br>👤 Client: <%= a.client.displayName || a.client.email %>

@@ -9,6 +9,7 @@ import { router as wsRelayRouter } from './api/ws-relay.js';
 import { router as wsTestRouter } from './api/websocket-test.js';
 import { router as protooTestRouter } from './api/protoo-test.js';
 import { router as directWsTestRouter } from './api/direct-ws-test.js';
+import aiRouter from './api/ai.js';
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.use('/ws-relay', wsRelayRouter);
 router.use('/ws-test', wsTestRouter);
 router.use('/protoo-test', protooTestRouter);
 router.use('/direct-ws-test', directWsTestRouter);
+router.use('/ai', aiRouter);
 
 // Add TURN credentials endpoint - no auth required as these are temporary
 router.get('/turn-credentials', async (req, res, next) => {
@@ -51,6 +53,19 @@ router.post('/tts', jwtAuth, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// Network connectivity test endpoint
+router.get('/network-test', (req, res) => {
+  res.json({
+    success: true,
+    timestamp: new Date().toISOString(),
+    clientIp: req.ip || req.connection.remoteAddress,
+    headers: {
+      'user-agent': req.headers['user-agent'],
+      'x-forwarded-for': req.headers['x-forwarded-for']
+    }
+  });
 });
 
 export default router; 
