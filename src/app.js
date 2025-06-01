@@ -13,6 +13,7 @@ import { initProtooSignaling } from './lib/protooSignaling.js';
 import { initWebSocketRelay } from './routes/api/ws-relay.js';
 import { initTestWebSocket } from './routes/api/websocket-test.js';
 import { debugMiddleware } from './middlewares/debugMiddleware.js';
+import { initSimpleWebSocket } from './routes/websocket-simple.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -191,8 +192,11 @@ const startServer = async (attemptPort) => {
       });
     });
 
-    // Initialize protoo signaling (awaiting properly)
+    // Initialize Protoo signaling for MediaSoup
     await initProtooSignaling(httpServer);
+    
+    // Initialize simple WebSocket for fallback video chat
+    initSimpleWebSocket(httpServer);
     
     // Initialize WebSocket relay for environments where WebRTC is blocked
     initWebSocketRelay(httpServer);

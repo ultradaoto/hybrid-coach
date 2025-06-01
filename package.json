@@ -4,13 +4,7 @@
   "description": "Hybrid-Coach platform combining human and AI coaching (Node.js + Express).",
   "main": "src/app.js",
   "type": "module",
-  "scripts": {
-    "dev": "nodemon src/app.js",
-    "start": "node src/app.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --detectOpenHandles --runInBand",
-    "migrate": "prisma migrate dev --name init",
-    "generate": "prisma generate"
-  },
+    "scripts": {    "dev": "nodemon src/app.js",    "start": "node src/app.js",    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --detectOpenHandles --runInBand",    "migrate": "prisma migrate dev --name init",    "generate": "prisma generate",    "setup-webrtc": "node setup-webrtc.js",    "diagnose": "node diagnose-webrtc.js"  },
   "keywords": [
     "coaching",
     "ai",

@@ -3,6 +3,13 @@
   <p>Your email: <%= user.email ?? 'N/A' %></p>
 
   <% if (user.role === 'coach') { %>
+    <!-- Auto-refresh for coaches every 10 seconds -->
+    <script>
+      setTimeout(() => {
+        window.location.reload();
+      }, 10000);
+    </script>
+    
     <h3>Coach Tools</h3>
     <% if (!user.googleTokens) { %>
       <a href="/coach/calendar/connect" class="btn">Connect Calendar</a>
@@ -32,30 +39,49 @@
         <button type="submit">Book</button>
       </form>
     <% } else { %>
-      <p>Loading available slots...</p>
+      <p>Click below to create a test room immediately:</p>
+      <a href="/room/create" class="btn" style="background: #28a745; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">Create Instant Room</a>
     <% } %>
   <% } %>
 
-  <h3>Upcoming Appointments</h3>
+  <h3>
+    Upcoming Appointments
+    <% if (user.role === 'coach') { %>
+      <span style="font-size: 0.8em; color: #666;">(Auto-refreshing every 10 seconds)</span>
+    <% } %>
+  </h3>
   <% if (appointments && appointments.length) { %>
-    <ul>
+    <ul style="list-style: none; padding: 0;">
       <% appointments.forEach(a => { %>
-        <li>
-          <%= new Date(a.scheduledFor).toLocaleString() %> –
-          <a href="/room/<%= a.roomId %>">Join Room</a>
-          <% if (user.role === 'coach') { %>
-            (Client: <%= a.client?.displayName || a.client?.email %>)
+        <li style="margin-bottom: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 8px; border-left: 4px solid <%= user.role === 'coach' ? '#007bff' : '#28a745' %>;">
+          <strong>📅 <%= new Date(a.scheduledFor).toLocaleString() %></strong>
+          <% if (user.role === 'coach' && a.client) { %>
+            <br>👤 Client: <%= a.client.displayName || a.client.email %>
+          <% } else if (user.role === 'client' && a.coach) { %>
+            <br>🎓 Coach: <%= a.coach.displayName || a.coach.email %>
           <% } %>
+          <br>
+          <span style="color: #666; font-size: 0.9em;">Room ID: <%= a.roomId.substring(0, 8) %>...</span>
+          <div style="margin-top: 0.5rem;">
+            <a href="/room/<%= a.roomId %>/simple" class="btn" style="background: #28a745; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">✅ Join Room (Simple)</a>
+            <a href="/room/<%= a.roomId %>" class="btn" style="background: #6c757d; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block; margin-left: 0.5rem;">🔧 Advanced Mode</a>
+          </div>
         </li>
       <% }) %>
     </ul>
   <% } else { %>
-    <p>No upcoming appointments.</p>
+    <p style="color: #666;">No upcoming appointments. 
+      <% if (user.role === 'client') { %>
+        Schedule one above or create an instant room.
+      <% } else { %>
+        Waiting for clients to book appointments...
+      <% } %>
+    </p>
   <% } %>
 
   <% if (user.role === 'coach') { %>
     <div style="margin-top:1rem">
-      <a href="/room/create" class="btn">Launch Test Room</a>
+      <a href="/room/create" class="btn" style="background: #17a2b8; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px;">🧪 Launch Test Room</a>
     </div>
   <% } %>
 
