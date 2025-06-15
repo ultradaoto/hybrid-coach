@@ -1,4 +1,62 @@
 <section>
-  <h2>Login</h2>
-  <a href="/auth/google" class="btn-google">Sign in with Google</a>
-</section> 
+  <h2><%= title || 'Login' %></h2>
+  
+  <% if (typeof error !== 'undefined' && error) { %>
+    <div class="alert alert-error">
+      <h3><%= error %></h3>
+      <p><%= message %></p>
+      <% if (typeof actionUrl !== 'undefined' && actionUrl) { %>
+        <a href="<%= actionUrl %>" class="btn btn-primary" target="_blank"><%= actionText %></a>
+        <p><em>After joining, return here and login with the same email address.</em></p>
+      <% } %>
+    </div>
+  <% } else { %>
+    <a href="/auth/google" class="btn-google">Sign in with Google</a>
+  <% } %>
+</section>
+
+<style>
+.alert {
+  padding: 20px;
+  margin: 20px 0;
+  border-radius: 8px;
+  border: 1px solid;
+}
+
+.alert-error {
+  background-color: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.alert h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+.alert p {
+  margin: 10px 0;
+  line-height: 1.5;
+}
+
+.btn {
+  display: inline-block;
+  padding: 12px 24px;
+  margin: 10px 0;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.btn-primary {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+}
+
+.btn-primary:hover {
+  background-color: #2563eb;
+}
+</style> 

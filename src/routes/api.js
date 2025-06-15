@@ -4,6 +4,8 @@ import { synth } from '../services/ttsService.js';
 import { getTwilioIceServers } from '../services/turnService.js';
 import profileRouter from './api/profile.js';
 import { jwtAuth } from '../middlewares/jwtAuth.js';
+import { ensureAuthenticated } from '../middlewares/auth.js';
+import userService from '../services/userService.js';
 import messageRouter from './api/message.js';
 import { router as wsRelayRouter } from './api/ws-relay.js';
 import { router as wsTestRouter } from './api/websocket-test.js';
@@ -64,6 +66,16 @@ router.get('/network-test', (req, res) => {
       'x-forwarded-for': req.headers['x-forwarded-for']
     }
   });
+});
+
+// Dismiss membership warning endpoint
+router.post('/dismiss-membership-warning', ensureAuthenticated, async (req, res, next) => {
+  try {
+    await userService.markWarningShown(req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router; 

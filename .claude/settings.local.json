@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run migrate:*)",
+      "Bash(npm install:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(mkdir:*)",
+      "Bash(node:*)",
+      "Bash(sudo npx playwright:*)",
+      "Bash(sudo apt-get:*)",
+      "Bash(sudo apt-get install:*)",
+      "Bash(npm --version)",
+      "Bash(npx:*)",
+      "Bash(npm run test-skool:*)"
+    ],
+    "deny": []
+  }
+}

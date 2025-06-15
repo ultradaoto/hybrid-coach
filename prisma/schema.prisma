@@ -1,68 +1,104 @@
-// Datasource
- datasource db {
-   provider = "postgresql"
-   url      = env("DATABASE_URL")
- }
+generator client {
+  provider = "prisma-client-js"
+}
 
-// Generator
- generator client {
-   provider = "prisma-client-js"
- }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
 model User {
-  id          String    @id @default(cuid())
-  googleId    String    @unique
-  email       String    @unique
-  displayName String
-  role        String
-  profile     Profile?
-  sessions    Session[]
-  messages    Message[]
-  clientAppointments  Appointment[] @relation("Client")
-  coachAppointments   Appointment[] @relation("Coach")
+  id                      String                    @id @default(cuid())
+  googleId                String                    @unique
+  email                   String                    @unique
+  displayName             String
+  role                    String
+  googleTokens            Json?
+  isAvailable             Boolean                   @default(true)
+  coachLevel              Int?
+  coachName               String?
+  lastSkoolSync           DateTime?
+  membershipEndDate       DateTime?
+  membershipWarningShown  Boolean                   @default(false)
+  skoolUltraEmail         String?
+  skoolVagusEmail         String?
+  ultraSubscriptionStatus String?
+  vagusSubscriptionStatus String?
+  clientAppointments      Appointment[]             @relation("Client")
+  coachAppointments       Appointment[]             @relation("Coach")
+  membershipHistory       MembershipStatusHistory[]
+  messages                Message[]
+  profile                 Profile?
+  sessions                Session[]
 }
 
 model Profile {
   id      String @id @default(cuid())
-  user    User   @relation(fields:[userId], references:[id])
   userId  String @unique
   bioJson Json?
+  user    User   @relation(fields: [userId], references: [id])
 }
 
 model Session {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   roomId        String
-  appointment   Appointment @relation(fields: [appointmentId], references: [id])
-  appointmentId String                // NOT unique - many sessions per appointment
-  startedAt     DateTime   @default(now())
+  startedAt     DateTime    @default(now())
   endedAt       DateTime?
-  summary       String?
-  user          User       @relation(fields:[userId], references:[id])
   userId        String
+  summary       String?
+  appointmentId String
   messages      Message[]
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+
   @@unique([appointmentId, userId], name: "appointment_user")
 }
 
 model Message {
   id        String   @id @default(cuid())
-  session   Session  @relation(fields:[sessionId], references:[id])
   sessionId String
-  user      User     @relation(fields:[userId], references:[id])
-  userId    String
   sender    String
   content   String
   createdAt DateTime @default(now())
-} 
+  userId    String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
 
 model Appointment {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   scheduledFor DateTime
-  durationMin  Int         @default(30)
-  client       User        @relation("Client", fields:[clientId], references:[id])
+  durationMin  Int       @default(30)
   clientId     String
-  coach        User        @relation("Coach", fields:[coachId], references:[id])
   coachId      String
-  roomId       String   @unique
+  roomId       String    @unique
+  status       String    @default("scheduled")
+  cancelledAt  DateTime?
+  cancelledBy  String?
+  createdAt    DateTime  @default(now())
+  client       User      @relation("Client", fields: [clientId], references: [id])
+  coach        User      @relation("Coach", fields: [coachId], references: [id])
   sessions     Session[]
-  status       String      @default("scheduled") // scheduled | active | done
+}
+
+model SkoolMonitoringLog {
+  id               Int      @id @default(autoincrement())
+  community        String
+  membersFound     Int
+  newMembers       Int
+  cancelledMembers Int
+  syncDurationMs   Int
+  success          Boolean
+  errorMessage     String?
+  executedAt       DateTime @default(now())
+}
+
+model MembershipStatusHistory {
+  id               String   @id @default(cuid())
+  userId           String
+  community        String
+  previousStatus   String?
+  newStatus        String
+  changeDetectedAt DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id])
 }

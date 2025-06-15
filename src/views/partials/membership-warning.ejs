@@ -1,0 +1,183 @@
+<% if (membershipWarning && membershipWarning.show) { %>
+  <div class="membership-warning" style="
+    background: linear-gradient(135deg, #ff6b6b, #feca57);
+    border: 2px solid #ff5722;
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin: 1rem 0;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    position: relative;
+    overflow: hidden;
+  ">
+    <!-- Animated background pattern -->
+    <div style="
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 10px,
+        rgba(255,255,255,0.1) 10px,
+        rgba(255,255,255,0.1) 20px
+      );
+      animation: slide 20s linear infinite;
+      z-index: 1;
+    "></div>
+    
+    <!-- Warning content -->
+    <div style="position: relative; z-index: 2;">
+      <div style="display: flex; align-items: center; margin-bottom: 1rem;">
+        <span style="font-size: 2rem; margin-right: 0.75rem;">⚠️</span>
+        <h3 style="margin: 0; font-size: 1.4rem; font-weight: bold;">
+          MEMBERSHIP RENEWAL REQUIRED
+        </h3>
+      </div>
+      
+      <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+        <p style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">
+          <%= membershipWarning.message %>
+        </p>
+        <p style="margin: 0; font-size: 1rem; opacity: 0.9;">
+          <strong>Grace period ends in <%= membershipWarning.daysLeft %> day<%= membershipWarning.daysLeft !== 1 ? 's' : '' %></strong>
+          (<%= membershipWarning.endDate.toLocaleDateString() %>)
+        </p>
+      </div>
+      
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="<%= membershipWarning.ultraUrl %>" 
+           target="_blank"
+           style="
+             background: #28a745;
+             color: white;
+             padding: 0.75rem 1.5rem;
+             text-decoration: none;
+             border-radius: 8px;
+             font-weight: bold;
+             display: inline-flex;
+             align-items: center;
+             gap: 0.5rem;
+             transition: all 0.3s ease;
+             box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+           "
+           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(40, 167, 69, 0.4)'"
+           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(40, 167, 69, 0.3)'">
+          🎯 Renew Ultra Skool Membership
+        </a>
+        
+        <a href="<%= membershipWarning.vagusUrl %>" 
+           target="_blank"
+           style="
+             background: #6c757d;
+             color: white;
+             padding: 0.75rem 1.5rem;
+             text-decoration: none;
+             border-radius: 8px;
+             font-weight: bold;
+             display: inline-flex;
+             align-items: center;
+             gap: 0.5rem;
+             transition: all 0.3s ease;
+             box-shadow: 0 2px 8px rgba(108, 117, 125, 0.3);
+           "
+           onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 15px rgba(108, 117, 125, 0.4)'"
+           onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(108, 117, 125, 0.3)'">
+          📚 Join Vagus Skool (Client Access)
+        </a>
+        
+        <button onclick="dismissWarning()" 
+                style="
+                  background: rgba(255,255,255,0.2);
+                  color: white;
+                  border: 2px solid white;
+                  padding: 0.75rem 1rem;
+                  border-radius: 8px;
+                  font-weight: bold;
+                  cursor: pointer;
+                  transition: all 0.3s ease;
+                "
+                onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+                onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+          ✕ Dismiss Warning
+        </button>
+      </div>
+    </div>
+    
+    <!-- Pulsing border animation -->
+    <div style="
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      background: linear-gradient(45deg, #ff6b6b, #feca57, #ff6b6b);
+      border-radius: 12px;
+      z-index: 0;
+      animation: pulse 2s ease-in-out infinite alternate;
+    "></div>
+  </div>
+
+  <style>
+    @keyframes slide {
+      0% { transform: translateX(0) translateY(0); }
+      100% { transform: translateX(-50px) translateY(-50px); }
+    }
+    
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+    
+    .membership-warning {
+      animation: slideInDown 0.5s ease-out;
+    }
+    
+    @keyframes slideInDown {
+      from {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+  </style>
+
+  <script>
+    function dismissWarning() {
+      fetch('/api/dismiss-membership-warning', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      })
+      .then(response => {
+        if (response.ok) {
+          document.querySelector('.membership-warning').style.animation = 'slideOutUp 0.5s ease-in forwards';
+          setTimeout(() => {
+            document.querySelector('.membership-warning').style.display = 'none';
+          }, 500);
+        }
+      })
+      .catch(error => {
+        console.error('Error dismissing warning:', error);
+      });
+    }
+    
+    @keyframes slideOutUp {
+      from {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+    }
+  </script>
+<% } %>

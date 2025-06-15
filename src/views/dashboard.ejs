@@ -14,6 +14,15 @@
   
   <h2>Welcome, <%= user.displayName %></h2>
   <p>Your email: <%= user.email ?? 'N/A' %></p>
+  
+  <% if (message) { %>
+    <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+      <%= message %>
+    </div>
+  <% } %>
+
+  <!-- Include membership warning component -->
+  <%- include('partials/membership-warning') %>
 
   <% if (user.role === 'coach') { %>
     <!-- Auto-refresh for coaches every 10 seconds -->
@@ -24,10 +33,45 @@
     </script>
     
     <h3>Coach Tools</h3>
-    <% if (!user.googleTokens) { %>
-      <a href="/coach/calendar/connect" class="btn">Connect Calendar</a>
+    
+    <!-- Coach Availability Toggle -->
+    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <strong>📊 Availability Status</strong>
+          <br>
+          <small style="color: #666;">
+            <% if (user.isAvailable) { %>
+              You are currently accepting new client bookings
+            <% } else { %>
+              You are not accepting new client bookings
+            <% } %>
+          </small>
+        </div>
+        <form method="post" action="/coach/toggle-availability" style="margin: 0;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" <%= user.isAvailable ? 'checked' : '' %> onchange="this.form.submit()" style="margin-right: 0.5rem;">
+            <span style="font-weight: bold; color: <%= user.isAvailable ? '#28a745' : '#dc3545' %>;">
+              <%= user.isAvailable ? 'Available' : 'Unavailable' %>
+            </span>
+          </label>
+        </form>
+      </div>
+    </div>
+    
+    <% if (!calendarConnected) { %>
+      <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+        <strong>📅 Calendar not connected</strong><br>
+        Connect your Google Calendar to manage availability and view upcoming events.
+      </div>
+      <a href="/coach/calendar/connect" class="btn" style="background: #007bff; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">
+        🔗 Connect Google Calendar
+      </a>
     <% } else { %>
-      <p>Calendar connected ✔️</p>
+      <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+        <strong>✅ Calendar connected</strong><br>
+        Your Google Calendar is successfully connected and synced.
+      </div>
     <% } %>
     <h4>Upcoming Meetings</h4>
     <% if (meetings && meetings.length) { %>
@@ -40,17 +84,59 @@
       <p>No upcoming meetings.</p>
     <% } %>
   <% } else { %>
+    <h3>Client Tools</h3>
+    <% if (!calendarConnected) { %>
+      <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+        <strong>📅 Calendar not connected</strong><br>
+        Connect your Google Calendar to automatically receive appointment invitations and reminders.
+      </div>
+      <a href="/client/calendar/connect" class="btn" style="background: #007bff; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block; margin-bottom: 1rem;">
+        🔗 Connect Google Calendar
+      </a>
+    <% } else { %>
+      <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+        <strong>✅ Calendar connected</strong><br>
+        Your Google Calendar is successfully connected. You'll receive appointment invitations automatically.
+      </div>
+    <% } %>
+    
     <h3>Schedule Your Hybrid Coaching Call</h3>
-    <% if (slots && slots.length) { %>
-      <form method="post" action="/schedule">
-        <label for="slot">Choose a slot:</label>
-        <select name="slot" id="slot">
-          <% slots.forEach(s => { %>
-            <option value="<%= s.iso %>"><%= s.label %></option>
-          <% }) %>
-        </select>
-        <button type="submit">Book</button>
+    <% if (slots && slots.length && availableCoaches && availableCoaches.length) { %>
+      <form method="post" action="/schedule" style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+        <div style="margin-bottom: 1rem;">
+          <label for="coach" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Choose your coach:</label>
+          <select name="coachId" id="coach" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">Select a coach...</option>
+            <% availableCoaches.forEach(coach => { %>
+              <option value="<%= coach.id %>">
+                <%= coach.coachName || coach.displayName %> 
+                <% if (coach.coachLevel) { %>
+                  - Level <%= coach.coachLevel %>
+                <% } %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+          <label for="slot" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Choose a time slot:</label>
+          <select name="slot" id="slot" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="">Select a time...</option>
+            <% slots.forEach(s => { %>
+              <option value="<%= s.iso %>"><%= s.label %></option>
+            <% }) %>
+          </select>
+        </div>
+        
+        <button type="submit" style="background: #007bff; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem;">
+          📅 Book Appointment
+        </button>
       </form>
+    <% } else if (!availableCoaches || availableCoaches.length === 0) { %>
+      <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
+        <strong>⚠️ No coaches available</strong><br>
+        All coaches are currently unavailable for new bookings. Please check back later.
+      </div>
     <% } else { %>
       <p>Click below to create a test room immediately:</p>
       <a href="/room/create" class="btn" style="background: #28a745; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">Create Instant Room</a>
@@ -67,18 +153,50 @@
     <ul style="list-style: none; padding: 0;">
       <% appointments.forEach(a => { %>
         <li class="appointment-item <%= user.role === 'coach' ? 'coach' : '' %>">
-          <strong>📅 <%= new Date(a.scheduledFor).toLocaleString() %></strong>
-          <% if (user.role === 'coach' && a.client) { %>
-            <br>👤 Client: <%= a.client.displayName || a.client.email %>
-          <% } else if (user.role === 'client' && a.coach) { %>
-            <br>🎓 Coach: <%= a.coach.displayName || a.coach.email %>
-          <% } %>
-          <br>
-          <span style="color: #666; font-size: 0.9em;">Room ID: <%= a.roomId.substring(0, 8) %>...</span>
-          <div style="margin-top: 0.5rem;">
-            <a href="/room/<%= a.roomId %>/simple" class="btn" style="background: #28a745; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">✅ Join Room (Simple)</a>
-            <a href="/room/<%= a.roomId %>" class="btn" style="background: #6c757d; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block; margin-left: 0.5rem;">🔧 Advanced Mode</a>
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="flex: 1;">
+              <strong>📅 <%= new Date(a.scheduledFor).toLocaleString() %></strong>
+              <% if (a.status === 'cancelled') { %>
+                <span style="background: #dc3545; color: white; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem; margin-left: 0.5rem;">CANCELLED</span>
+              <% } %>
+              <% if (user.role === 'coach' && a.client) { %>
+                <br>👤 Client: <%= a.client.displayName || a.client.email %>
+              <% } else if (user.role === 'client' && a.coach) { %>
+                <br>🎓 Coach: <%= a.coach.coachName || a.coach.displayName %> 
+                <% if (a.coach.coachLevel) { %>
+                  (Level <%= a.coach.coachLevel %>)
+                <% } %>
+              <% } %>
+              <br>
+              <span style="color: #666; font-size: 0.9em;">Room ID: <%= a.roomId.substring(0, 8) %>...</span>
+            </div>
+            
+            <% if (a.status !== 'cancelled') { %>
+              <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-left: 1rem;">
+                <% if (user.role === 'coach') { %>
+                  <form method="post" action="/coach/reassign-appointment" style="margin: 0;">
+                    <input type="hidden" name="appointmentId" value="<%= a.id %>">
+                    <button type="submit" style="background: #ffc107; color: #212529; padding: 0.3rem 0.6rem; border: none; border-radius: 3px; font-size: 0.8rem; cursor: pointer;" onclick="return confirm('Send this call back to the coach pool?')">
+                      🔄 Return to Pool
+                    </button>
+                  </form>
+                <% } else { %>
+                  <form method="post" action="/client/cancel-appointment" style="margin: 0;">
+                    <input type="hidden" name="appointmentId" value="<%= a.id %>">
+                    <button type="submit" style="background: #dc3545; color: white; padding: 0.3rem 0.6rem; border: none; border-radius: 3px; font-size: 0.8rem; cursor: pointer;" onclick="return confirm('Cancel this appointment?')">
+                      ❌ Cancel
+                    </button>
+                  </form>
+                <% } %>
+              </div>
+            <% } %>
           </div>
+          
+          <% if (a.status !== 'cancelled') { %>
+            <div style="margin-top: 0.5rem;">
+              <a href="/room/<%= a.roomId %>" class="btn" style="background: #28a745; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">✅ Join Room</a>
+            </div>
+          <% } %>
         </li>
       <% }) %>
     </ul>
