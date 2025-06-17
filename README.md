@@ -75,5 +75,4 @@ This project uses PostgreSQL via Prisma ORM.
    npm run migrate    # creates DB schema (migration name: init)
    ``` 
 
-   Start Claude with wsl -d Ubuntu, and then run claude
-   
+   Start Claude with wsl -d Ubuntu, and then run claude - to open claude code.
