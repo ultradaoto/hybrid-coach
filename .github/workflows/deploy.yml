@@ -34,7 +34,11 @@ jobs:
               git clone https://github.com/${{ github.repository }}.git "$DEPLOY_DIR"
               cd "$DEPLOY_DIR"
             fi
-            npm ci --omit=dev
+            if [ -f "package-lock.json" ]; then
+              npm ci --omit=dev
+            else
+              npm install --omit=dev
+            fi
             npm run generate
             npx prisma migrate deploy
             pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs
