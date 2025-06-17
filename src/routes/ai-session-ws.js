@@ -33,21 +33,25 @@ export function setupAISessionWebSocket(server) {
         
         log(`Proxying AI session to GPU server: ${sessionId}`);
         
-        // Create connection to GPU server
+        // Create connection to GPU server with options
         const gpuWsUrl = `${GPU_WS_URL}/ai-session/${sessionId}`;
         log(`Attempting to connect to GPU server: ${gpuWsUrl}`);
-        const gpuWs = new WebSocket(gpuWsUrl);
+        const gpuWs = new WebSocket(gpuWsUrl, {
+            handshakeTimeout: 30000, // 30 seconds for initial connection
+            perMessageDeflate: false
+        });
         
         // Track connection state
         let gpuConnected = false;
+        let keepAliveInterval = null;
         
-        // Connection timeout
+        // Connection timeout (initial connection only)
         const connectionTimeout = setTimeout(() => {
             if (!gpuConnected) {
-                log(`❌ GPU connection timeout after 10 seconds for session: ${sessionId}`);
+                log(`❌ GPU connection timeout after 30 seconds for session: ${sessionId}`);
                 gpuWs.close();
             }
-        }, 10000);
+        }, 30000);
         
         // Proxy messages from client to GPU server
         clientWs.on('message', (data) => {
@@ -79,6 +83,19 @@ export function setupAISessionWebSocket(server) {
             log(`✅ Successfully connected to GPU server for session: ${sessionId}`);
             gpuConnected = true;
             clearTimeout(connectionTimeout);
+            
+            // Start keepalive pings every 30 seconds
+            keepAliveInterval = setInterval(() => {
+                if (gpuWs.readyState === WebSocket.OPEN) {
+                    gpuWs.ping();
+                    log(`Sent keepalive ping to GPU server for session: ${sessionId}`);
+                }
+            }, 30000);
+        });
+        
+        // Handle pong responses from GPU server
+        gpuWs.on('pong', () => {
+            log(`Received pong from GPU server for session: ${sessionId}`);
         });
         
         gpuWs.on('error', (error) => {
@@ -96,6 +113,13 @@ export function setupAISessionWebSocket(server) {
         gpuWs.on('close', (code, reason) => {
             log(`GPU connection closed for session: ${sessionId}, code: ${code}, reason: ${reason}`);
             gpuConnected = false;
+            
+            // Clear keepalive interval
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+                keepAliveInterval = null;
+            }
+            
             if (clientWs.readyState === WebSocket.OPEN) {
                 clientWs.close();
             }
@@ -104,6 +128,13 @@ export function setupAISessionWebSocket(server) {
         // Handle client disconnection
         clientWs.on('close', () => {
             log(`Client disconnected from session: ${sessionId}`);
+            
+            // Clear keepalive interval
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+                keepAliveInterval = null;
+            }
+            
             if (gpuWs.readyState === WebSocket.OPEN) {
                 gpuWs.close();
             }
