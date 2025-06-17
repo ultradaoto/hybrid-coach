@@ -146,6 +146,15 @@ export function setupAISessionWebSocket(server) {
     async function handleClientSpeaking(message, session) {
         if (session.aiState === 'paused') return;
         
+        // Check if AI is already processing or speaking
+        if (session.aiState === 'speaking' || session.aiState === 'thinking') {
+            log(`AI is ${session.aiState}, ignoring client speech`);
+            return;
+        }
+        
+        // Set state to processing to prevent overlapping responses
+        session.aiState = 'processing';
+        
         // Simulate speech-to-text processing
         setTimeout(() => {
             const mockTranscript = generateMockTranscript();
@@ -210,6 +219,8 @@ export function setupAISessionWebSocket(server) {
                     nextState: 'listening',
                     timestamp: new Date().toISOString()
                 });
+                
+                log(`AI finished speaking, ready for next interaction. Session state: ${session.aiState}`);
             }, aiResponse.length * 50); // Simulate speaking duration
             
         }, 2000); // Simulate AI processing time

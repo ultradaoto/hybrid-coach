@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Conversation Test</title>
+</head>
+<body>
+    <h1>AI WebSocket Test</h1>
+    <button id="connect">Connect</button>
+    <button id="speak1" disabled>Speak: "Hello"</button>
+    <button id="speak2" disabled>Speak: "How are you?"</button>
+    <button id="speak3" disabled>Speak: "Tell me a joke"</button>
+    <div id="log" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 10px; margin-top: 10px; height: 400px; overflow-y: auto;"></div>
+
+    <script>
+        let ws = null;
+        const sessionId = 'test-' + Date.now();
+        const log = document.getElementById('log');
+        
+        function addLog(msg) {
+            log.textContent += new Date().toISOString() + ' - ' + msg + '\n';
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        document.getElementById('connect').onclick = () => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ai-session/${sessionId}`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                addLog('Connected!');
+                ws.send(JSON.stringify({
+                    type: 'init_session',
+                    sessionId: sessionId,
+                    roomId: 'test-room',
+                    userId: 'test-user',
+                    userRole: 'client'
+                }));
+                
+                document.getElementById('speak1').disabled = false;
+                document.getElementById('speak2').disabled = false;
+                document.getElementById('speak3').disabled = false;
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                addLog('Received: ' + JSON.stringify(data, null, 2));
+            };
+            
+            ws.onerror = (error) => {
+                addLog('Error: ' + error);
+            };
+            
+            ws.onclose = () => {
+                addLog('Disconnected');
+            };
+        };
+        
+        document.getElementById('speak1').onclick = () => {
+            addLog('Sending: client_speaking_detected (Hello)');
+            ws.send(JSON.stringify({
+                type: 'client_speaking_detected',
+                sessionId: sessionId,
+                volume: 50
+            }));
+        };
+        
+        document.getElementById('speak2').onclick = () => {
+            addLog('Sending: client_speaking_detected (How are you?)');
+            ws.send(JSON.stringify({
+                type: 'client_speaking_detected',
+                sessionId: sessionId,
+                volume: 50
+            }));
+        };
+        
+        document.getElementById('speak3').onclick = () => {
+            addLog('Sending: client_speaking_detected (Tell me a joke)');
+            ws.send(JSON.stringify({
+                type: 'client_speaking_detected',
+                sessionId: sessionId,
+                volume: 50
+            }));
+        };
+    </script>
+</body>
+</html>
