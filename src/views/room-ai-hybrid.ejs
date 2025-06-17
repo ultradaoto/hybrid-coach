@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Hybrid Coaching - <%= roomId %></title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .main-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Left panel - Video area */
+        .video-panel {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+        }
+
+        .video-header {
+            background: #2a2a2a;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #404040;
+        }
+
+        .room-info h2 {
+            font-size: 1.2rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .room-info .subtitle {
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
+        .ai-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .ai-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .ai-indicator.speaking {
+            background: #17a2b8;
+            animation: pulse 0.5s infinite;
+        }
+
+        .ai-indicator.paused {
+            background: #ffc107;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .video-grid {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            padding: 2rem;
+            background: #111;
+            flex-wrap: wrap;
+        }
+
+        .video-wrapper {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #333;
+            /* Responsive sizing with max constraints */
+            width: 100%;
+            max-width: 300px;
+            height: auto;
+            aspect-ratio: 4/3;
+        }
+
+        .video-wrapper.speaking {
+            border-color: #17a2b8;
+            box-shadow: 0 0 20px rgba(23, 162, 184, 0.5);
+        }
+
+        /* Portrait mode (mobile/vertical) */
+        @media (orientation: portrait) {
+            .video-wrapper {
+                max-width: 250px;
+                max-height: 400px;
+                aspect-ratio: 3/4;
+            }
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-label {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .ai-avatar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .ai-sphere {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #667eea, #764ba2);
+            animation: rotate 20s linear infinite;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .ai-sphere.speaking {
+            animation: rotate 2s linear infinite, glow 0.8s ease-in-out infinite alternate, pulse-size 1.2s ease-in-out infinite alternate;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #17a2b8, #667eea, #764ba2);
+        }
+
+        .ai-sphere.listening {
+            animation: rotate 20s linear infinite, subtle-glow 3s ease-in-out infinite alternate;
+        }
+
+        .ai-sphere.thinking {
+            animation: rotate 5s linear infinite, thinking-pulse 1.5s ease-in-out infinite alternate;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #ffc107, #667eea, #764ba2);
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        @keyframes glow {
+            from { 
+                box-shadow: 0 0 20px rgba(23, 162, 184, 0.5);
+                filter: brightness(1);
+            }
+            to { 
+                box-shadow: 0 0 40px rgba(23, 162, 184, 1), 0 0 60px rgba(23, 162, 184, 0.5);
+                filter: brightness(1.3);
+            }
+        }
+
+        @keyframes pulse-size {
+            from { 
+                transform: scale(1) rotate(0deg);
+            }
+            to { 
+                transform: scale(1.1) rotate(180deg);
+            }
+        }
+
+        @keyframes subtle-glow {
+            from { 
+                box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+            }
+            to { 
+                box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+            }
+        }
+
+        @keyframes thinking-pulse {
+            from { 
+                box-shadow: 0 0 15px rgba(255, 193, 7, 0.4);
+                filter: brightness(1);
+            }
+            to { 
+                box-shadow: 0 0 30px rgba(255, 193, 7, 0.8);
+                filter: brightness(1.2);
+            }
+        }
+
+        /* Audio-reactive visualization elements */
+        .ai-sphere::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -10px;
+            right: -10px;
+            bottom: -10px;
+            border-radius: 50%;
+            background: radial-gradient(circle, transparent 60%, rgba(23, 162, 184, 0.1) 70%, transparent 80%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .ai-sphere.speaking::before {
+            opacity: 1;
+            animation: audio-ripple 1s ease-out infinite;
+        }
+
+        @keyframes audio-ripple {
+            0% {
+                transform: scale(0.8);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        .controls {
+            background: #2a2a2a;
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            border-top: 1px solid #404040;
+        }
+
+        .btn {
+            background: #4a4a4a;
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: #5a5a5a;
+            transform: translateY(-1px);
+        }
+
+        .btn.active {
+            background: #dc3545;
+        }
+
+        .btn.ai-control {
+            background: #17a2b8;
+        }
+
+        .btn.ai-control:hover {
+            background: #138496;
+        }
+
+        .btn.ai-control.paused {
+            background: #ffc107;
+            color: #000;
+        }
+
+        /* Right panel - AI Controls & Transcript (Coach only) */
+        .ai-panel {
+            flex: 1;
+            background: #1e1e1e;
+            border-left: 1px solid #404040;
+            display: flex;
+            flex-direction: column;
+            max-width: 400px;
+        }
+
+        .ai-panel.client-view {
+            display: none;
+        }
+
+        .panel-header {
+            background: #2a2a2a;
+            padding: 1rem;
+            border-bottom: 1px solid #404040;
+        }
+
+        .panel-header h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .ai-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .transcript-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .transcript-tabs {
+            display: flex;
+            background: #333;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 0.75rem;
+            background: #333;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .tab.active {
+            background: #1e1e1e;
+            color: #fff;
+            border-bottom: 2px solid #17a2b8;
+        }
+
+        .transcript-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .transcript-item {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .transcript-item.client {
+            background: #2a4a2a;
+            border-left: 4px solid #28a745;
+        }
+
+        .transcript-item.ai {
+            background: #2a3a4a;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .transcript-item.coach {
+            background: #4a2a2a;
+            border-left: 4px solid #dc3545;
+        }
+
+        .transcript-item .speaker {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        .transcript-item .timestamp {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            float: right;
+        }
+
+        .ai-response-preview {
+            background: #333;
+            padding: 1rem;
+            border-top: 1px solid #404040;
+            min-height: 100px;
+        }
+
+        .ai-response-preview h4 {
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            color: #17a2b8;
+        }
+
+        .ai-response-text {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #ccc;
+            font-style: italic;
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            z-index: 1000;
+        }
+
+        .status-indicator.error {
+            background: rgba(220, 53, 69, 0.9);
+        }
+
+        .status-indicator.success {
+            background: rgba(40, 167, 69, 0.9);
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .ai-panel {
+                max-width: none;
+                height: 300px;
+            }
+            
+            .video-grid {
+                gap: 1rem;
+                padding: 1rem;
+            }
+            
+            .video-wrapper {
+                max-width: 280px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .ai-panel {
+                height: 250px;
+            }
+            
+            .video-grid {
+                gap: 0.75rem;
+                padding: 0.75rem;
+            }
+            
+            .video-wrapper {
+                max-width: 250px;
+            }
+            
+            .ai-sphere {
+                width: 100px;
+                height: 100px;
+            }
+            
+            .controls {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                padding: 0.75rem;
+            }
+            
+            .btn {
+                flex: 1;
+                min-width: 100px;
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+            
+            .video-header {
+                padding: 0.75rem;
+            }
+            
+            .room-info h2 {
+                font-size: 1rem;
+            }
+            
+            .room-info .subtitle {
+                font-size: 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .video-wrapper {
+                max-width: 220px;
+            }
+            
+            .ai-sphere {
+                width: 80px;
+                height: 80px;
+            }
+            
+            .btn {
+                min-width: 80px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+            
+            .video-grid {
+                gap: 0.5rem;
+                padding: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Video Panel -->
+        <div class="video-panel">
+            <div class="video-header">
+                <div class="room-info">
+                    <h2>AI Hybrid Coaching</h2>
+                    <div class="subtitle">Room: <%= roomId.substring(0, 8) %>... | Session: <%= sessionId %></div>
+                </div>
+                <div class="ai-status">
+                    <div class="ai-indicator" id="aiIndicator"></div>
+                    <span id="aiStatusText">AI Ready</span>
+                </div>
+            </div>
+
+            <div class="video-grid">
+                <div class="video-wrapper" id="localVideoWrapper">
+                    <video id="localVideo" autoplay playsinline muted></video>
+                    <div class="video-label">You (<%= user.displayName || user.email %>)</div>
+                </div>
+
+                <div class="video-wrapper" id="remoteVideoWrapper">
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <div class="video-label" id="remoteLabel">
+                        <% if (user.role === 'coach') { %>
+                            Waiting for client...
+                        <% } else { %>
+                            Waiting for coach...
+                        <% } %>
+                    </div>
+                </div>
+
+                <div class="video-wrapper" id="aiVideoWrapper">
+                    <div class="ai-avatar">
+                        <div class="ai-sphere" id="aiSphere"></div>
+                    </div>
+                    <div class="video-label">AI Coach Assistant</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="toggleVideo" class="btn">📹 Video</button>
+                <button id="toggleAudio" class="btn">🎤 Audio</button>
+                <button id="shareScreen" class="btn">🖥️ Share Screen</button>
+                
+                <% if (user.role === 'coach') { %>
+                    <button id="pauseAI" class="btn ai-control">⏸️ Pause AI</button>
+                    <button id="resumeAI" class="btn ai-control" style="display: none;">▶️ Resume AI</button>
+                <% } %>
+                
+                <a href="/dashboard" class="btn" style="text-decoration: none;">🚪 Exit</a>
+            </div>
+        </div>
+
+        <!-- AI Panel (Coach View Only) -->
+        <% if (user.role === 'coach') { %>
+        <div class="ai-panel">
+            <div class="panel-header">
+                <h3>AI Control Center</h3>
+                <div class="ai-controls">
+                    <button id="quickPause" class="btn ai-control" style="font-size: 0.8rem;">Quick Pause</button>
+                    <button id="aiSettings" class="btn" style="font-size: 0.8rem;">⚙️ Settings</button>
+                </div>
+            </div>
+
+            <div class="transcript-container">
+                <div class="transcript-tabs">
+                    <button class="tab active" data-tab="live">Live Transcript</button>
+                    <button class="tab" data-tab="ai">AI Responses</button>
+                </div>
+
+                <div class="transcript-content" id="transcriptContent">
+                    <div class="transcript-item ai">
+                        <div class="speaker">AI Assistant <span class="timestamp">Session Start</span></div>
+                        <div>Hello! I'm ready to assist with this coaching session. I'll help facilitate the conversation and provide insights as needed.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ai-response-preview">
+                <h4>Next AI Response Preview:</h4>
+                <div class="ai-response-text" id="aiResponsePreview">
+                    Waiting for client input...
+                </div>
+            </div>
+        </div>
+        <% } %>
+    </div>
+
+    <div id="statusIndicator" class="status-indicator" style="display: none;"></div>
+
+    <script>
+        // Configuration
+        const roomId = "<%= roomId %>";
+        const sessionId = "<%= sessionId %>";
+        const userRole = "<%= user.role %>";
+        const userName = "<%= user.displayName || user.email %>";
+        const userId = "<%= user.id %>";
+        
+        // State management
+        let localStream = null;
+        let peerConnection = null;
+        let ws = null;
+        let aiWs = null;
+        let isVideoEnabled = true;
+        let isAudioEnabled = true;
+        let isAIPaused = false;
+        let currentSpeaker = null;
+        
+        // UI Elements
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        const aiSphere = document.getElementById('aiSphere');
+        const aiIndicator = document.getElementById('aiIndicator');
+        const aiStatusText = document.getElementById('aiStatusText');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const remoteLabel = document.getElementById('remoteLabel');
+        const transcriptContent = document.getElementById('transcriptContent');
+        const aiResponsePreview = document.getElementById('aiResponsePreview');
+
+        // Utility functions
+        function updateStatus(message, type = 'info') {
+            console.log(`[STATUS] ${message}`);
+            statusIndicator.textContent = message;
+            statusIndicator.className = 'status-indicator ' + type;
+            statusIndicator.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusIndicator.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        function addTranscriptItem(speaker, text, type = 'client') {
+            if (userRole !== 'coach') return; // Only show transcript to coaches
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const item = document.createElement('div');
+            item.className = `transcript-item ${type}`;
+            item.innerHTML = `
+                <div class="speaker">${speaker} <span class="timestamp">${timestamp}</span></div>
+                <div>${text}</div>
+            `;
+            
+            transcriptContent.appendChild(item);
+            transcriptContent.scrollTop = transcriptContent.scrollHeight;
+        }
+
+        function updateAIStatus(status, speaking = false) {
+            const indicator = aiIndicator;
+            const text = aiStatusText;
+            const sphere = aiSphere;
+            
+            // Reset classes
+            indicator.className = 'ai-indicator';
+            sphere.className = 'ai-sphere';
+            
+            switch (status) {
+                case 'speaking':
+                    indicator.classList.add('speaking');
+                    sphere.classList.add('speaking');
+                    text.textContent = 'AI Speaking';
+                    // Start real-time audio analysis for visual effects
+                    startAISpeechVisualization();
+                    break;
+                case 'listening':
+                    sphere.classList.add('listening');
+                    text.textContent = 'AI Listening';
+                    stopAISpeechVisualization();
+                    break;
+                case 'thinking':
+                    sphere.classList.add('thinking');
+                    text.textContent = 'AI Processing...';
+                    stopAISpeechVisualization();
+                    break;
+                case 'paused':
+                    indicator.classList.add('paused');
+                    text.textContent = 'AI Paused - Coach Control';
+                    stopAISpeechVisualization();
+                    break;
+                default:
+                    sphere.classList.add('listening');
+                    text.textContent = 'AI Ready';
+                    stopAISpeechVisualization();
+            }
+        }
+
+        // Audio visualization for AI speech
+        let aiAudioVisualizationInterval = null;
+        let speechSynthesisUtterance = null;
+
+        function startAISpeechVisualization() {
+            stopAISpeechVisualization(); // Clear any existing interval
+            
+            // Enhanced visual effect during AI speech
+            let intensity = 0;
+            let direction = 1;
+            
+            aiAudioVisualizationInterval = setInterval(() => {
+                intensity += direction * 0.1;
+                
+                if (intensity >= 1) {
+                    direction = -1;
+                } else if (intensity <= 0.3) {
+                    direction = 1;
+                }
+                
+                // Apply dynamic effects to the sphere
+                aiSphere.style.filter = `brightness(${1 + intensity * 0.5}) saturate(${1 + intensity * 0.3})`;
+                aiSphere.style.transform = `scale(${1 + intensity * 0.1}) rotate(${Date.now() / 20}deg)`;
+                
+                // Add ripple effect
+                if (Math.random() > 0.7) {
+                    createAudioRipple();
+                }
+            }, 100);
+        }
+
+        function stopAISpeechVisualization() {
+            if (aiAudioVisualizationInterval) {
+                clearInterval(aiAudioVisualizationInterval);
+                aiAudioVisualizationInterval = null;
+            }
+            
+            // Reset sphere styling
+            aiSphere.style.filter = '';
+            aiSphere.style.transform = '';
+        }
+
+        function createAudioRipple() {
+            const ripple = document.createElement('div');
+            ripple.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 120px;
+                height: 120px;
+                border: 2px solid rgba(23, 162, 184, 0.6);
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                animation: ripple-expand 1.5s ease-out forwards;
+            `;
+            
+            aiSphere.parentElement.appendChild(ripple);
+            
+            setTimeout(() => {
+                ripple.remove();
+            }, 1500);
+        }
+
+        // Add ripple animation to stylesheet
+        if (!document.getElementById('ripple-animation')) {
+            const style = document.createElement('style');
+            style.id = 'ripple-animation';
+            style.textContent = `
+                @keyframes ripple-expand {
+                    0% {
+                        transform: translate(-50%, -50%) scale(0.8);
+                        opacity: 1;
+                    }
+                    100% {
+                        transform: translate(-50%, -50%) scale(2);
+                        opacity: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        function updateSpeakingIndicator(speaker) {
+            // Remove speaking class from all video wrappers
+            document.querySelectorAll('.video-wrapper').forEach(wrapper => {
+                wrapper.classList.remove('speaking');
+            });
+            
+            // Add speaking class to current speaker
+            if (speaker) {
+                const wrapper = document.getElementById(`${speaker}VideoWrapper`);
+                if (wrapper) {
+                    wrapper.classList.add('speaking');
+                }
+            }
+            
+            currentSpeaker = speaker;
+        }
+
+        // Initialize AI WebSocket for coaching session communication
+        function initializeAIConnection() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const aiWsUrl = `${protocol}//${window.location.host}/ai-session/${sessionId}`;
+            
+            aiWs = new WebSocket(aiWsUrl);
+            
+            aiWs.onopen = () => {
+                console.log('AI WebSocket connected');
+                updateStatus('AI system connected', 'success');
+                
+                // Initialize AI session
+                aiWs.send(JSON.stringify({
+                    type: 'init_session',
+                    sessionId: sessionId,
+                    roomId: roomId,
+                    userId: userId,
+                    userRole: userRole
+                }));
+            };
+            
+            aiWs.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleAIMessage(data);
+            };
+            
+            aiWs.onerror = (error) => {
+                console.error('AI WebSocket error:', error);
+                updateStatus('AI connection error', 'error');
+            };
+            
+            aiWs.onclose = () => {
+                updateStatus('AI disconnected - attempting reconnect...', 'error');
+                
+                // Attempt reconnection after 3 seconds
+                setTimeout(() => {
+                    if (aiWs.readyState === WebSocket.CLOSED) {
+                        initializeAIConnection();
+                    }
+                }, 3000);
+            };
+        }
+
+        function handleAIMessage(data) {
+            console.log('AI Message:', data);
+            
+            switch (data.type) {
+                case 'session_ready':
+                    updateAIStatus('listening');
+                    if (userRole === 'coach') {
+                        addTranscriptItem('System', 'AI session initialized and ready', 'ai');
+                    }
+                    break;
+                    
+                case 'client_speaking':
+                    updateAIStatus('listening');
+                    updateSpeakingIndicator('local');
+                    if (userRole === 'coach' && data.transcript) {
+                        addTranscriptItem('Client', data.transcript, 'client');
+                    }
+                    break;
+                    
+                case 'ai_thinking':
+                    updateAIStatus('thinking');
+                    if (userRole === 'coach' && data.preview) {
+                        aiResponsePreview.textContent = data.preview;
+                    }
+                    break;
+                    
+                case 'ai_speaking':
+                    updateAIStatus('speaking');
+                    updateSpeakingIndicator('ai');
+                    if (userRole === 'coach') {
+                        addTranscriptItem('AI Assistant', data.text, 'ai');
+                        aiResponsePreview.textContent = 'Waiting for client input...';
+                    }
+                    
+                    // Simulate AI audio playback for all users
+                    playAIAudio(data.text);
+                    break;
+                    
+                case 'ai_paused':
+                    updateAIStatus('paused');
+                    isAIPaused = true;
+                    if (userRole === 'coach') {
+                        addTranscriptItem('System', 'AI paused - Coach has control', 'coach');
+                        document.getElementById('pauseAI').style.display = 'none';
+                        document.getElementById('resumeAI').style.display = 'inline-flex';
+                    }
+                    break;
+                    
+                case 'ai_resumed':
+                    updateAIStatus('listening');
+                    isAIPaused = false;
+                    if (userRole === 'coach') {
+                        addTranscriptItem('System', 'AI resumed - Back in control', 'ai');
+                        document.getElementById('pauseAI').style.display = 'inline-flex';
+                        document.getElementById('resumeAI').style.display = 'none';
+                    }
+                    break;
+                    
+                case 'coach_speaking':
+                    updateSpeakingIndicator('remote');
+                    if (userRole === 'coach' && data.transcript) {
+                        addTranscriptItem('Coach', data.transcript, 'coach');
+                    }
+                    break;
+            }
+        }
+
+        function playAIAudio(text) {
+            // For now, we'll use Web Speech API for demonstration
+            // In production, this would play actual AI-generated audio from the GPU server
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.rate = 0.9;
+                utterance.pitch = 1.1;
+                utterance.volume = 0.8;
+                
+                // Store reference for potential cancellation
+                speechSynthesisUtterance = utterance;
+                
+                utterance.onstart = () => {
+                    console.log('AI speech started');
+                    updateSpeakingIndicator('ai');
+                    updateAIStatus('speaking');
+                };
+                
+                utterance.onend = () => {
+                    console.log('AI speech ended');
+                    updateSpeakingIndicator(null);
+                    updateAIStatus('listening');
+                    speechSynthesisUtterance = null;
+                };
+                
+                utterance.onerror = (event) => {
+                    console.error('Speech synthesis error:', event);
+                    updateSpeakingIndicator(null);
+                    updateAIStatus('listening');
+                    speechSynthesisUtterance = null;
+                };
+                
+                // Enhanced visualization during speech
+                utterance.onboundary = (event) => {
+                    // Create visual effects at word boundaries
+                    if (event.name === 'word') {
+                        createAudioRipple();
+                    }
+                };
+                
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        // AI Control functions (Coach only)
+        function pauseAI() {
+            // Stop any current AI speech immediately
+            if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+            }
+            stopAISpeechVisualization();
+            
+            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                aiWs.send(JSON.stringify({
+                    type: 'pause_ai',
+                    sessionId: sessionId,
+                    coachId: userId
+                }));
+            }
+            
+            updateAIStatus('paused');
+        }
+
+        function resumeAI() {
+            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                aiWs.send(JSON.stringify({
+                    type: 'resume_ai',
+                    sessionId: sessionId,
+                    coachId: userId
+                }));
+            }
+        }
+
+        // Initialize media and connections
+        async function initializeMedia() {
+            try {
+                updateStatus('Accessing camera and microphone...');
+                
+                const constraints = {
+                    video: { 
+                        width: { ideal: 640, max: 1280 },
+                        height: { ideal: 480, max: 720 },
+                        facingMode: 'user'
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                };
+                
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                localVideo.srcObject = localStream;
+                
+                updateStatus('Media ready', 'success');
+                setupControls();
+                initializeWebRTCConnection();
+                initializeAIConnection();
+                
+            } catch (err) {
+                console.error('Media initialization error:', err);
+                updateStatus('Media error: ' + err.message, 'error');
+                
+                // Still try to connect for receive-only
+                initializeWebRTCConnection();
+                initializeAIConnection();
+            }
+        }
+
+        function initializeWebRTCConnection() {
+            // WebRTC connection logic (simplified for this example)
+            // This would integrate with your existing WebRTC implementation
+            updateStatus('Connecting to video call...', 'info');
+            
+            // Simulate connection for demo
+            setTimeout(() => {
+                updateStatus('Video call connected', 'success');
+                remoteLabel.textContent = userRole === 'coach' ? 'Client Connected' : 'Coach Connected';
+            }, 2000);
+        }
+
+        function setupControls() {
+            // Video toggle
+            document.getElementById('toggleVideo').onclick = () => {
+                isVideoEnabled = !isVideoEnabled;
+                localStream.getVideoTracks().forEach(track => {
+                    track.enabled = isVideoEnabled;
+                });
+                
+                const btn = document.getElementById('toggleVideo');
+                btn.classList.toggle('active', !isVideoEnabled);
+                btn.innerHTML = isVideoEnabled ? '📹 Video' : '📹 Video Off';
+            };
+            
+            // Audio toggle
+            document.getElementById('toggleAudio').onclick = () => {
+                isAudioEnabled = !isAudioEnabled;
+                localStream.getAudioTracks().forEach(track => {
+                    track.enabled = isAudioEnabled;
+                });
+                
+                const btn = document.getElementById('toggleAudio');
+                btn.classList.toggle('active', !isAudioEnabled);
+                btn.innerHTML = isAudioEnabled ? '🎤 Audio' : '🎤 Muted';
+            };
+            
+            // Coach controls
+            if (userRole === 'coach') {
+                document.getElementById('pauseAI').onclick = pauseAI;
+                document.getElementById('resumeAI').onclick = resumeAI;
+                document.getElementById('quickPause').onclick = pauseAI;
+                
+                // Tab switching
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.onclick = () => {
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        
+                        // Switch transcript view (placeholder for now)
+                        console.log('Switched to tab:', tab.dataset.tab);
+                    };
+                });
+            }
+        }
+
+        // Audio detection for speaking indicators
+        function setupAudioDetection() {
+            if (localStream) {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioContext.createAnalyser();
+                const microphone = audioContext.createMediaStreamSource(localStream);
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                microphone.connect(analyser);
+                analyser.fftSize = 256;
+                
+                function detectSpeaking() {
+                    analyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    
+                    if (average > 10 && isAudioEnabled && !isAIPaused) {
+                        updateSpeakingIndicator('local');
+                        
+                        // Notify AI system of client speaking
+                        if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                            aiWs.send(JSON.stringify({
+                                type: 'client_speaking_detected',
+                                sessionId: sessionId,
+                                volume: average
+                            }));
+                        }
+                    }
+                    
+                    requestAnimationFrame(detectSpeaking);
+                }
+                
+                detectSpeaking();
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (aiWs) {
+                aiWs.send(JSON.stringify({
+                    type: 'end_session',
+                    sessionId: sessionId
+                }));
+                aiWs.close();
+            }
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (peerConnection) {
+                peerConnection.close();
+            }
+        });
+
+        // Start the application
+        initializeMedia();
+        
+        // Set up audio detection after a short delay
+        setTimeout(setupAudioDetection, 1000);
+        
+        // Demo: Simulate some AI interactions after 5 seconds
+        setTimeout(() => {
+            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                // Simulate client question
+                aiWs.send(JSON.stringify({
+                    type: 'simulate_interaction',
+                    text: 'Hi, I need help with my computer setup',
+                    speaker: 'client'
+                }));
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

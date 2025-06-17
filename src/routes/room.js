@@ -77,8 +77,8 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
       update: {},
     });
 
-    res.render('room-simple', {
-      title: 'Hybrid Coaching Call',
+    res.render('room-ai-hybrid', {
+      title: 'AI Hybrid Coaching Call',
       roomId,
       user: req.user,
       jwt: token,

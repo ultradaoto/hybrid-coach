@@ -13,7 +13,11 @@
     "setup-webrtc": "node setup-webrtc.js",
     "diagnose": "node diagnose-webrtc.js",
     "sync-skool": "node -e \"import('./src/daemons/skoolSyncDaemon.js').then(m => m.default.triggerManualSync())\"",
-    "test-skool": "node test-skool-login.js"
+    "test-skool": "node test-skool-login.js",
+    "start-virtual-gpu": "node virtual-gpu-server.js",
+    "test-ai-system": "node test-ai-system.js",
+    "test-ai-local": "node test-ai-local.js",
+    "test-ai-manual": "echo 'Manual testing: Run npm run start-virtual-gpu in one terminal, npm run dev in another, then npm run test-ai-system in a third'"
   },
   "keywords": [
     "coaching",
@@ -25,6 +29,7 @@
   "license": "MIT",
   "dependencies": {
     "@prisma/client": "^5.14.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "ejs": "^3.1.9",
     "express": "^4.19.2",

@@ -14,6 +14,7 @@ import { initWebSocketRelay } from './routes/api/ws-relay.js';
 import { initTestWebSocket } from './routes/api/websocket-test.js';
 import { debugMiddleware } from './middlewares/debugMiddleware.js';
 import { initSimpleWebSocket } from './routes/websocket-simple.js';
+import { setupAISessionWebSocket } from './routes/ai-session-ws.js';
 import skoolSyncDaemon from './daemons/skoolSyncDaemon.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,8 +35,10 @@ app.use((req, res, next) => {
   if (req.headers.upgrade === 'websocket' || 
       req.url.startsWith('/ws-relay') || 
       req.url.startsWith('/protoo') || 
+      req.url.startsWith('/ai-session') ||
       req.url.includes('/ws-relay') || 
-      req.url.includes('/protoo')) {
+      req.url.includes('/protoo') ||
+      req.url.includes('/ai-session')) {
     
     console.log(`[WS-BYPASS] WebSocket/Protoo request to ${req.url}, bypassing auth`);
     // Allow WebSocket requests to bypass auth
@@ -104,6 +107,7 @@ import clientRouter from './routes/client.js';
 import scheduleRouter from './routes/schedule.js';
 import roomRouter from './routes/room.js';
 import apiRouter from './routes/api.js';
+import aiRouter from './routes/ai.js';
 
 app.use('/', baseRouter);
 app.use('/healthz', healthRouter);
@@ -114,6 +118,7 @@ app.use('/client', clientRouter);
 app.use('/schedule', scheduleRouter);
 app.use('/room', roomRouter);
 app.use('/api', apiRouter);
+app.use('/api/ai', aiRouter);
 
 // 404 handler
 app.use((req, res) => {
@@ -206,6 +211,9 @@ const startServer = async (attemptPort) => {
     
     // Initialize test WebSocket server
     initTestWebSocket(httpServer);
+    
+    // Initialize AI Session WebSocket for hybrid coaching
+    setupAISessionWebSocket(httpServer);
 
     httpServer.listen(attemptPort, HOST, () => {
       console.log(`🚀 Server & Socket.IO listening on http://${HOST}:${attemptPort}`);
