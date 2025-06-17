@@ -9,7 +9,7 @@ import passport from 'passport';
 import './config/passport.js';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { initProtooSignaling } from './lib/protooSignaling.js';
+// import { initProtooSignaling } from './lib/protooSignaling.js';
 import { initWebSocketRelay } from './routes/api/ws-relay.js';
 import { initTestWebSocket } from './routes/api/websocket-test.js';
 import { debugMiddleware } from './middlewares/debugMiddleware.js';
@@ -34,10 +34,8 @@ app.use((req, res, next) => {
   // Extended path check to fix 403 forbidden errors
   if (req.headers.upgrade === 'websocket' || 
       req.url.startsWith('/ws-relay') || 
-      req.url.startsWith('/protoo') || 
       req.url.startsWith('/ai-session') ||
       req.url.includes('/ws-relay') || 
-      req.url.includes('/protoo') ||
       req.url.includes('/ai-session')) {
     
     console.log(`[WS-BYPASS] WebSocket/Protoo request to ${req.url}, bypassing auth`);
@@ -201,7 +199,7 @@ const startServer = async (attemptPort) => {
     });
 
     // Initialize Protoo signaling for MediaSoup
-    await initProtooSignaling(httpServer);
+    // await initProtooSignaling(httpServer);
     
     // Initialize simple WebSocket for fallback video chat
     initSimpleWebSocket(httpServer);

@@ -13,7 +13,9 @@
       "Bash(npx:*)",
       "Bash(npm run test-skool:*)",
       "Bash(grep:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(killall:*)"
     ],
     "deny": []
   }

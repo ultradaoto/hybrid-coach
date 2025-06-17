@@ -37,8 +37,6 @@
     "express-session": "^1.17.3",
     "googleapis": "^130.0.0",
     "jsonwebtoken": "^9.0.2",
-    "mediasoup": "^3.16.0",
-    "mediasoup-client": "^3.11.0",
     "morgan": "^1.10.0",
     "node-cron": "^4.1.0",
     "node-fetch": "^3.3.2",

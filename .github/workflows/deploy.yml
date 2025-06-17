@@ -34,10 +34,21 @@ jobs:
               git clone https://github.com/${{ github.repository }}.git "$DEPLOY_DIR"
               cd "$DEPLOY_DIR"
             fi
+            # Update Node.js to version 20+ if needed
+            if ! node --version | grep -q "v20\|v21\|v22"; then
+              curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+            
+            # Install with network retry and increased timeout
+            npm config set fetch-timeout 600000
+            npm config set fetch-retry-mintimeout 20000
+            npm config set fetch-retry-maxtimeout 120000
+            
             if [ -f "package-lock.json" ]; then
-              npm ci --omit=dev
+              npm ci --omit=dev --prefer-offline --no-audit
             else
-              npm install --omit=dev
+              npm install --omit=dev --prefer-offline --no-audit
             fi
             npm run generate
             npx prisma migrate deploy
