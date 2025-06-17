@@ -823,9 +823,20 @@
             
             // Add speaking class to current speaker
             if (speaker) {
-                const wrapper = document.getElementById(`${speaker}VideoWrapper`);
+                let wrapper = null;
+                if (speaker === 'local') {
+                    wrapper = document.getElementById('localVideoWrapper');
+                } else if (speaker === 'remote') {
+                    wrapper = document.getElementById('remoteVideoWrapper');
+                } else if (speaker === 'ai') {
+                    wrapper = document.getElementById('aiVideoWrapper');
+                }
+                
                 if (wrapper) {
                     wrapper.classList.add('speaking');
+                    console.log(`Speaking indicator activated for: ${speaker}`);
+                } else {
+                    console.log(`No wrapper found for speaker: ${speaker}`);
                 }
             }
             
@@ -834,8 +845,11 @@
 
         // Initialize AI WebSocket for coaching session communication
         function initializeAIConnection() {
+            // Connect through CPU server proxy to GPU server
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const aiWsUrl = `${protocol}//${window.location.host}/ai-session/${sessionId}`;
+            
+            console.log('Connecting to AI WebSocket (via CPU proxy):', aiWsUrl);
             
             try {
                 aiWs = new WebSocket(aiWsUrl);
@@ -1153,7 +1167,7 @@
                     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
                     
                     if (average > 10 && isAudioEnabled && !isAIPaused && !isAISpeaking) {
-                        updateSpeakingIndicator('local');
+                        updateSpeakingIndicator('local'); // Light up your video box
                         
                         // Clear silence timer if speaking
                         if (silenceTimer) {
@@ -1246,8 +1260,8 @@
             }
         }
         
-        // Start demo after 5 seconds
-        setTimeout(simulateNextInteraction, 5000);
+        // Demo disabled - using real speech detection
+        // setTimeout(simulateNextInteraction, 5000);
     </script>
 </body>
 </html>
