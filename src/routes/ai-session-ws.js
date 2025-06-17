@@ -4,7 +4,6 @@ import { createServer } from 'http';
 // AI Session WebSocket handler
 export function setupAISessionWebSocket(server) {
     const wss = new WebSocketServer({ 
-        server,
         noServer: true // We'll handle the upgrade manually
     });
 
