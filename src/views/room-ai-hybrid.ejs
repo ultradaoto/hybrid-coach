@@ -625,6 +625,7 @@
         let isVideoEnabled = true;
         let isAudioEnabled = true;
         let isAIPaused = false;
+        let isAISpeaking = false;
         let currentSpeaker = null;
         
         // UI Elements
@@ -893,6 +894,7 @@
                 case 'ai_speaking':
                     updateAIStatus('speaking');
                     updateSpeakingIndicator('ai');
+                    isAISpeaking = true;
                     if (userRole === 'coach') {
                         addTranscriptItem('AI Assistant', data.text, 'ai');
                         aiResponsePreview.textContent = 'Waiting for client input...';
@@ -954,6 +956,7 @@
                     updateSpeakingIndicator(null);
                     updateAIStatus('listening');
                     speechSynthesisUtterance = null;
+                    isAISpeaking = false;
                 };
                 
                 utterance.onerror = (event) => {
@@ -1107,21 +1110,47 @@
                 microphone.connect(analyser);
                 analyser.fftSize = 256;
                 
+                let isSpeaking = false;
+                let silenceTimer = null;
+                let lastSpeechTime = 0;
+                const SILENCE_THRESHOLD = 1000; // 1 second of silence before considering speech ended
+                const SPEECH_COOLDOWN = 2000; // 2 seconds cooldown between speeches
+                
                 function detectSpeaking() {
                     analyser.getByteFrequencyData(dataArray);
                     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
                     
-                    if (average > 10 && isAudioEnabled && !isAIPaused) {
+                    if (average > 10 && isAudioEnabled && !isAIPaused && !isAISpeaking) {
                         updateSpeakingIndicator('local');
                         
-                        // Notify AI system of client speaking
-                        if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                            aiWs.send(JSON.stringify({
-                                type: 'client_speaking_detected',
-                                sessionId: sessionId,
-                                volume: average
-                            }));
+                        // Clear silence timer if speaking
+                        if (silenceTimer) {
+                            clearTimeout(silenceTimer);
+                            silenceTimer = null;
                         }
+                        
+                        // Only send speaking detected if not already speaking and cooldown passed
+                        if (!isSpeaking && Date.now() - lastSpeechTime > SPEECH_COOLDOWN) {
+                            isSpeaking = true;
+                            console.log('Client started speaking');
+                            
+                            // Notify AI system of client speaking
+                            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                aiWs.send(JSON.stringify({
+                                    type: 'client_speaking_detected',
+                                    sessionId: sessionId,
+                                    volume: average
+                                }));
+                            }
+                        }
+                    } else if (isSpeaking && !silenceTimer) {
+                        // Start silence timer when speech stops
+                        silenceTimer = setTimeout(() => {
+                            isSpeaking = false;
+                            lastSpeechTime = Date.now();
+                            console.log('Client stopped speaking');
+                            updateSpeakingIndicator(null);
+                        }, SILENCE_THRESHOLD);
                     }
                     
                     requestAnimationFrame(detectSpeaking);
