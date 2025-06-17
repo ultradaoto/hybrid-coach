@@ -811,7 +811,13 @@
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const aiWsUrl = `${protocol}//${window.location.host}/ai-session/${sessionId}`;
             
-            aiWs = new WebSocket(aiWsUrl);
+            try {
+                aiWs = new WebSocket(aiWsUrl);
+            } catch (error) {
+                console.error('Failed to create WebSocket:', error);
+                updateStatus('AI connection failed - running in demo mode', 'warning');
+                return;
+            }
             
             aiWs.onopen = () => {
                 console.log('AI WebSocket connected');
@@ -834,19 +840,28 @@
             
             aiWs.onerror = (error) => {
                 console.error('AI WebSocket error:', error);
-                updateStatus('AI connection error', 'error');
+                updateStatus('AI connection error - running in demo mode', 'warning');
+                // Enable demo mode
+                aiWs = null;
+                enableDemoMode();
             };
             
             aiWs.onclose = () => {
-                updateStatus('AI disconnected - attempting reconnect...', 'error');
-                
-                // Attempt reconnection after 3 seconds
-                setTimeout(() => {
-                    if (aiWs.readyState === WebSocket.CLOSED) {
-                        initializeAIConnection();
-                    }
-                }, 3000);
+                updateStatus('AI disconnected - running in demo mode', 'warning');
+                aiWs = null;
+                enableDemoMode();
             };
+        }
+        
+        // Enable demo mode when AI connection fails
+        function enableDemoMode() {
+            console.log('AI Demo Mode enabled');
+            // Simulate AI responses for testing
+            if (userRole === 'coach') {
+                // Show coach controls even in demo mode
+                document.getElementById('pauseAIBtn').disabled = false;
+            }
+            updateAIStatus('demo');
         }
 
         function handleAIMessage(data) {

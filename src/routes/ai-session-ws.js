@@ -5,7 +5,7 @@ import { createServer } from 'http';
 export function setupAISessionWebSocket(server) {
     const wss = new WebSocketServer({ 
         server,
-        path: '/ai-session'
+        noServer: true // We'll handle the upgrade manually
     });
 
     // Track active AI sessions
@@ -14,6 +14,18 @@ export function setupAISessionWebSocket(server) {
     function log(message) {
         console.log(`[AI-WS] ${new Date().toISOString()} - ${message}`);
     }
+
+    // Handle WebSocket upgrade requests manually
+    server.on('upgrade', (request, socket, head) => {
+        const pathname = request.url;
+        
+        // Check if this is an AI session WebSocket request
+        if (pathname.startsWith('/ai-session/')) {
+            wss.handleUpgrade(request, socket, head, (ws) => {
+                wss.emit('connection', ws, request);
+            });
+        }
+    });
 
     wss.on('connection', (ws, req) => {
         const url = new URL(req.url, 'http://localhost');
