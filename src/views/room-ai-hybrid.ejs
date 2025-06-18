@@ -2390,6 +2390,14 @@
                             mediaRecorder.ondataavailable = (event) => {
                                 // Check recording duration to avoid very short recordings
                                 const recordingDuration = Date.now() - recordingStartTime;
+                                
+                                console.log(`[AUDIO] 🎤 MediaRecorder data event:`, {
+                                    blobSize: event.data.size,
+                                    blobType: event.data.type,
+                                    recordingDuration: recordingDuration,
+                                    mimeType: currentMimeType
+                                });
+                                
                                 if (recordingDuration < 500) { // Less than 0.5 seconds
                                     console.log(`[AUDIO] Recording too short (${recordingDuration}ms), skipping chunk`);
                                     return;
@@ -2406,7 +2414,7 @@
                                     return;
                                 }
                                 
-                                console.log(`[AUDIO] Chunk data available, size: ${event.data.size} bytes, duration: ${recordingDuration}ms`);
+                                console.log(`[AUDIO] ✅ Chunk data available, size: ${event.data.size} bytes, duration: ${recordingDuration}ms`);
                                 
                                 // Create chunk with overlap if we have previous data
                                 let chunkData = [event.data];
@@ -2506,11 +2514,19 @@
                             // Convert to base64 for transmission
                             const reader = new FileReader();
                             reader.onload = () => {
+                                console.log(`[AUDIO] 🔍 FileReader result type: ${typeof reader.result}`);
+                                console.log(`[AUDIO] 🔍 FileReader result length: ${reader.result ? reader.result.length : 0}`);
+                                console.log(`[AUDIO] 🔍 FileReader result preview: ${reader.result ? reader.result.substring(0, 100) : 'null'}...`);
+                                
                                 const base64Audio = reader.result.split(',')[1];
+                                console.log(`[AUDIO] 🔍 Base64 audio length after split: ${base64Audio ? base64Audio.length : 0}`);
+                                console.log(`[AUDIO] 🔍 Base64 audio preview: ${base64Audio ? base64Audio.substring(0, 50) : 'null'}...`);
                                 
                                 // Final validation - check base64 data is meaningful
                                 if (!base64Audio || base64Audio.length < 100) {
-                                    console.log(`[AUDIO] Base64 data too short (${base64Audio ? base64Audio.length : 0} chars), skipping - likely empty audio`);
+                                    console.error(`[AUDIO] ❌ Base64 data too short (${base64Audio ? base64Audio.length : 0} chars), skipping - likely empty audio`);
+                                    console.error(`[AUDIO] ❌ Original blob size: ${audioBlob.size} bytes, mime: ${audioBlob.type}`);
+                                    console.error(`[AUDIO] ❌ FileReader result: ${reader.result ? reader.result.substring(0, 200) : 'null'}`);
                                     return;
                                 }
                                 
@@ -2584,13 +2600,21 @@
                                 }
                             };
                             reader.onerror = (error) => {
-                                console.error('[AUDIO] Failed to read chunk:', error);
+                                console.error('[AUDIO] ❌ FileReader failed to read chunk:', error);
+                                console.error('[AUDIO] ❌ FileReader error details:', {
+                                    blobSize: audioBlob.size,
+                                    blobType: audioBlob.type,
+                                    error: error,
+                                    retryAttempt: retryAttempt
+                                });
                                 if (retryAttempt < 2) {
                                     setTimeout(() => {
                                         sendAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
                                     }, 1000);
                                 }
                             };
+                            
+                            console.log(`[AUDIO] 🔄 Starting FileReader for blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
                             reader.readAsDataURL(audioBlob);
                         }
                         
