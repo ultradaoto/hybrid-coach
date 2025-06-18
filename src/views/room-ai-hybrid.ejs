@@ -1760,7 +1760,26 @@
                             console.log(`Client started speaking. AI State: ${isAISpeaking ? 'AI Speaking' : 'AI Not Speaking'}, Paused: ${isAIPaused}`);
                             
                             // Start chunked recording if available
-                            if (mediaRecorder && mediaRecorder.state === 'inactive' && !isRecording) {
+                            if (mediaRecorder && !isRecording) {
+                                // Stop any existing recording first
+                                if (mediaRecorder.state === 'recording') {
+                                    console.log('[AUDIO] MediaRecorder already recording, stopping first');
+                                    mediaRecorder.stop();
+                                    // Wait a moment for it to stop
+                                    setTimeout(() => {
+                                        if (mediaRecorder.state === 'inactive') {
+                                            startChunkedRecording();
+                                        }
+                                    }, 100);
+                                    return;
+                                }
+                                
+                                if (mediaRecorder.state === 'inactive') {
+                                    startChunkedRecording();
+                                }
+                            }
+                            
+                            function startChunkedRecording() {
                                 try {
                                     console.log('🎤 Starting chunked audio recording for real-time STT');
                                     console.log('[AUDIO] Starting chunked recording - chunks every', chunkDuration + 'ms');
@@ -1786,14 +1805,6 @@
                                     });
                                     isRecording = false;
                                 }
-                            } else if (mediaRecorder) {
-                                if (isRecording) {
-                                    console.log('[AUDIO] Already recording chunks, continuing...');
-                                } else {
-                                    console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state);
-                                }
-                            } else {
-                                console.log('[AUDIO] MediaRecorder not available');
                             }
                             
                             // Also send speaking detected for immediate feedback
