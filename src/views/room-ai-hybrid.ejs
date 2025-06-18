@@ -844,7 +844,141 @@
         }
 
         // Initialize AI WebSocket for coaching session communication
+        // Detect browser audio capabilities
+        function detectAudioCapabilities() {
+            const capabilities = {
+                webm: MediaRecorder.isTypeSupported('audio/webm;codecs=opus'),
+                mp3: MediaRecorder.isTypeSupported('audio/mp3'),
+                wav: MediaRecorder.isTypeSupported('audio/wav'),
+                webmBasic: MediaRecorder.isTypeSupported('audio/webm')
+            };
+            
+            console.log('[AUDIO] Browser capabilities:', capabilities);
+            
+            // Select preferred format
+            let preferredFormat = 'audio/webm'; // fallback
+            const supportedFormats = [];
+            
+            if (capabilities.webm) {
+                preferredFormat = 'audio/webm;codecs=opus';
+                supportedFormats.push('audio/webm;codecs=opus');
+            }
+            if (capabilities.mp3) {
+                supportedFormats.push('audio/mp3');
+                if (!capabilities.webm) preferredFormat = 'audio/mp3';
+            }
+            if (capabilities.wav) {
+                supportedFormats.push('audio/wav');
+                if (!capabilities.webm && !capabilities.mp3) preferredFormat = 'audio/wav';
+            }
+            if (capabilities.webmBasic) {
+                supportedFormats.push('audio/webm');
+                if (supportedFormats.length === 1) preferredFormat = 'audio/webm';
+            }
+            
+            return {
+                preferred_format: preferredFormat,
+                supported_formats: supportedFormats,
+                chunk_duration: 3000, // 3 seconds default
+                sample_rate: 48000
+            };
+        }
+
         function initializeAIConnection() {
+            // Connection state management variables
+            let connectionState = 'connecting';
+            let missedPings = 0;
+            let lastPingTime = 0;
+            let pingInterval = null;
+            let connectionTimeout = null;
+            let reconnectAttempts = 0;
+            let maxReconnectAttempts = 5;
+            
+            function updateConnectionState(newState) {
+                console.log('[AI-WS] Connection state:', connectionState, '->', newState);
+                connectionState = newState;
+                
+                // Update UI status based on connection state
+                switch (newState) {
+                    case 'connected':
+                        updateStatus('AI system connected', 'success');
+                        break;
+                    case 'reconnecting':
+                        updateStatus('AI reconnecting...', 'warning');
+                        break;
+                    case 'disconnected':
+                        updateStatus('AI disconnected - running in demo mode', 'warning');
+                        break;
+                }
+            }
+            
+            function sendPing() {
+                if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                    lastPingTime = Date.now();
+                    aiWs.send(JSON.stringify({
+                        type: 'ping',
+                        sessionId: sessionId,
+                        timestamp: lastPingTime
+                    }));
+                    console.log('[AI-WS] Sent keep-alive ping #' + (missedPings + 1));
+                    
+                    // Set timeout for pong response
+                    connectionTimeout = setTimeout(() => {
+                        missedPings++;
+                        console.log('[AI-WS] Ping timeout - missed pings:', missedPings);
+                        
+                        if (missedPings >= 3) {
+                            console.log('[AI-WS] 3 missed pings - connection considered lost');
+                            updateConnectionState('disconnected');
+                            clearInterval(pingInterval);
+                            if (aiWs) {
+                                aiWs.close();
+                            }
+                        }
+                    }, 10000); // 10 second timeout for pong response
+                } else {
+                    console.log('[AI-WS] Cannot send ping - WebSocket not open');
+                    clearInterval(pingInterval);
+                }
+            }
+            
+            function handlePong() {
+                console.log('[AI-WS] Received pong from GPU - connection alive');
+                // Reset ping tracking
+                missedPings = 0;
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                    connectionTimeout = null;
+                }
+                if (connectionState !== 'connected') {
+                    updateConnectionState('connected');
+                }
+                // Reset reconnect attempts on successful connection
+                reconnectAttempts = 0;
+            }
+            
+            function attemptReconnection(reason = 'unknown') {
+                if (reconnectAttempts >= maxReconnectAttempts) {
+                    console.log('[AI-WS] Max reconnection attempts reached, giving up');
+                    updateConnectionState('disconnected');
+                    enableDemoMode();
+                    return;
+                }
+                
+                reconnectAttempts++;
+                // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000);
+                
+                console.log(`[AI-WS] Reconnection attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${delay}ms (reason: ${reason})`);
+                updateConnectionState('reconnecting');
+                
+                setTimeout(() => {
+                    console.log('[AI-WS] Attempting to reconnect to AI system');
+                    aiWs = null;
+                    initializeAIConnection(); // Recursive reconnect
+                }, delay);
+            }
+            
             // Connect through CPU server proxy to GPU server
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const aiWsUrl = `${protocol}//${window.location.host}/ai-session/${sessionId}`;
@@ -879,32 +1013,25 @@
             aiWs.onopen = () => {
                 console.log('[AI-WS] GPU connection status: SUCCESS');
                 console.log('[AI-WS] WebSocket readyState:', aiWs.readyState);
-                updateStatus('AI system connected', 'success');
+                updateConnectionState('connected');
                 
-                // Initialize AI session
+                // Initialize AI session with audio capabilities
+                const audioCapabilities = detectAudioCapabilities();
                 const initMessage = {
                     type: 'init_session',
                     sessionId: sessionId,
                     roomId: roomId,
                     userId: userId,
-                    userRole: userRole
+                    userRole: userRole,
+                    audio_capabilities: audioCapabilities
                 };
                 console.log('[AI-WS] Sending to GPU:', JSON.stringify(initMessage));
+                console.log('[AI-WS] Audio capabilities:', audioCapabilities);
                 aiWs.send(JSON.stringify(initMessage));
                 
-                // Set up keep-alive ping to prevent connection drops
-                const pingInterval = setInterval(() => {
-                    if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                        aiWs.send(JSON.stringify({
-                            type: 'ping',
-                            sessionId: sessionId,
-                            timestamp: Date.now()
-                        }));
-                        console.log('[AI-WS] Sent keep-alive ping');
-                    } else {
-                        clearInterval(pingInterval);
-                    }
-                }, 30000); // Ping every 30 seconds
+                // Start ping interval
+                pingInterval = setInterval(sendPing, 30000); // Ping every 30 seconds
+                sendPing(); // Send first ping immediately
             };
             
             aiWs.onmessage = async (event) => {
@@ -949,18 +1076,30 @@
                 console.log('[AI-WS] Was clean close:', event.wasClean);
                 console.log('[AI-WS] ReadyState at close:', aiWs ? aiWs.readyState : 'null');
                 
-                // Attempt automatic reconnection after unexpected disconnection
-                if (event.code === 1006 || event.code === 1001) {
-                    console.log('[AI-WS] Unexpected disconnection detected, attempting reconnection in 3 seconds...');
-                    updateStatus('AI reconnecting...', 'warning');
-                    
-                    setTimeout(() => {
-                        console.log('[AI-WS] Attempting to reconnect to AI system');
-                        aiWs = null;
-                        initAIConnection(); // Reconnect
-                    }, 3000);
+                // Clear any active ping intervals
+                if (pingInterval) {
+                    clearInterval(pingInterval);
+                    pingInterval = null;
+                }
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                    connectionTimeout = null;
+                }
+                
+                // Determine if we should attempt reconnection
+                const shouldReconnect = (
+                    event.code === 1006 || // Abnormal closure
+                    event.code === 1001 || // Going away
+                    event.code === 1000    // Normal closure but unexpected
+                );
+                
+                if (shouldReconnect && connectionState !== 'disconnected') {
+                    const reason = `code_${event.code}`;
+                    console.log('[AI-WS] Unexpected disconnection detected');
+                    attemptReconnection(reason);
                 } else {
-                    updateStatus('AI disconnected - running in demo mode', 'warning');
+                    console.log('[AI-WS] Clean disconnection or already disconnected');
+                    updateConnectionState('disconnected');
                     
                     // Don't immediately set to null for debugging
                     setTimeout(() => {
@@ -1066,7 +1205,7 @@
                     break;
                     
                 case 'pong':
-                    console.log('[AI-WS] Received pong from GPU - connection alive');
+                    handlePong();
                     break;
             }
         }
@@ -1312,30 +1451,44 @@
                     const microphone = audioContext.createMediaStreamSource(localStream);
                     const dataArray = new Uint8Array(analyser.frequencyBinCount);
                     
+                    // Use audio capabilities already detected
+                    const audioCapabilities = detectAudioCapabilities();
+                    const selectedMimeType = audioCapabilities.preferred_format;
+                    
+                    console.log('[AUDIO] Using preferred format:', selectedMimeType);
+                    
+                    // Create MediaRecorder options
+                    let selectedFormat = {};
+                    if (selectedMimeType && selectedMimeType !== 'audio/webm') {
+                        selectedFormat = { mimeType: selectedMimeType };
+                    }
+                    // If no specific format or using basic webm, let browser choose default
+                    
                     // Set up audio recording for real speech-to-text
                     let mediaRecorder = null;
                     let audioChunks = [];
+                    let currentMimeType = selectedMimeType;
                     
                     try {
-                        mediaRecorder = new MediaRecorder(localStream, {
-                            mimeType: 'audio/webm;codecs=opus'
-                        });
+                        mediaRecorder = new MediaRecorder(localStream, selectedFormat);
                         
                         mediaRecorder.ondataavailable = (event) => {
                             if (event.data.size > 0) {
                                 audioChunks.push(event.data);
+                                console.log('[AUDIO] Chunk received, size:', event.data.size, 'bytes');
                             }
                         };
                         
                         mediaRecorder.onstop = async () => {
                             if (audioChunks.length > 0) {
-                                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                                console.log('[AUDIO] Recording stopped, processing', audioChunks.length, 'chunks');
+                                const audioBlob = new Blob(audioChunks, { type: currentMimeType });
                                 audioChunks = []; // Reset for next recording
                                 
                                 // Convert to base64 for transmission
                                 const reader = new FileReader();
                                 reader.onload = () => {
-                                    const base64Audio = reader.result.split(',')[1]; // Remove data:audio/webm;base64, prefix
+                                    const base64Audio = reader.result.split(',')[1]; // Remove data URL prefix
                                     
                                     // Send real audio data to GPU
                                     if (aiWs && aiWs.readyState === WebSocket.OPEN) {
@@ -1343,20 +1496,34 @@
                                             type: 'client_audio_data',
                                             sessionId: sessionId,
                                             audioData: base64Audio,
-                                            mimeType: 'audio/webm;codecs=opus',
+                                            mimeType: currentMimeType,
                                             timestamp: Date.now()
                                         };
-                                        console.log('[AI-WS] Sending real audio data to GPU, size:', audioBlob.size, 'bytes');
+                                        console.log('[AI-WS] Sending real audio data to GPU');
+                                        console.log('[AI-WS] Audio details - Format:', currentMimeType, 'Size:', audioBlob.size, 'bytes');
                                         aiWs.send(JSON.stringify(audioMessage));
+                                    } else {
+                                        console.log('[AI-WS] Cannot send audio - WebSocket not ready');
                                     }
                                 };
+                                reader.onerror = (error) => {
+                                    console.error('[AUDIO] Failed to read audio blob:', error);
+                                };
                                 reader.readAsDataURL(audioBlob);
+                            } else {
+                                console.log('[AUDIO] No audio chunks to process');
                             }
                         };
                         
-                        console.log('🎤 MediaRecorder initialized for real audio capture');
+                        mediaRecorder.onerror = (event) => {
+                            console.error('[AUDIO] MediaRecorder error:', event.error);
+                        };
+                        
+                        console.log('🎤 MediaRecorder initialized successfully');
+                        console.log('[AUDIO] Format:', currentMimeType, 'State:', mediaRecorder.state);
+                        
                     } catch (error) {
-                        console.error('MediaRecorder not supported or failed:', error);
+                        console.error('[AUDIO] MediaRecorder initialization failed:', error);
                         mediaRecorder = null;
                     }
                     
@@ -1389,8 +1556,24 @@
                             
                             // Start recording real audio if available
                             if (mediaRecorder && mediaRecorder.state === 'inactive') {
-                                console.log('🎤 Starting audio recording for real speech-to-text');
-                                mediaRecorder.start(1000); // Record in 1-second chunks
+                                try {
+                                    console.log('🎤 Starting audio recording for real speech-to-text');
+                                    console.log('[AUDIO] MediaRecorder state before start:', mediaRecorder.state);
+                                    mediaRecorder.start(1000); // Record in 1-second chunks
+                                    console.log('[AUDIO] MediaRecorder started successfully');
+                                } catch (startError) {
+                                    console.error('[AUDIO] Failed to start MediaRecorder:', startError);
+                                    console.log('[AUDIO] Error details:', {
+                                        name: startError.name,
+                                        message: startError.message,
+                                        state: mediaRecorder.state,
+                                        mimeType: currentMimeType
+                                    });
+                                }
+                            } else if (mediaRecorder) {
+                                console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state);
+                            } else {
+                                console.log('[AUDIO] MediaRecorder not available');
                             }
                             
                             // Also send speaking detected for immediate feedback
@@ -1416,8 +1599,16 @@
                             
                             // Stop recording when speech ends
                             if (mediaRecorder && mediaRecorder.state === 'recording') {
-                                console.log('🎤 Stopping audio recording - speech ended');
-                                mediaRecorder.stop();
+                                try {
+                                    console.log('🎤 Stopping audio recording - speech ended');
+                                    console.log('[AUDIO] MediaRecorder state before stop:', mediaRecorder.state);
+                                    mediaRecorder.stop();
+                                    console.log('[AUDIO] MediaRecorder stopped successfully');
+                                } catch (stopError) {
+                                    console.error('[AUDIO] Failed to stop MediaRecorder:', stopError);
+                                }
+                            } else if (mediaRecorder) {
+                                console.log('[AUDIO] MediaRecorder not recording, state:', mediaRecorder.state);
                             }
                             
                             updateSpeakingIndicator(null);
