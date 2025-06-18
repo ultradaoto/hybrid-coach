@@ -633,6 +633,7 @@
                 <h3>AI Control Center</h3>
                 <div class="ai-controls">
                     <button id="quickPause" class="btn ai-control" style="font-size: 0.8rem;">Quick Pause</button>
+                    <button id="clearQueue" class="btn" style="font-size: 0.8rem;">🗑️ Clear Queue</button>
                     <button id="testAudio" class="btn" style="font-size: 0.8rem;">🎤 Test</button>
                     <button id="aiSettings" class="btn" style="font-size: 0.8rem;">⚙️ Settings</button>
                 </div>
@@ -726,7 +727,10 @@
             // Initialize performance monitor
             performanceMonitor = new PerformanceMonitor();
             
-            // Set up streaming player callbacks
+            // 🚀 SPEECH COORDINATION: Initialize speech coordinator
+            speechCoordinator = new SpeechCoordinator();
+            
+            // Set up streaming player callbacks with speech coordination
             streamingAudioPlayer.setCallbacks(
                 (latency) => {
                     // On first audio callback
@@ -736,13 +740,27 @@
                 (metrics) => {
                     // On playback complete callback
                     console.log('[STREAMING] 🎊 Streaming audio playback complete:', metrics);
-                    isAISpeaking = false;
-                    updateAIStatus('listening');
+                    
+                    // Update speech coordinator when audio finishes
+                    if (speechCoordinator) {
+                        speechCoordinator.setAISpeaking(false, 'streaming-complete');
+                        // Try to play next queued chunk
+                        setTimeout(() => speechCoordinator.playQueuedAudio(), 50);
+                    } else {
+                        // Fallback to legacy flag management
+                        isAISpeaking = false;
+                        updateAIStatus('listening');
+                    }
                 },
                 (type, error, context) => {
                     // On error callback
                     console.error(`[STREAMING] ❌ Audio player error (${type}):`, error, context);
                     updateStatus(`Audio streaming error: ${type}`, 'warning');
+                    
+                    // Update speech coordinator on error
+                    if (speechCoordinator) {
+                        speechCoordinator.setAISpeaking(false, 'error');
+                    }
                 }
             );
             
@@ -1089,10 +1107,243 @@
             }
         }
         
+        // 🚀 SPEECH COORDINATION: Unified speech state management
+        class SpeechCoordinator {
+            constructor() {
+                this.humanSpeaking = false;
+                this.aiSpeaking = false;
+                this.aiPaused = false;
+                this.audioQueue = [];
+                this.currentAudioSource = null;
+                this.queuedSince = null;
+                this.speechConflictCount = 0;
+                
+                console.log('[SPEECH_COORD] 🎭 Speech Coordinator initialized');
+            }
+            
+            // Check if human is currently speaking
+            isHumanSpeaking() {
+                return this.humanSpeaking || recordingSessionActive;
+            }
+            
+            // Check if AI can start speaking
+            canAISpeak() {
+                return !this.isHumanSpeaking() && !this.aiPaused && !this.aiSpeaking;
+            }
+            
+            // Set human speaking state
+            setHumanSpeaking(speaking) {
+                const wasHumanSpeaking = this.humanSpeaking;
+                this.humanSpeaking = speaking;
+                
+                if (speaking && !wasHumanSpeaking) {
+                    console.log('[SPEECH_COORD] 🎤 Human started speaking - queuing AI audio if needed');
+                    this.handleHumanStartedSpeaking();
+                } else if (!speaking && wasHumanSpeaking) {
+                    console.log('[SPEECH_COORD] 🔇 Human stopped speaking - resuming AI audio if queued');
+                    this.handleHumanStoppedSpeaking();
+                }
+            }
+            
+            // Set AI speaking state
+            setAISpeaking(speaking, source = 'unknown') {
+                const wasAISpeaking = this.aiSpeaking;
+                this.aiSpeaking = speaking;
+                this.currentAudioSource = speaking ? source : null;
+                
+                // Update global flag for compatibility
+                isAISpeaking = speaking;
+                
+                if (speaking && !wasAISpeaking) {
+                    console.log(`[SPEECH_COORD] 🤖 AI started speaking (${source})`);
+                    updateAIStatus('speaking');
+                    updateSpeakingIndicator('ai');
+                } else if (!speaking && wasAISpeaking) {
+                    console.log(`[SPEECH_COORD] 🔇 AI stopped speaking (${source})`);
+                    updateAIStatus('listening');
+                    updateSpeakingIndicator(null);
+                }
+            }
+            
+            // Set AI paused state  
+            setAIPaused(paused) {
+                const wasPaused = this.aiPaused;
+                this.aiPaused = paused;
+                
+                // Update global flag for compatibility
+                isAIPaused = paused;
+                
+                if (paused && !wasPaused) {
+                    console.log('[SPEECH_COORD] ⏸️ AI paused by coach');
+                    this.pauseCurrentAudio();
+                    updateAIStatus('paused');
+                } else if (!paused && wasPaused) {
+                    console.log('[SPEECH_COORD] ▶️ AI resumed by coach');
+                    this.resumeAudio();
+                    updateAIStatus('listening');
+                }
+            }
+            
+            // Queue audio chunk for later playback
+            queueAudioChunk(chunkData) {
+                this.audioQueue.push({
+                    ...chunkData,
+                    queuedAt: Date.now()
+                });
+                
+                if (!this.queuedSince) {
+                    this.queuedSince = Date.now();
+                }
+                
+                console.log(`[SPEECH_COORD] 📦 Queued audio chunk ${chunkData.sequence}, queue size: ${this.audioQueue.length}`);
+                this.updateQueueStatus();
+            }
+            
+            // Try to play audio (either immediate or queue)
+            tryPlayAudio(chunkData) {
+                if (this.canAISpeak()) {
+                    console.log(`[SPEECH_COORD] ✅ Playing audio chunk ${chunkData.sequence} immediately`);
+                    this.playAudioChunk(chunkData);
+                    return true;
+                } else {
+                    const reason = this.getBlockingReason();
+                    console.log(`[SPEECH_COORD] ⏳ Queuing audio chunk ${chunkData.sequence} - ${reason}`);
+                    this.queueAudioChunk(chunkData);
+                    this.speechConflictCount++;
+                    return false;
+                }
+            }
+            
+            // Get reason why AI can't speak
+            getBlockingReason() {
+                if (this.isHumanSpeaking()) return 'human speaking';
+                if (this.aiPaused) return 'AI paused by coach';
+                if (this.aiSpeaking) return 'AI already speaking';
+                return 'unknown reason';
+            }
+            
+            // Handle human started speaking
+            handleHumanStartedSpeaking() {
+                // Don't interrupt ongoing AI speech, but queue new chunks
+                if (this.aiSpeaking) {
+                    console.log('[SPEECH_COORD] ⚠️ Speech conflict detected - human interrupted AI');
+                    // Let current chunk finish, but queue new ones
+                }
+            }
+            
+            // Handle human stopped speaking  
+            handleHumanStoppedSpeaking() {
+                if (this.audioQueue.length > 0 && !this.aiPaused) {
+                    const queueWaitTime = Date.now() - this.queuedSince;
+                    console.log(`[SPEECH_COORD] 🚀 Resuming queued audio after ${queueWaitTime}ms wait`);
+                    this.playQueuedAudio();
+                }
+            }
+            
+            // Play next chunk from queue
+            playQueuedAudio() {
+                if (this.audioQueue.length === 0 || !this.canAISpeak()) {
+                    return;
+                }
+                
+                const nextChunk = this.audioQueue.shift();
+                const queueTime = Date.now() - nextChunk.queuedAt;
+                console.log(`[SPEECH_COORD] 🎵 Playing queued chunk ${nextChunk.sequence} (waited ${queueTime}ms)`);
+                
+                this.playAudioChunk(nextChunk);
+                
+                // Reset queue timer if queue is empty
+                if (this.audioQueue.length === 0) {
+                    this.queuedSince = null;
+                }
+                
+                this.updateQueueStatus();
+            }
+            
+            // Play audio chunk via streaming player
+            playAudioChunk(chunkData) {
+                if (streamingAudioPlayer) {
+                    streamingAudioPlayer.onChunkReceived(chunkData);
+                    this.setAISpeaking(true, 'streaming');
+                } else {
+                    console.error('[SPEECH_COORD] ❌ No streaming audio player available');
+                }
+            }
+            
+            // Pause current audio
+            pauseCurrentAudio() {
+                if (streamingAudioPlayer && this.aiSpeaking) {
+                    streamingAudioPlayer.pause();
+                    console.log('[SPEECH_COORD] ⏸️ Paused current streaming audio');
+                }
+                
+                // Also stop legacy speech synthesis
+                if (speechSynthesis.speaking) {
+                    speechSynthesis.cancel();
+                    console.log('[SPEECH_COORD] ⏸️ Cancelled speech synthesis');
+                }
+                
+                this.setAISpeaking(false, 'paused');
+            }
+            
+            // Resume audio playback
+            resumeAudio() {
+                if (streamingAudioPlayer) {
+                    streamingAudioPlayer.resume();
+                    console.log('[SPEECH_COORD] ▶️ Resumed streaming audio');
+                }
+                
+                // Try to play queued audio
+                if (this.audioQueue.length > 0) {
+                    setTimeout(() => this.playQueuedAudio(), 100);
+                }
+            }
+            
+            // Clear audio queue (coach control)
+            clearQueue() {
+                const clearedCount = this.audioQueue.length;
+                this.audioQueue = [];
+                this.queuedSince = null;
+                
+                console.log(`[SPEECH_COORD] 🗑️ Cleared ${clearedCount} queued audio chunks`);
+                this.updateQueueStatus();
+            }
+            
+            // Update queue status display
+            updateQueueStatus() {
+                if (userRole === 'coach') {
+                    const progressIndicator = document.getElementById('progress-indicator');
+                    if (progressIndicator) {
+                        if (this.audioQueue.length > 0) {
+                            const waitTime = this.queuedSince ? Date.now() - this.queuedSince : 0;
+                            progressIndicator.textContent = `🔄 ${this.audioQueue.length} chunks queued (${Math.round(waitTime/1000)}s)`;
+                            progressIndicator.style.color = '#ffc107';
+                        } else {
+                            progressIndicator.textContent = '';
+                        }
+                    }
+                }
+            }
+            
+            // Get coordination metrics
+            getMetrics() {
+                return {
+                    humanSpeaking: this.humanSpeaking,
+                    aiSpeaking: this.aiSpeaking,
+                    aiPaused: this.aiPaused,
+                    queueSize: this.audioQueue.length,
+                    queuedSince: this.queuedSince,
+                    speechConflicts: this.speechConflictCount,
+                    currentSource: this.currentAudioSource
+                };
+            }
+        }
+        
         // Initialize streaming services
         let sentenceProcessor = null;
         let streamingAudioPlayer = null;
         let performanceMonitor = null;
+        let speechCoordinator = null;
         let streamingEnabled = false;
         let maxParallelSentences = 3;
         
@@ -1970,6 +2221,25 @@
                     console.log('  - Voice ID:', data.voice_id || 'unknown');
                     console.log('  - Text:', data.text ? `"${data.text.substring(0, 50)}..."` : 'no text');
                     
+                    // 🚀 SPEECH COORDINATION: Skip legacy handler if streaming mode is enabled
+                    if (streamingEnabled) {
+                        console.log('[AI-WS] ⚠️ Skipping legacy audio handler - streaming mode enabled');
+                        console.log('[AI-WS] Audio will be processed via streaming chunks instead');
+                        
+                        // Still stop keepalive and add to transcript
+                        if (ttsKeepAliveInterval) {
+                            clearInterval(ttsKeepAliveInterval);
+                            ttsKeepAliveInterval = null;
+                            console.log('[AI-WS] 🔄 TTS keepalive stopped - streaming mode');
+                        }
+                        
+                        // Add text to transcript if available
+                        if (data.text && userRole === 'coach') {
+                            addTranscriptItem('AI (Legacy→Streaming)', data.text, 'ai');
+                        }
+                        break;
+                    }
+                    
                     // Stop TTS keepalive since we got the response
                     if (ttsKeepAliveInterval) {
                         clearInterval(ttsKeepAliveInterval);
@@ -2148,30 +2418,55 @@
                         return;
                     }
                     
-                    // Send to streaming audio player
-                    if (streamingAudioPlayer) {
-                        streamingAudioPlayer.onChunkReceived({
-                            sequence: data.sequence,
-                            audioData: data.audioData,
-                            mimeType: data.mimeType,
-                            duration: data.duration,
-                            text: data.text,
-                            sessionId: data.sessionId
-                        });
+                    // Prepare chunk data
+                    const chunkData = {
+                        sequence: data.sequence,
+                        audioData: data.audioData,
+                        mimeType: data.mimeType,
+                        duration: data.duration,
+                        text: data.text,
+                        sessionId: data.sessionId
+                    };
+                    
+                    // 🚀 SPEECH COORDINATION: Use speech coordinator for smart queuing
+                    if (speechCoordinator) {
+                        const wasPlayed = speechCoordinator.tryPlayAudio(chunkData);
                         
-                        // Update AI status to speaking
-                        if (data.sequence === 0) {
-                            updateAIStatus('speaking');
-                            isAISpeaking = true;
-                            updateSpeakingIndicator('ai');
+                        if (wasPlayed) {
+                            console.log(`[AI-WS] ✅ Chunk ${data.sequence} played immediately`);
+                        } else {
+                            const reason = speechCoordinator.getBlockingReason();
+                            console.log(`[AI-WS] ⏳ Chunk ${data.sequence} queued - ${reason}`);
+                            updateStatus(`AI response queued - ${reason}`, 'info');
                         }
                         
-                        // Add text to transcript if available and coach
+                        // Add text to transcript if available and coach (only for first chunk)
                         if (data.text && userRole === 'coach' && data.sequence === 0) {
-                            addTranscriptItem('AI (Streaming)', data.text, 'ai');
+                            const label = wasPlayed ? 'AI (Streaming)' : 'AI (Queued)';
+                            addTranscriptItem(label, data.text, 'ai');
                         }
+                        
                     } else {
-                        console.error('[AI-WS] ❌ Streaming audio player not initialized');
+                        // Fallback to direct streaming player (legacy behavior)
+                        console.log('[AI-WS] ⚠️ Speech coordinator not available, using direct playback');
+                        
+                        if (streamingAudioPlayer) {
+                            streamingAudioPlayer.onChunkReceived(chunkData);
+                            
+                            // Update AI status to speaking
+                            if (data.sequence === 0) {
+                                updateAIStatus('speaking');
+                                isAISpeaking = true;
+                                updateSpeakingIndicator('ai');
+                            }
+                            
+                            // Add text to transcript if available and coach
+                            if (data.text && userRole === 'coach' && data.sequence === 0) {
+                                addTranscriptItem('AI (Streaming)', data.text, 'ai');
+                            }
+                        } else {
+                            console.error('[AI-WS] ❌ Streaming audio player not initialized');
+                        }
                     }
                     
                     // Send acknowledgment to GPU
@@ -2413,30 +2708,54 @@
 
         // AI Control functions (Coach only)
         function pauseAI() {
-            // Stop any current AI speech immediately
-            if (speechSynthesis.speaking) {
-                speechSynthesis.cancel();
-            }
-            stopAISpeechVisualization();
+            console.log('[COACH_CONTROL] 🎭 Coach requesting AI pause');
             
+            // 🚀 SPEECH COORDINATION: Use speech coordinator for unified pause control
+            if (speechCoordinator) {
+                speechCoordinator.setAIPaused(true);
+                console.log('[COACH_CONTROL] ✅ Speech coordinator paused AI');
+            } else {
+                // Fallback to legacy behavior
+                if (speechSynthesis.speaking) {
+                    speechSynthesis.cancel();
+                }
+                stopAISpeechVisualization();
+                updateAIStatus('paused');
+                console.log('[COACH_CONTROL] ✅ Legacy AI pause applied');
+            }
+            
+            // Notify GPU server
             if (aiWs && aiWs.readyState === WebSocket.OPEN) {
                 aiWs.send(JSON.stringify({
                     type: 'pause_ai',
                     sessionId: sessionId,
                     coachId: userId
                 }));
+                console.log('[COACH_CONTROL] 📡 Sent pause command to GPU');
             }
-            
-            updateAIStatus('paused');
         }
 
         function resumeAI() {
+            console.log('[COACH_CONTROL] 🎭 Coach requesting AI resume');
+            
+            // 🚀 SPEECH COORDINATION: Use speech coordinator for unified resume control
+            if (speechCoordinator) {
+                speechCoordinator.setAIPaused(false);
+                console.log('[COACH_CONTROL] ✅ Speech coordinator resumed AI');
+            } else {
+                // Fallback to legacy behavior
+                updateAIStatus('listening');
+                console.log('[COACH_CONTROL] ✅ Legacy AI resume applied');
+            }
+            
+            // Notify GPU server
             if (aiWs && aiWs.readyState === WebSocket.OPEN) {
                 aiWs.send(JSON.stringify({
                     type: 'resume_ai',
                     sessionId: sessionId,
                     coachId: userId
                 }));
+                console.log('[COACH_CONTROL] 📡 Sent resume command to GPU');
             }
         }
 
@@ -2523,6 +2842,17 @@
                 document.getElementById('pauseAI').onclick = pauseAI;
                 document.getElementById('resumeAI').onclick = resumeAI;
                 document.getElementById('quickPause').onclick = pauseAI;
+                
+                // 🚀 SPEECH COORDINATION: Clear audio queue button
+                document.getElementById('clearQueue').onclick = () => {
+                    if (speechCoordinator) {
+                        speechCoordinator.clearQueue();
+                        updateStatus('Audio queue cleared by coach', 'info');
+                        console.log('[COACH_CONTROL] 🗑️ Coach cleared audio queue');
+                    } else {
+                        updateStatus('Speech coordinator not available', 'warning');
+                    }
+                };
                 
                 // Test button for sending "I like turtles" to GPU
                 document.getElementById('testAudio').onclick = () => {
@@ -3270,6 +3600,11 @@
                         isSpeaking = true;
                         speechStartTime = Date.now();
                         
+                        // 🚀 SPEECH COORDINATION: Notify speech coordinator of human speech start
+                        if (speechCoordinator) {
+                            speechCoordinator.setHumanSpeaking(true);
+                        }
+                        
                         // Clear previous session's chunk acknowledgments
                         acknowledgedChunks.clear();
                         chunkRetryTimeouts.clear();
@@ -3314,6 +3649,11 @@
                                     isSpeaking = false;
                                     lastSpeechTime = Date.now();
                                     speechStartTime = 0;
+                                    
+                                    // 🚀 SPEECH COORDINATION: Notify speech coordinator of human speech end
+                                    if (speechCoordinator) {
+                                        speechCoordinator.setHumanSpeaking(false);
+                                    }
                                     
                                     // 🚀 STREAMING OPTIMIZATION: Record speech end for performance monitoring
                                     if (performanceMonitor) {
