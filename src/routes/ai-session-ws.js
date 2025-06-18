@@ -14,6 +14,8 @@ export function setupAISessionWebSocket(server) {
     }
     
     log(`AI WebSocket proxy initialized. GPU_WS_URL: ${GPU_WS_URL}`);
+    log(`Environment check - NODE_ENV: ${process.env.NODE_ENV || 'undefined'}`);
+    log(`Host check - process will connect to: ${GPU_WS_URL}`);
 
     // Handle WebSocket upgrade requests manually
     server.on('upgrade', (request, socket, head) => {
@@ -49,6 +51,7 @@ export function setupAISessionWebSocket(server) {
         const connectionTimeout = setTimeout(() => {
             if (!gpuConnected) {
                 log(`❌ GPU connection timeout after 30 seconds for session: ${sessionId}`);
+                log(`❌ GPU server might not be running on ${GPU_WS_URL}`);
                 gpuWs.close();
             }
         }, 30000);
