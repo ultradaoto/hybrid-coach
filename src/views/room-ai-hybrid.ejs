@@ -2664,8 +2664,9 @@
                         }
                     }
                     const voiceRatio = totalEnergy > 0 ? (voiceEnergy / totalEnergy) : 0;
-                    const variance = audioSamples.length > 1 ? 
-                        audioSamples.reduce((acc, val) => acc + Math.pow(val - avgLevel, 2), 0) / audioSamples.length : 0;
+                    
+                    // Calculate variance using the already computed avgLevel and variance from above
+                    const currentVariance = variance;
                     
                     if (audioLevel > VOICE_THRESHOLD && !isAudioEnabled) {
                         voiceStatusDisplay.textContent = 'Muted';
@@ -2691,7 +2692,7 @@
                         let reason = '';
                         if (audioLevel < VOICE_THRESHOLD) reason = 'Too quiet';
                         else if (voiceRatio < 0.2) reason = `Voice ratio: ${voiceRatio.toFixed(2)}`;
-                        else if (!isConsistent) reason = `Variance: ${variance.toFixed(0)}`;
+                        else if (!isConsistent) reason = `Variance: ${currentVariance.toFixed(0)}`;
                         else reason = 'Other conditions';
                         
                         voiceStatusDisplay.textContent = reason;
