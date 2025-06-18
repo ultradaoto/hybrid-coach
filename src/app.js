@@ -202,15 +202,15 @@ const startServer = async (attemptPort) => {
     // await initProtooSignaling(httpServer);
     
     // Initialize simple WebSocket for fallback video chat
-    initSimpleWebSocket(httpServer);
+    // initSimpleWebSocket(httpServer);
     
     // Initialize WebSocket relay for environments where WebRTC is blocked
-    initWebSocketRelay(httpServer);
+    // initWebSocketRelay(httpServer);
     
-    // Initialize test WebSocket server
-    initTestWebSocket(httpServer);
+    // Initialize test WebSocket server  
+    // initTestWebSocket(httpServer);
     
-    // Initialize AI Session WebSocket for hybrid coaching
+    // Initialize AI Session WebSocket for hybrid coaching - ONLY WebSocket server needed
     setupAISessionWebSocket(httpServer);
 
     httpServer.listen(attemptPort, HOST, () => {
