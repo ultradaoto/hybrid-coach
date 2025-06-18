@@ -2483,11 +2483,12 @@
                 const SILENCE_THRESHOLD = 1500; // 1.5 seconds of silence before considering speech ended
                 const SPEECH_COOLDOWN = 2000; // 2 seconds cooldown between speeches
                 
-                // Enhanced voice detection parameters - more responsive
-                const VOICE_THRESHOLD = 8; // Minimum volume for voice detection (reduced to catch normal speech)
+                // Enhanced voice detection parameters - smart voice vs keyboard detection
+                const VOICE_THRESHOLD = 6; // Minimum volume for voice detection (lowered to catch your levels)
                 const FREQUENCY_THRESHOLD = 5; // Minimum frequency activity for voice
-                const SUSTAINED_SPEECH_TIME = 100; // Must speak for 100ms before triggering (reduced further)
-                const NOISE_GATE_SAMPLES = 3; // Number of samples to analyze for consistency (reduced for faster response)
+                const SUSTAINED_SPEECH_TIME = 200; // Must speak for 200ms before triggering (increased to filter keyboard)
+                const NOISE_GATE_SAMPLES = 8; // Number of samples to analyze for consistency (increased for keyboard filtering)
+                const KEYBOARD_FILTER_TIME = 50; // Keyboard clicks are typically < 50ms
                 
                 let audioSamples = []; // Rolling buffer for audio level analysis
                 let frequencySamples = []; // Rolling buffer for frequency analysis
@@ -2589,7 +2590,7 @@
                     }
                 }
                 
-                // Enhanced voice activity detection
+                // Enhanced voice activity detection with keyboard filtering
                 function isVoiceActivity(audioLevel, frequencyData) {
                     // Check if audio level meets minimum threshold
                     if (audioLevel < VOICE_THRESHOLD) {
@@ -2601,7 +2602,11 @@
                     const voiceFreqStart = Math.floor((85 / (audioContext.sampleRate / 2)) * frequencyData.length);
                     const voiceFreqEnd = Math.floor((3000 / (audioContext.sampleRate / 2)) * frequencyData.length);
                     
+                    // Also check high frequencies typical of keyboard clicks (3000Hz+)
+                    const highFreqStart = Math.floor((3000 / (audioContext.sampleRate / 2)) * frequencyData.length);
+                    
                     let voiceEnergy = 0;
+                    let highFreqEnergy = 0;
                     let totalEnergy = 0;
                     
                     for (let i = 0; i < frequencyData.length; i++) {
@@ -2609,12 +2614,23 @@
                         if (i >= voiceFreqStart && i <= voiceFreqEnd) {
                             voiceEnergy += frequencyData[i];
                         }
+                        if (i >= highFreqStart) {
+                            highFreqEnergy += frequencyData[i];
+                        }
                     }
                     
-                    // Voice should represent reasonable portion of total energy
                     const voiceRatio = totalEnergy > 0 ? (voiceEnergy / totalEnergy) : 0;
+                    const highFreqRatio = totalEnergy > 0 ? (highFreqEnergy / totalEnergy) : 0;
                     
-                    return voiceRatio > 0.15; // At least 15% of energy should be in voice range (reduced further)
+                    // Keyboard clicks have lots of high frequency energy, voice doesn't
+                    const isLikelyKeyboard = highFreqRatio > 0.4 && voiceRatio < 0.3;
+                    
+                    if (isLikelyKeyboard) {
+                        console.log(`⌨️ Keyboard detected: high freq ${(highFreqRatio * 100).toFixed(0)}%, voice ${(voiceRatio * 100).toFixed(0)}%`);
+                        return false;
+                    }
+                    
+                    return voiceRatio > 0.15; // At least 15% of energy should be in voice range
                 }
                 
                 function detectSpeaking() {
@@ -2631,16 +2647,22 @@
                         audioSamples.shift();
                     }
                     
-                    // Calculate consistency - voice should be relatively stable
+                    // Calculate consistency - voice should be relatively stable, keyboard clicks are spiky
                     const avgLevel = audioSamples.reduce((a, b) => a + b) / audioSamples.length;
                     const variance = audioSamples.reduce((acc, val) => acc + Math.pow(val - avgLevel, 2), 0) / audioSamples.length;
-                    const isConsistent = variance < 200; // Increased variance tolerance for more responsive detection
+                    
+                    // Voice is consistent, keyboard clicks are very spiky
+                    const isConsistent = variance < 150; // Tightened for better keyboard filtering
+                    
+                    // Additional check: if all samples are very similar to current level, it's likely sustained voice
+                    const sustainedVoice = audioSamples.every(sample => Math.abs(sample - audioLevel) < 3);
+                    const isVoiceLike = isConsistent || sustainedVoice;
                     
                     // Check if current audio qualifies as voice activity
-                    // High audio override: if audio is moderately loud (>20), bypass some strict checks
-                    const highAudioOverride = audioLevel > 20;
+                    // High audio override: if audio is moderately loud (>15), bypass some strict checks
+                    const highAudioOverride = audioLevel > 15;
                     const passesVoiceCheck = highAudioOverride || isVoiceActivity(audioLevel, frequencyData);
-                    const passesConsistencyCheck = highAudioOverride || isConsistent;
+                    const passesConsistencyCheck = highAudioOverride || isVoiceLike;
                     
                     const hasVoiceActivity = passesVoiceCheck && 
                                            passesConsistencyCheck && 
@@ -2717,6 +2739,8 @@
                                 voiceRatio: voiceRatio.toFixed(3),
                                 variance: currentVariance.toFixed(0),
                                 isConsistent,
+                                sustainedVoice,
+                                isVoiceLike,
                                 passesVoiceCheck,
                                 passesConsistencyCheck,
                                 highAudioOverride
