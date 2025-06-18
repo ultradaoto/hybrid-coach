@@ -35,6 +35,9 @@ export function setupAISessionWebSocket(server) {
         
         log(`Proxying AI session to GPU server: ${sessionId}`);
         
+        // Initialize client heartbeat state
+        clientWs.isAlive = true;
+        
         // Create connection to GPU server with options
         const gpuWsUrl = `${GPU_WS_URL}/ai-session/${sessionId}`;
         log(`Attempting to connect to GPU server: ${gpuWsUrl}`);
@@ -45,7 +48,6 @@ export function setupAISessionWebSocket(server) {
         
         // Track connection state
         let gpuConnected = false;
-        let keepAliveInterval = null;
         
         // Connection timeout (initial connection only)
         const connectionTimeout = setTimeout(() => {
@@ -87,19 +89,10 @@ export function setupAISessionWebSocket(server) {
             gpuConnected = true;
             clearTimeout(connectionTimeout);
             
-            // Start keepalive pings every 30 seconds
-            keepAliveInterval = setInterval(() => {
-                if (gpuWs.readyState === WebSocket.OPEN) {
-                    gpuWs.ping();
-                    log(`Sent keepalive ping to GPU server for session: ${sessionId}`);
-                }
-            }, 30000);
+            // No proxy-level keepalive - application handles its own ping/pong system
         });
         
-        // Handle pong responses from GPU server
-        gpuWs.on('pong', () => {
-            log(`Received pong from GPU server for session: ${sessionId}`);
-        });
+        // GPU pong responses handled by application-level ping/pong system
         
         gpuWs.on('error', (error) => {
             log(`❌ GPU connection error for session ${sessionId}: ${error.message}`);
@@ -117,26 +110,16 @@ export function setupAISessionWebSocket(server) {
             log(`GPU connection closed for session: ${sessionId}, code: ${code}, reason: ${reason}`);
             gpuConnected = false;
             
-            // Clear keepalive interval
-            if (keepAliveInterval) {
-                clearInterval(keepAliveInterval);
-                keepAliveInterval = null;
-            }
-            
             if (clientWs.readyState === WebSocket.OPEN) {
                 clientWs.close();
             }
         });
         
+        // Client pong responses handled by application-level ping/pong system
+        
         // Handle client disconnection
         clientWs.on('close', () => {
             log(`Client disconnected from session: ${sessionId}`);
-            
-            // Clear keepalive interval
-            if (keepAliveInterval) {
-                clearInterval(keepAliveInterval);
-                keepAliveInterval = null;
-            }
             
             if (gpuWs.readyState === WebSocket.OPEN) {
                 gpuWs.close();
@@ -151,22 +134,11 @@ export function setupAISessionWebSocket(server) {
         });
     });
 
-    // Heartbeat to keep connections alive
-    const heartbeat = setInterval(() => {
-        wss.clients.forEach((ws) => {
-            if (!ws.isAlive) {
-                ws.terminate();
-                return;
-            }
-            
-            ws.isAlive = false;
-            ws.ping();
-        });
-    }, 30000);
-
+    // Disabled proxy-level heartbeat to avoid conflicts with application-level ping/pong
+    // The application handles keepalive with its own ping/pong system
+    
     // Cleanup on server shutdown
     process.on('SIGINT', () => {
-        clearInterval(heartbeat);
         wss.close();
     });
 

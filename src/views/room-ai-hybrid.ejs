@@ -633,6 +633,7 @@
                 <h3>AI Control Center</h3>
                 <div class="ai-controls">
                     <button id="quickPause" class="btn ai-control" style="font-size: 0.8rem;">Quick Pause</button>
+                    <button id="testAudio" class="btn" style="font-size: 0.8rem;">🎤 Test</button>
                     <button id="aiSettings" class="btn" style="font-size: 0.8rem;">⚙️ Settings</button>
                 </div>
             </div>
@@ -886,6 +887,86 @@
         // Initialize AI WebSocket for coaching session communication
         // Cache audio capabilities to avoid re-testing on reconnections
         let cachedAudioCapabilities = null;
+        
+        /*
+        📋 INSTRUCTIONS FOR GPU CLAUDE - FULL AI CONVERSATION PIPELINE
+        
+        🚀 IMPLEMENTED: Full conversation flow with real-time transcription and AI audio responses
+        
+        FULL CONVERSATION PIPELINE MESSAGE FLOW:
+        
+        1. 📝 REAL-TIME TRANSCRIPTION:
+        {
+            "type": "client_transcription",
+            "sessionId": "session_id_here",
+            "text": "I like turtles",
+            "confidence": 0.9,
+            "timestamp": "2025-06-18T17:30:00.000Z"
+        }
+        
+        2. 🤖 AI PIPELINE STATUS MESSAGES:
+        {
+            "type": "ai_thinking",
+            "sessionId": "session_id_here", 
+            "message": "AI is processing your message..."
+        }
+        
+        {
+            "type": "ai_response_text",
+            "sessionId": "session_id_here",
+            "text": "That's great! Turtles can be very calming..."
+        }
+        
+        {
+            "type": "ai_generating_speech",
+            "sessionId": "session_id_here",
+            "message": "Generating AI speech..."
+        }
+        
+        3. 🔊 AI AUDIO RESPONSE (MAIN FEATURE):
+        {
+            "type": "ai_audio_response",
+            "sessionId": "session_id_here",
+            "audioData": "base64_encoded_mp3_audio",
+            "mimeType": "audio/mpeg",
+            "duration": 3500,
+            "text": "That's great! Turtles can be very calming...",
+            "voice_id": "EXAVITQu4vr4xnSDxMaL",
+            "timestamp": "2025-06-18T17:30:00.000Z"
+        }
+        
+        4. ❌ ERROR HANDLING:
+        {
+            "type": "ai_error",
+            "message": "OpenAI processing failed"
+        }
+        
+        {
+            "type": "ai_speech_error", 
+            "message": "TTS generation failed",
+            "fallback_text": "AI response text for browser TTS"
+        }
+        
+        {
+            "type": "ai_pipeline_error",
+            "message": "Complete AI pipeline failure"
+        }
+        
+        EXPECTED USER EXPERIENCE:
+        1. 🎤 User says "I like turtles"
+        2. 📝 CPU displays: "Client: I like turtles" 
+        3. 🤖 CPU shows: "AI is thinking..."
+        4. 📝 CPU displays: "AI: That's wonderful! Turtles are..."
+        5. 🔊 CPU plays AI voice speaking the response
+        
+        BEST PRACTICES FOR GPU:
+        - Send client_transcription for real-time display
+        - Use ai_audio_response as primary audio delivery method  
+        - Include text with audio for transcript display
+        - Send status messages for better UX
+        - Use fallback_text in ai_speech_error for browser TTS
+        - Always include sessionId and timestamps
+        */
         
         // Enhanced MediaRecorder testing with better fallbacks
         async function detectAudioCapabilities() {
@@ -1470,6 +1551,45 @@
                     }
                     break;
                     
+                case 'transcription_result':
+                    console.log('[AI-WS] 🎙️ TRANSCRIPTION RESULT:', data.transcript);
+                    console.log('[AI-WS] Confidence:', data.confidence || 'unknown');
+                    console.log('[AI-WS] Processing time:', data.processing_time || 'unknown');
+                    
+                    if (data.transcript) {
+                        // Add to transcript display for coaches
+                        if (userRole === 'coach') {
+                            addTranscriptItem('Client (STT)', data.transcript, 'client');
+                        }
+                        
+                        // Show transcription result in status for testing
+                        updateStatus(`Transcribed: "${data.transcript}"`, 'success');
+                        
+                        // Update voice indicator to show successful transcription
+                        if (voiceStatusDisplay) {
+                            voiceStatusDisplay.textContent = `Transcribed: "${data.transcript.substring(0, 20)}..."`;
+                            voiceIndicator.className = 'voice-indicator speaking';
+                            voiceIndicator.style.display = 'block';
+                            
+                            // Reset after 3 seconds
+                            setTimeout(() => {
+                                voiceStatusDisplay.textContent = 'Listening...';
+                                voiceIndicator.className = 'voice-indicator';
+                            }, 3000);
+                        }
+                    }
+                    
+                    if (data.chunk_sequence !== undefined) {
+                        acknowledgedChunks.add(data.chunk_sequence);
+                        const retryTimeout = chunkRetryTimeouts.get(data.chunk_sequence);
+                        if (retryTimeout) {
+                            clearTimeout(retryTimeout);
+                            chunkRetryTimeouts.delete(data.chunk_sequence);
+                        }
+                        chunkRetryAttempts.delete(data.chunk_sequence);
+                    }
+                    break;
+                    
                 case 'chunk_received':
                     console.log('[AI-WS] GPU confirmed chunk received:', data.chunk_sequence);
                     if (data.processing_status) {
@@ -1549,9 +1669,25 @@
                     break;
                     
                 case 'ai_audio_data':
-                    console.log('[AI-WS] Received AI audio data, size:', data.audioData?.length || 0, 'bytes');
-                    if (data.audioData) {
+                    console.log('[AI-WS] 🔊 RECEIVED AI AUDIO DATA:');
+                    console.log('  - Size:', data.audioData?.length || 0, 'characters (base64)');
+                    console.log('  - MIME Type:', data.mimeType || 'audio/wav');
+                    console.log('  - Source:', data.source || 'unknown');
+                    console.log('  - Text:', data.text ? `"${data.text.substring(0, 50)}..."` : 'no text provided');
+                    
+                    if (data.audioData && data.audioData.length > 0) {
+                        // Show status update that we're about to play AI audio
+                        updateStatus(`Playing AI response: "${(data.text || 'Audio response').substring(0, 30)}..."`, 'success');
+                        
+                        // Add to transcript if we have the text
+                        if (data.text && userRole === 'coach') {
+                            addTranscriptItem('AI Assistant (TTS)', data.text, 'ai');
+                        }
+                        
                         playRealAIAudio(data.audioData, data.mimeType || 'audio/wav');
+                    } else {
+                        console.log('[AI-WS] ❌ Received ai_audio_data but no audioData provided');
+                        updateStatus('Received empty audio data from AI', 'warning');
                     }
                     break;
                     
@@ -1560,6 +1696,143 @@
                     updateAIStatus('listening');
                     updateSpeakingIndicator(null);
                     isAISpeaking = false;
+                    break;
+                    
+                case 'client_transcription':
+                    console.log('[AI-WS] 📝 CLIENT TRANSCRIPTION:', data.text);
+                    console.log('  - Confidence:', data.confidence || 'unknown');
+                    console.log('  - Timestamp:', data.timestamp || 'unknown');
+                    
+                    if (data.text) {
+                        // Add to transcript display for coaches
+                        if (userRole === 'coach') {
+                            addTranscriptItem('Client', data.text, 'client');
+                        }
+                        
+                        // Show transcription result in status
+                        updateStatus(`You said: "${data.text}"`, 'success');
+                        
+                        // Update AI status to show processing
+                        updateAIStatus('thinking');
+                    }
+                    break;
+                    
+                case 'ai_thinking':
+                    console.log('[AI-WS] 🤖 AI THINKING:', data.message);
+                    updateAIStatus('thinking');
+                    if (userRole === 'coach' && data.message) {
+                        if (aiResponsePreview) {
+                            aiResponsePreview.textContent = data.message;
+                        }
+                    }
+                    updateStatus(data.message || 'AI is processing...', 'info');
+                    break;
+                    
+                case 'ai_response_text':
+                    console.log('[AI-WS] 📝 AI TEXT RESPONSE:', data.text ? `"${data.text.substring(0, 100)}..."` : 'no text');
+                    
+                    if (data.text) {
+                        // Add to transcript for coaches
+                        if (userRole === 'coach') {
+                            addTranscriptItem('AI', data.text, 'ai');
+                        }
+                        
+                        // Update AI response preview
+                        if (aiResponsePreview) {
+                            aiResponsePreview.textContent = data.text;
+                        }
+                        
+                        // Show status that we got AI response
+                        updateStatus(`AI responded: "${data.text.substring(0, 30)}..."`, 'success');
+                    }
+                    break;
+                    
+                case 'ai_generating_speech':
+                    console.log('[AI-WS] 🎙️ AI GENERATING SPEECH:', data.message);
+                    updateAIStatus('thinking');
+                    updateStatus(data.message || 'Generating AI speech...', 'info');
+                    break;
+                    
+                case 'ai_audio_response':
+                    console.log('[AI-WS] 🔊 AI AUDIO RESPONSE RECEIVED:');
+                    console.log('  - Audio size:', data.audioData?.length || 0, 'characters (base64)');
+                    console.log('  - MIME Type:', data.mimeType || 'unknown');
+                    console.log('  - Duration:', data.duration || 'unknown', 'ms');
+                    console.log('  - Voice ID:', data.voice_id || 'unknown');
+                    console.log('  - Text:', data.text ? `"${data.text.substring(0, 50)}..."` : 'no text');
+                    
+                    if (data.audioData && data.audioData.length > 0) {
+                        // Show status that we're playing AI response
+                        updateStatus(`AI speaking: "${(data.text || 'Audio response').substring(0, 30)}..."`, 'success');
+                        
+                        // Add text to transcript if available
+                        if (data.text && userRole === 'coach') {
+                            addTranscriptItem('AI (TTS)', data.text, 'ai');
+                        }
+                        
+                        // Play the AI audio response
+                        playRealAIAudio(data.audioData, data.mimeType || 'audio/mpeg');
+                    } else {
+                        console.log('[AI-WS] ❌ Received ai_audio_response but no audioData');
+                        updateStatus('Received empty audio response from AI', 'warning');
+                        
+                        // Fallback to text-to-speech if we have text
+                        if (data.text) {
+                            playAIAudio(data.text);
+                        }
+                    }
+                    break;
+                    
+                case 'ai_error':
+                    console.error('[AI-WS] ❌ AI ERROR:', data.message || 'OpenAI processing failed');
+                    updateStatus('AI processing failed - please try again', 'error');
+                    updateAIStatus('listening');
+                    break;
+                    
+                case 'ai_speech_error':
+                    console.error('[AI-WS] ❌ AI SPEECH ERROR:', data.message || 'TTS generation failed');
+                    updateStatus('AI speech generation failed - using text fallback', 'warning');
+                    
+                    // Use fallback text if available
+                    if (data.fallback_text) {
+                        console.log('[AI-WS] Using fallback text for speech synthesis');
+                        playAIAudio(data.fallback_text);
+                        
+                        if (userRole === 'coach') {
+                            addTranscriptItem('AI (Fallback)', data.fallback_text, 'ai');
+                        }
+                    } else {
+                        updateAIStatus('listening');
+                    }
+                    break;
+                    
+                case 'ai_pipeline_error':
+                    console.error('[AI-WS] ❌ AI PIPELINE ERROR:', data.message || 'Complete AI pipeline failure');
+                    updateStatus('AI system error - please try speaking again', 'error');
+                    updateAIStatus('listening');
+                    break;
+                
+                case 'openai_response':
+                    console.log('[AI-WS] 🤖 OPENAI RESPONSE RECEIVED:');
+                    console.log('  - Text:', data.text ? `"${data.text.substring(0, 100)}..."` : 'no text');
+                    console.log('  - Model:', data.model || 'unknown');
+                    console.log('  - Tokens:', data.tokens || 'unknown');
+                    
+                    if (data.text) {
+                        // Add to transcript for coaches
+                        if (userRole === 'coach') {
+                            addTranscriptItem('AI Response (OpenAI)', data.text, 'ai');
+                        }
+                        
+                        // Update AI response preview
+                        if (aiResponsePreview) {
+                            aiResponsePreview.textContent = data.text;
+                        }
+                        
+                        // Show status that we got OpenAI response
+                        updateStatus(`OpenAI responded: "${data.text.substring(0, 30)}..."`, 'success');
+                        updateAIStatus('thinking'); // Now processing TTS
+                    }
                     break;
                     
                 case 'pong':
@@ -1576,33 +1849,47 @@
         // Play real AI audio from GPU server (ElevenLabs TTS)
         function playRealAIAudio(base64Audio, mimeType) {
             try {
-                console.log('[AI-AUDIO] Playing real AI audio, type:', mimeType);
+                console.log('[AI-AUDIO] 🎵 Processing AI audio playback:');
+                console.log('  - Base64 length:', base64Audio.length, 'characters');
+                console.log('  - MIME type:', mimeType);
+                
+                // Validate base64 input
+                if (!base64Audio || base64Audio.length < 100) {
+                    throw new Error(`Invalid base64 audio data: ${base64Audio?.length || 0} characters`);
+                }
                 
                 // Convert base64 to blob
+                console.log('[AI-AUDIO] Converting base64 to audio blob...');
                 const audioData = atob(base64Audio);
                 const bytes = new Uint8Array(audioData.length);
                 for (let i = 0; i < audioData.length; i++) {
                     bytes[i] = audioData.charCodeAt(i);
                 }
                 const audioBlob = new Blob([bytes], { type: mimeType });
+                console.log('[AI-AUDIO] Audio blob created, size:', audioBlob.size, 'bytes');
                 
                 // Create audio element and play
                 const audioUrl = URL.createObjectURL(audioBlob);
                 const audio = new Audio(audioUrl);
                 
+                // Set up comprehensive audio event handlers
                 audio.onloadstart = () => {
-                    console.log('[AI-AUDIO] Real AI audio started loading');
+                    console.log('[AI-AUDIO] ✅ AI audio loading started');
                     updateSpeakingIndicator('ai');
                     updateAIStatus('speaking');
                     isAISpeaking = true;
                 };
                 
+                audio.oncanplay = () => {
+                    console.log('[AI-AUDIO] ✅ AI audio can start playing');
+                };
+                
                 audio.onplay = () => {
-                    console.log('[AI-AUDIO] Real AI audio playback started');
+                    console.log('[AI-AUDIO] ✅ AI audio playback started successfully');
                 };
                 
                 audio.onended = () => {
-                    console.log('[AI-AUDIO] Real AI audio playback ended');
+                    console.log('[AI-AUDIO] ✅ AI audio playback completed');
                     updateSpeakingIndicator(null);
                     updateAIStatus('listening');
                     isAISpeaking = false;
@@ -1610,25 +1897,58 @@
                 };
                 
                 audio.onerror = (error) => {
-                    console.error('[AI-AUDIO] Real AI audio playback error:', error);
+                    console.error('[AI-AUDIO] ❌ AI audio playback error:', error);
+                    console.error('[AI-AUDIO] Audio element error details:', {
+                        error: audio.error,
+                        networkState: audio.networkState,
+                        readyState: audio.readyState,
+                        src: audioUrl.substring(0, 50) + '...'
+                    });
                     updateSpeakingIndicator(null);
                     updateAIStatus('listening');
                     isAISpeaking = false;
                     URL.revokeObjectURL(audioUrl); // Clean up
+                    updateStatus('AI audio playback failed', 'error');
                 };
                 
-                // Play the audio
-                audio.play().catch(error => {
-                    console.error('[AI-AUDIO] Failed to play real AI audio:', error);
-                    // Fallback to text-to-speech if audio fails
+                audio.onpause = () => {
+                    console.log('[AI-AUDIO] AI audio paused');
+                };
+                
+                audio.onstalled = () => {
+                    console.log('[AI-AUDIO] ⚠️ AI audio stalled');
+                };
+                
+                audio.onwaiting = () => {
+                    console.log('[AI-AUDIO] ⚠️ AI audio waiting for data');
+                };
+                
+                // Attempt to play the audio
+                console.log('[AI-AUDIO] Attempting to play audio...');
+                audio.play().then(() => {
+                    console.log('[AI-AUDIO] ✅ Audio play() promise resolved');
+                }).catch(error => {
+                    console.error('[AI-AUDIO] ❌ Audio play() promise rejected:', error);
+                    console.error('[AI-AUDIO] Play error details:', {
+                        name: error.name,
+                        message: error.message,
+                        code: error.code
+                    });
                     updateAIStatus('listening');
                     isAISpeaking = false;
+                    updateStatus(`AI audio play failed: ${error.message}`, 'error');
                 });
                 
             } catch (error) {
-                console.error('[AI-AUDIO] Error processing real AI audio:', error);
+                console.error('[AI-AUDIO] ❌ Error processing AI audio:', error);
+                console.error('[AI-AUDIO] Error details:', {
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack?.substring(0, 200)
+                });
                 updateAIStatus('listening');
                 isAISpeaking = false;
+                updateStatus(`AI audio processing failed: ${error.message}`, 'error');
             }
         }
 
@@ -1789,6 +2109,23 @@
                 document.getElementById('pauseAI').onclick = pauseAI;
                 document.getElementById('resumeAI').onclick = resumeAI;
                 document.getElementById('quickPause').onclick = pauseAI;
+                
+                // Test button for sending "I like turtles" to GPU
+                document.getElementById('testAudio').onclick = () => {
+                    if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                        const testMessage = {
+                            type: 'test_transcription',
+                            sessionId: sessionId,
+                            test_text: 'I like turtles',
+                            timestamp: Date.now()
+                        };
+                        console.log('[AI-WS] 🧪 Sending test transcription to GPU');
+                        aiWs.send(JSON.stringify(testMessage));
+                        updateStatus('Sent test transcription to GPU', 'success');
+                    } else {
+                        updateStatus('GPU not connected', 'error');
+                    }
+                };
                 
                 // Tab switching
                 document.querySelectorAll('.tab').forEach(tab => {
@@ -2146,11 +2483,11 @@
                 const SILENCE_THRESHOLD = 1500; // 1.5 seconds of silence before considering speech ended
                 const SPEECH_COOLDOWN = 2000; // 2 seconds cooldown between speeches
                 
-                // Enhanced voice detection parameters
-                const VOICE_THRESHOLD = 25; // Minimum volume for voice detection (increased from 10)
+                // Enhanced voice detection parameters - more responsive
+                const VOICE_THRESHOLD = 15; // Minimum volume for voice detection (reduced from 25)
                 const FREQUENCY_THRESHOLD = 5; // Minimum frequency activity for voice
-                const SUSTAINED_SPEECH_TIME = 300; // Must speak for 300ms before triggering
-                const NOISE_GATE_SAMPLES = 10; // Number of samples to analyze for consistency
+                const SUSTAINED_SPEECH_TIME = 150; // Must speak for 150ms before triggering (reduced from 300ms)
+                const NOISE_GATE_SAMPLES = 5; // Number of samples to analyze for consistency (reduced from 10)
                 
                 let audioSamples = []; // Rolling buffer for audio level analysis
                 let frequencySamples = []; // Rolling buffer for frequency analysis
@@ -2274,10 +2611,10 @@
                         }
                     }
                     
-                    // Voice should represent significant portion of total energy
+                    // Voice should represent reasonable portion of total energy
                     const voiceRatio = totalEnergy > 0 ? (voiceEnergy / totalEnergy) : 0;
                     
-                    return voiceRatio > 0.3; // At least 30% of energy should be in voice range
+                    return voiceRatio > 0.2; // At least 20% of energy should be in voice range (reduced from 30%)
                 }
                 
                 function detectSpeaking() {
@@ -2297,17 +2634,38 @@
                     // Calculate consistency - voice should be relatively stable
                     const avgLevel = audioSamples.reduce((a, b) => a + b) / audioSamples.length;
                     const variance = audioSamples.reduce((acc, val) => acc + Math.pow(val - avgLevel, 2), 0) / audioSamples.length;
-                    const isConsistent = variance < 100; // Low variance indicates sustained sound vs. brief noise
+                    const isConsistent = variance < 200; // Increased variance tolerance for more responsive detection
                     
                     // Check if current audio qualifies as voice activity
-                    const hasVoiceActivity = isVoiceActivity(audioLevel, frequencyData) && 
-                                           isConsistent && 
+                    // High audio override: if audio is very loud (>35), bypass some strict checks
+                    const highAudioOverride = audioLevel > 35;
+                    const passesVoiceCheck = highAudioOverride || isVoiceActivity(audioLevel, frequencyData);
+                    const passesConsistencyCheck = highAudioOverride || isConsistent;
+                    
+                    const hasVoiceActivity = passesVoiceCheck && 
+                                           passesConsistencyCheck && 
                                            isAudioEnabled && 
                                            !isAIPaused && 
                                            !isAISpeaking;
                     
-                    // Update visual voice indicator
+                    // Update visual voice indicator with diagnostic info
                     audioLevelDisplay.textContent = audioLevel.toFixed(1);
+                    
+                    // Calculate voice metrics for debugging
+                    const voiceFreqStart = Math.floor((85 / (audioContext.sampleRate / 2)) * frequencyData.length);
+                    const voiceFreqEnd = Math.floor((3000 / (audioContext.sampleRate / 2)) * frequencyData.length);
+                    let voiceEnergy = 0;
+                    let totalEnergy = 0;
+                    
+                    for (let i = 0; i < frequencyData.length; i++) {
+                        totalEnergy += frequencyData[i];
+                        if (i >= voiceFreqStart && i <= voiceFreqEnd) {
+                            voiceEnergy += frequencyData[i];
+                        }
+                    }
+                    const voiceRatio = totalEnergy > 0 ? (voiceEnergy / totalEnergy) : 0;
+                    const variance = audioSamples.length > 1 ? 
+                        audioSamples.reduce((acc, val) => acc + Math.pow(val - avgLevel, 2), 0) / audioSamples.length : 0;
                     
                     if (audioLevel > VOICE_THRESHOLD && !isAudioEnabled) {
                         voiceStatusDisplay.textContent = 'Muted';
@@ -2320,15 +2678,23 @@
                     } else if (hasVoiceActivity && speechStartTime > 0) {
                         const speechDuration = Date.now() - speechStartTime;
                         if (speechDuration > SUSTAINED_SPEECH_TIME) {
-                            voiceStatusDisplay.textContent = 'Voice Detected';
+                            const status = highAudioOverride ? `Voice (HIGH): ${audioLevel.toFixed(1)}` : `Voice: ${voiceRatio.toFixed(2)} ratio`;
+                            voiceStatusDisplay.textContent = status;
                             voiceIndicator.className = 'voice-indicator speaking';
                         } else {
-                            voiceStatusDisplay.textContent = `Detecting... ${speechDuration}ms`;
+                            voiceStatusDisplay.textContent = `Analyzing... ${speechDuration}ms`;
                             voiceIndicator.className = 'voice-indicator detecting';
                         }
                         voiceIndicator.style.display = 'block';
-                    } else if (audioLevel > 5) {
-                        voiceStatusDisplay.textContent = audioLevel > VOICE_THRESHOLD ? 'Background Noise' : 'Low Audio';
+                    } else if (audioLevel > 8) {
+                        // Show why it's not detecting voice
+                        let reason = '';
+                        if (audioLevel < VOICE_THRESHOLD) reason = 'Too quiet';
+                        else if (voiceRatio < 0.2) reason = `Voice ratio: ${voiceRatio.toFixed(2)}`;
+                        else if (!isConsistent) reason = `Variance: ${variance.toFixed(0)}`;
+                        else reason = 'Other conditions';
+                        
+                        voiceStatusDisplay.textContent = reason;
                         voiceIndicator.className = 'voice-indicator noise';
                         voiceIndicator.style.display = 'block';
                     } else {
