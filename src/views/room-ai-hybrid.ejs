@@ -1611,6 +1611,82 @@
                     try {
                         await initializeMediaRecorder();
                         
+                        function setupMediaRecorderHandlers() {
+                            if (!mediaRecorder) {
+                                console.error('[AUDIO] Cannot setup handlers - MediaRecorder is null');
+                                return;
+                            }
+                            
+                            // Clear any existing handlers
+                            mediaRecorder.ondataavailable = null;
+                            mediaRecorder.onstop = null;
+                            mediaRecorder.onerror = null;
+                            
+                            mediaRecorder.ondataavailable = (event) => {
+                                if (event.data.size > 0) {
+                                    console.log(`[AUDIO] Chunk data available, size: ${event.data.size} bytes`);
+                                    
+                                    // Create chunk with overlap if we have previous data
+                                    let chunkData = [event.data];
+                                    if (overlapBuffer.length > 0) {
+                                        // Add 200ms overlap from previous chunk
+                                        chunkData = [...overlapBuffer, event.data];
+                                        console.log('[AUDIO] Added 200ms overlap from previous chunk');
+                                    }
+                                    
+                                    const chunkBlob = new Blob(chunkData, { type: currentMimeType });
+                                    
+                                    // Send chunk immediately for real-time processing
+                                    sendAudioChunk(chunkBlob, false);
+                                    
+                                    // Store last part for next chunk's overlap (simulate 200ms)
+                                    overlapBuffer = [event.data];
+                                }
+                            };
+                            
+                            mediaRecorder.onstop = () => {
+                                console.log('[AUDIO] Recording stopped, sending final chunk if needed');
+                                isRecording = false;
+                                
+                                // Send final marker to indicate end of speech
+                                if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                    const finalMessage = {
+                                        type: 'audio_chunk',
+                                        sessionId: sessionId,
+                                        chunk_sequence: chunkSequence,
+                                        total_chunks: chunkSequence,
+                                        audioData: null, // No data, just end marker
+                                        mimeType: currentMimeType,
+                                        duration: 0,
+                                        overlap: 0,
+                                        timestamp: Date.now()
+                                    };
+                                    console.log('[AUDIO] Sending end-of-speech marker');
+                                    aiWs.send(JSON.stringify(finalMessage));
+                                }
+                                
+                                // Reset for next recording session
+                                chunkSequence = 0;
+                                overlapBuffer = [];
+                            };
+                            
+                            mediaRecorder.onerror = (event) => {
+                                console.error('[AUDIO] MediaRecorder error:', event.error);
+                                // Send error to GPU for debugging
+                                if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                    aiWs.send(JSON.stringify({
+                                        type: 'error',
+                                        error_code: 'AUDIO_002',
+                                        message: 'MediaRecorder error: ' + event.error,
+                                        sessionId: sessionId,
+                                        timestamp: Date.now()
+                                    }));
+                                }
+                            };
+                            
+                            console.log('[AUDIO] ✅ MediaRecorder event handlers setup complete');
+                        }
+                        
                         function sendAudioChunk(audioBlob, isLastChunk = false, retryAttempt = 0) {
                             // Validate audio chunk
                             if (audioBlob.size === 0) {
@@ -1702,67 +1778,8 @@
                             reader.readAsDataURL(audioBlob);
                         }
                         
-                        mediaRecorder.ondataavailable = (event) => {
-                            if (event.data.size > 0) {
-                                console.log(`[AUDIO] Chunk data available, size: ${event.data.size} bytes`);
-                                
-                                // Create chunk with overlap if we have previous data
-                                let chunkData = [event.data];
-                                if (overlapBuffer.length > 0) {
-                                    // Add 200ms overlap from previous chunk
-                                    chunkData = [...overlapBuffer, event.data];
-                                    console.log('[AUDIO] Added 200ms overlap from previous chunk');
-                                }
-                                
-                                const chunkBlob = new Blob(chunkData, { type: currentMimeType });
-                                
-                                // Send chunk immediately for real-time processing
-                                sendAudioChunk(chunkBlob, false);
-                                
-                                // Store last part for next chunk's overlap (simulate 200ms)
-                                overlapBuffer = [event.data];
-                            }
-                        };
-                        
-                        mediaRecorder.onstop = () => {
-                            console.log('[AUDIO] Recording stopped, sending final chunk if needed');
-                            isRecording = false;
-                            
-                            // Send final marker to indicate end of speech
-                            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                                const finalMessage = {
-                                    type: 'audio_chunk',
-                                    sessionId: sessionId,
-                                    chunk_sequence: chunkSequence,
-                                    total_chunks: chunkSequence,
-                                    audioData: null, // No data, just end marker
-                                    mimeType: currentMimeType,
-                                    duration: 0,
-                                    overlap: 0,
-                                    timestamp: Date.now()
-                                };
-                                console.log('[AUDIO] Sending end-of-speech marker');
-                                aiWs.send(JSON.stringify(finalMessage));
-                            }
-                            
-                            // Reset for next recording session
-                            chunkSequence = 0;
-                            overlapBuffer = [];
-                        };
-                        
-                        mediaRecorder.onerror = (event) => {
-                            console.error('[AUDIO] MediaRecorder error:', event.error);
-                            // Send error to GPU for debugging
-                            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                                aiWs.send(JSON.stringify({
-                                    type: 'error',
-                                    error_code: 'AUDIO_002',
-                                    message: 'MediaRecorder error: ' + event.error,
-                                    sessionId: sessionId,
-                                    timestamp: Date.now()
-                                }));
-                            }
-                        };
+                        // Setup initial event handlers
+                        setupMediaRecorderHandlers();
                         
                         console.log('🎤 MediaRecorder initialized successfully');
                         console.log('[AUDIO] Format:', currentMimeType, 'State:', mediaRecorder.state);
@@ -1799,28 +1816,60 @@
                         return;
                     }
                     
+                    console.log('[AUDIO] Current MediaRecorder state:', mediaRecorder.state);
+                    
                     // Force stop any existing recording
                     if (mediaRecorder.state === 'recording') {
-                        console.log('[AUDIO] Forcing stop of existing recording');
+                        console.log('[AUDIO] MediaRecorder already recording, stopping first');
                         mediaRecorder.stop();
                         isRecording = false;
                         
                         // Wait for it to stop, then restart
                         setTimeout(() => {
                             startChunkedRecording();
-                        }, 200);
+                        }, 500);
+                        return;
+                    }
+                    
+                    if (mediaRecorder.state === 'paused') {
+                        console.log('[AUDIO] MediaRecorder paused, resuming');
+                        mediaRecorder.resume();
                         return;
                     }
                     
                     if (mediaRecorder.state !== 'inactive') {
-                        console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state);
-                        return;
+                        console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state, '- recreating MediaRecorder');
+                        
+                        // Recreate MediaRecorder if it's in a bad state
+                        try {
+                            const supportedFormats = audioCapabilities.supported_formats;
+                            for (let i = 0; i < supportedFormats.length; i++) {
+                                const format = supportedFormats[i];
+                                try {
+                                    const options = format === 'audio/wav' ? {} : { mimeType: format };
+                                    mediaRecorder = new MediaRecorder(localStream, options);
+                                    currentMimeType = mediaRecorder.mimeType;
+                                    console.log('[AUDIO] ✅ Recreated MediaRecorder with format:', currentMimeType);
+                                    
+                                    // Re-setup event handlers
+                                    setupMediaRecorderHandlers();
+                                    break;
+                                } catch (error) {
+                                    console.log('[AUDIO] Format', format, 'failed during recreation');
+                                    continue;
+                                }
+                            }
+                        } catch (error) {
+                            console.error('[AUDIO] Failed to recreate MediaRecorder:', error);
+                            return;
+                        }
                     }
                     
                     try {
                         console.log('🎤 Starting chunked audio recording for real-time STT');
                         console.log('[AUDIO] Starting chunked recording - chunks every', chunkDuration + 'ms');
                         console.log('[AUDIO] MediaRecorder state before start:', mediaRecorder.state);
+                        console.log('[AUDIO] MediaRecorder mimeType:', currentMimeType);
                         
                         // Reset chunking state
                         chunkSequence = 0;
@@ -1829,18 +1878,27 @@
                         
                         // Start recording with chunk duration (e.g., 3000ms chunks)
                         mediaRecorder.start(chunkDuration);
-                        console.log('[AUDIO] Chunked recording started successfully');
+                        console.log('[AUDIO] ✅ Chunked recording started successfully');
                         
                     } catch (startError) {
-                        console.error('[AUDIO] Failed to start chunked recording:', startError);
+                        console.error('[AUDIO] ❌ Failed to start chunked recording:', startError);
                         console.log('[AUDIO] Error details:', {
                             name: startError.name,
                             message: startError.message,
                             state: mediaRecorder.state,
                             mimeType: currentMimeType,
-                            chunkDuration: chunkDuration
+                            chunkDuration: chunkDuration,
+                            streamActive: localStream && localStream.active,
+                            audioTracks: localStream ? localStream.getAudioTracks().length : 0
                         });
                         isRecording = false;
+                        
+                        // Try to recreate MediaRecorder for next attempt
+                        setTimeout(async () => {
+                            console.log('[AUDIO] Attempting to recreate MediaRecorder after error...');
+                            await initializeMediaRecorder();
+                            setupMediaRecorderHandlers();
+                        }, 1000);
                     }
                 }
                 
