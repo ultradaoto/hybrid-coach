@@ -1129,7 +1129,7 @@
                 aiWs.send(JSON.stringify(initMessage));
                 
                 // Start ping interval
-                pingInterval = setInterval(sendPing, 30000); // Ping every 30 seconds
+                pingInterval = setInterval(sendPing, 12000); // Ping every 12 seconds (GPU recommends 10-15s)
                 sendPing(); // Send first ping immediately
             };
             
