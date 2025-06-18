@@ -850,12 +850,12 @@
         function detectAudioCapabilities() {
             console.log('[AUDIO] Detecting browser capabilities...');
             
-            // Test formats in order of preference as per GPU recommendations
+            // Test formats in order of WHISPER COMPATIBILITY (prioritizing what Whisper likes)
             const formatTests = [
-                'audio/webm;codecs=opus',  // Chrome, Firefox, Edge preferred
-                'audio/webm',             // If codec fails
-                'audio/mp4',              // Safari preferred
-                'audio/wav'               // Universal fallback
+                'audio/wav',              // Whisper's favorite - universal compatibility
+                'audio/mp4',              // Whisper supports, Safari preferred  
+                'audio/webm',             // Whisper supports, but without Opus codec
+                'audio/webm;codecs=opus'  // Last resort - known Whisper issue
             ];
             
             const capabilities = {};

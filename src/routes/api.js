@@ -85,11 +85,12 @@ router.get('/system/browser-compatibility', (req, res) => {
     browserType = 'edge';
   }
   
-  // Browser-specific compatibility info as recommended by GPU Claude
+  // Browser-specific compatibility info OPTIMIZED FOR WHISPER STT
   const browserCompatibility = {
     chrome: {
-      preferredFormat: "audio/webm;codecs=opus",
-      fallbackFormats: ["audio/webm", "audio/mp4", "audio/wav"],
+      preferredFormat: "audio/wav",
+      fallbackFormats: ["audio/mp4", "audio/webm", "audio/webm;codecs=opus"],
+      whisperCompatible: true,
       chunking: {
         recommended: true,
         chunkSize: 3000,
@@ -98,7 +99,8 @@ router.get('/system/browser-compatibility', (req, res) => {
     },
     safari: {
       preferredFormat: "audio/mp4",
-      fallbackFormats: ["audio/wav", "audio/mp3"],
+      fallbackFormats: ["audio/wav", "audio/webm"],
+      whisperCompatible: true,
       chunking: {
         recommended: true,
         chunkSize: 3000,
@@ -106,8 +108,9 @@ router.get('/system/browser-compatibility', (req, res) => {
       }
     },
     firefox: {
-      preferredFormat: "audio/webm;codecs=opus",
-      fallbackFormats: ["audio/webm", "audio/wav"],
+      preferredFormat: "audio/wav",
+      fallbackFormats: ["audio/mp4", "audio/webm", "audio/webm;codecs=opus"],
+      whisperCompatible: true,
       chunking: {
         recommended: true,
         chunkSize: 3000,
@@ -115,8 +118,9 @@ router.get('/system/browser-compatibility', (req, res) => {
       }
     },
     edge: {
-      preferredFormat: "audio/webm;codecs=opus",
-      fallbackFormats: ["audio/webm", "audio/mp4", "audio/wav"],
+      preferredFormat: "audio/wav",
+      fallbackFormats: ["audio/mp4", "audio/webm", "audio/webm;codecs=opus"],
+      whisperCompatible: true,
       chunking: {
         recommended: true,
         chunkSize: 3000,
@@ -126,27 +130,32 @@ router.get('/system/browser-compatibility', (req, res) => {
     universalFallback: "audio/wav"
   };
   
-  // Format testing steps for client-side implementation
+  // Format testing steps OPTIMIZED FOR WHISPER STT
   const formatTestingSteps = [
     {
       step: 1,
-      format: "audio/webm;codecs=opus",
-      description: "Test WebM with Opus codec (preferred for Chrome/Firefox/Edge)"
+      format: "audio/wav",
+      description: "Test WAV (Whisper's favorite - maximum compatibility)",
+      whisperSupported: true
     },
     {
       step: 2,
-      format: "audio/webm",
-      description: "Test WebM without codec specification (fallback)"
+      format: "audio/mp4",
+      description: "Test MP4 (Whisper supported, Safari preferred)",
+      whisperSupported: true
     },
     {
       step: 3,
-      format: "audio/mp4",
-      description: "Test MP4 (preferred for Safari)"
+      format: "audio/webm",
+      description: "Test WebM without codec (Whisper supported)",
+      whisperSupported: true
     },
     {
       step: 4,
-      format: "audio/wav",
-      description: "Test WAV (universal fallback)"
+      format: "audio/webm;codecs=opus",
+      description: "Test WebM+Opus (known Whisper format issues)",
+      whisperSupported: false,
+      note: "May cause 'Invalid file format' errors in Whisper STT"
     }
   ];
   
