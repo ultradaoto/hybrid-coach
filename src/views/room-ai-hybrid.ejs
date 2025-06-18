@@ -874,8 +874,14 @@
                 
                 // REAL TEST: Try to actually create and start MediaRecorder
                 try {
+                    // Create AUDIO-ONLY stream for testing
+                    const audioOnlyStream = new MediaStream();
+                    localStream.getAudioTracks().forEach(track => {
+                        audioOnlyStream.addTrack(track);
+                    });
+                    
                     const testOptions = format ? { mimeType: format } : {};
-                    const testRecorder = new MediaRecorder(localStream, testOptions);
+                    const testRecorder = new MediaRecorder(audioOnlyStream, testOptions);
                     
                     // Test if we can actually start recording
                     await new Promise((resolve, reject) => {
@@ -1626,13 +1632,20 @@
                             throw new Error('No working MediaRecorder formats found during testing');
                         }
                         
+                        // Create AUDIO-ONLY stream from local stream
+                        const audioOnlyStream = new MediaStream();
+                        localStream.getAudioTracks().forEach(track => {
+                            audioOnlyStream.addTrack(track);
+                        });
+                        console.log(`[AUDIO] 🎵 Created audio-only stream with ${audioOnlyStream.getAudioTracks().length} audio tracks`);
+                        
                         // Use the first (preferred) working format
                         const bestFormat = workingFormats[0];
                         console.log(`[AUDIO] 🎯 Using PROVEN working format: ${bestFormat.name} (${bestFormat.actualFormat})`);
                         
                         try {
                             const options = bestFormat.requestedFormat ? { mimeType: bestFormat.requestedFormat } : {};
-                            mediaRecorder = new MediaRecorder(localStream, options);
+                            mediaRecorder = new MediaRecorder(audioOnlyStream, options);
                             currentMimeType = mediaRecorder.mimeType;
                             
                             console.log(`[AUDIO] ✅ MediaRecorder created with tested format`);
@@ -1894,9 +1907,15 @@
                         // Recreate MediaRecorder using TESTED working formats
                         try {
                             if (workingFormats.length > 0) {
+                                // Create fresh audio-only stream
+                                const audioOnlyStream = new MediaStream();
+                                localStream.getAudioTracks().forEach(track => {
+                                    audioOnlyStream.addTrack(track);
+                                });
+                                
                                 const bestFormat = workingFormats[0];
                                 const options = bestFormat.requestedFormat ? { mimeType: bestFormat.requestedFormat } : {};
-                                mediaRecorder = new MediaRecorder(localStream, options);
+                                mediaRecorder = new MediaRecorder(audioOnlyStream, options);
                                 currentMimeType = mediaRecorder.mimeType;
                                 console.log('[AUDIO] ✅ Recreated MediaRecorder with tested format:', currentMimeType);
                                 
