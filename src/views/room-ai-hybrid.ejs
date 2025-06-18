@@ -887,7 +887,7 @@
         // Cache audio capabilities to avoid re-testing on reconnections
         let cachedAudioCapabilities = null;
         
-        // REAL MediaRecorder testing - don't trust isTypeSupported()!
+        // Enhanced MediaRecorder testing with better fallbacks
         async function detectAudioCapabilities() {
             // Return cached results if we already tested
             if (cachedAudioCapabilities) {
@@ -896,80 +896,130 @@
                 return cachedAudioCapabilities;
             }
             
-            console.log('[AUDIO] 🧪 REAL MediaRecorder testing (not trusting isTypeSupported)...');
+            console.log('[AUDIO] 🧪 Enhanced MediaRecorder testing with fallbacks...');
             
-            // Test formats in order of WHISPER COMPATIBILITY 
+            // Check environment first
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                console.error('[AUDIO] ❌ MediaRecorder requires HTTPS or localhost');
+                throw new Error('MediaRecorder requires secure context (HTTPS)');
+            }
+            
+            // Check microphone permissions
+            try {
+                const permissions = await navigator.permissions.query({name: 'microphone'});
+                console.log('[AUDIO] Microphone permission status:', permissions.state);
+                if (permissions.state === 'denied') {
+                    throw new Error('Microphone permission denied');
+                }
+            } catch (permError) {
+                console.log('[AUDIO] Could not check permissions (may be unsupported):', permError.message);
+            }
+            
+            // Enhanced format list with broader fallbacks
             const formatTests = [
-                { format: null, name: 'browser-default' },           // Let browser choose (most reliable)
-                { format: 'audio/webm', name: 'webm' },             // Usually works, Whisper supported
-                { format: 'audio/mp4', name: 'mp4' },               // Whisper likes, but often fails
-                { format: 'audio/wav', name: 'wav' },               // Whisper's favorite, rarely supported
-                { format: 'audio/webm;codecs=opus', name: 'webm-opus' }  // Last resort
+                { format: null, name: 'browser-default' },                    // Let browser choose (most reliable)
+                { format: 'audio/webm', name: 'webm' },                      // Usually works, Whisper supported
+                { format: 'audio/webm;codecs=opus', name: 'webm-opus' },     // Explicit codec
+                { format: 'audio/mp4', name: 'mp4' },                        // Whisper likes, but often fails
+                { format: 'audio/wav', name: 'wav' },                        // Whisper's favorite, rarely supported
+                { format: 'audio/ogg', name: 'ogg' },                        // Firefox fallback
+                { format: 'audio/ogg;codecs=opus', name: 'ogg-opus' }        // Firefox with codec
             ];
             
             const workingFormats = [];
             let preferredFormat = null;
             
+            // Progressive format testing - test one by one and use first working
             for (const test of formatTests) {
                 const { format, name } = test;
                 console.log(`[AUDIO] 🧪 Testing ${name} (${format || 'default'})...`);
                 
-                // First check isTypeSupported (quick filter)
-                if (format && !MediaRecorder.isTypeSupported(format)) {
-                    console.log(`[AUDIO] ❌ ${name} - isTypeSupported says no`);
-                    continue;
+                // First check isTypeSupported (quick filter) - but don't fail if browser doesn't support this check
+                if (format) {
+                    try {
+                        if (!MediaRecorder.isTypeSupported(format)) {
+                            console.log(`[AUDIO] ❌ ${name} - isTypeSupported says no`);
+                            continue;
+                        }
+                    } catch (supportError) {
+                        console.log(`[AUDIO] ⚠️ ${name} - isTypeSupported check failed, trying anyway:`, supportError.message);
+                    }
                 }
                 
                 // REAL TEST: Try to actually create and start MediaRecorder
                 try {
+                    // Ensure we have a valid audio stream
+                    if (!localStream || localStream.getAudioTracks().length === 0) {
+                        console.log(`[AUDIO] ❌ No audio stream available for testing`);
+                        throw new Error('No audio stream available');
+                    }
+                    
                     // Create AUDIO-ONLY stream for testing
                     const audioOnlyStream = new MediaStream();
-                    localStream.getAudioTracks().forEach(track => {
+                    const audioTracks = localStream.getAudioTracks();
+                    if (audioTracks.length === 0) {
+                        throw new Error('No audio tracks in stream');
+                    }
+                    
+                    audioTracks.forEach(track => {
                         audioOnlyStream.addTrack(track);
                     });
+                    
+                    console.log(`[AUDIO] Testing with ${audioTracks.length} audio tracks`);
                     
                     const testOptions = format ? { mimeType: format } : {};
                     const testRecorder = new MediaRecorder(audioOnlyStream, testOptions);
                     
                     // Test if we can actually start recording
-                    await new Promise((resolve, reject) => {
+                    const actualMimeType = await new Promise((resolve, reject) => {
                         let testStarted = false;
+                        let timeoutId = null;
+                        
+                        const cleanup = () => {
+                            if (timeoutId) clearTimeout(timeoutId);
+                        };
                         
                         testRecorder.onstart = () => {
                             testStarted = true;
                             console.log(`[AUDIO] ✅ ${name} - MediaRecorder.start() SUCCESS!`);
-                            testRecorder.stop(); // Stop immediately
+                            setTimeout(() => {
+                                if (testRecorder.state === 'recording') {
+                                    testRecorder.stop();
+                                }
+                            }, 100); // Stop very quickly
                         };
                         
                         testRecorder.onstop = () => {
+                            cleanup();
                             if (testStarted) {
                                 resolve(testRecorder.mimeType);
                             } else {
-                                reject(new Error('Never started'));
+                                reject(new Error('Recording never started'));
                             }
                         };
                         
                         testRecorder.onerror = (event) => {
-                            reject(new Error(`MediaRecorder error: ${event.error}`));
+                            cleanup();
+                            reject(new Error(`MediaRecorder error: ${event.error || 'Unknown error'}`));
                         };
                         
-                        // Try to start
+                        // Try to start recording
                         try {
-                            testRecorder.start(100); // Very short test
+                            testRecorder.start(100); // Very short test chunk
                         } catch (startError) {
+                            cleanup();
                             reject(startError);
                         }
                         
-                        // Timeout after 2 seconds
-                        setTimeout(() => {
+                        // Timeout after 3 seconds
+                        timeoutId = setTimeout(() => {
                             if (!testStarted) {
-                                reject(new Error('Start timeout'));
+                                reject(new Error('Recording start timeout'));
                             }
-                        }, 2000);
+                        }, 3000);
                     });
                     
                     // If we get here, it works!
-                    const actualMimeType = testRecorder.mimeType;
                     workingFormats.push({
                         requestedFormat: format,
                         actualFormat: actualMimeType,
@@ -978,12 +1028,14 @@
                     
                     if (!preferredFormat) {
                         preferredFormat = actualMimeType;
+                        console.log(`[AUDIO] 🎯 ${name} WORKS! Using as preferred format: ${actualMimeType}`);
+                        // Break early - use first working format
+                        break;
                     }
-                    
-                    console.log(`[AUDIO] 🎯 ${name} WORKS! Actual format: ${actualMimeType}`);
                     
                 } catch (error) {
                     console.log(`[AUDIO] ❌ ${name} FAILED:`, error.message);
+                    // Continue to next format
                 }
             }
             
@@ -1003,6 +1055,41 @@
             console.log(`[AUDIO] 🎯 Browser: ${browserInfo}`);
             console.log(`[AUDIO] 🎯 Preferred (first working): ${preferredFormat}`);
             console.log(`[AUDIO] 🎯 All working formats:`, workingFormats);
+            
+            // Handle case where no formats work
+            if (!preferredFormat || workingFormats.length === 0) {
+                console.error('[AUDIO] ❌ No working MediaRecorder formats found!');
+                console.log('[AUDIO] 🩺 Diagnostics:');
+                console.log('  - Protocol:', location.protocol);
+                console.log('  - Hostname:', location.hostname);
+                console.log('  - MediaRecorder available:', typeof MediaRecorder !== 'undefined');
+                console.log('  - Audio tracks:', localStream ? localStream.getAudioTracks().length : 'No stream');
+                console.log('  - Browser:', browserInfo);
+                
+                // Try one last fallback with minimal options
+                try {
+                    console.log('[AUDIO] 🔄 Attempting final fallback...');
+                    const fallbackRecorder = new MediaRecorder(localStream);
+                    const fallbackFormat = fallbackRecorder.mimeType;
+                    console.log('[AUDIO] ✅ Final fallback works:', fallbackFormat);
+                    
+                    cachedAudioCapabilities = {
+                        preferred_format: fallbackFormat,
+                        working_formats: [{ requestedFormat: null, actualFormat: fallbackFormat, name: 'final-fallback' }],
+                        browser_info: browserInfo,
+                        chunk_duration: 3000,
+                        sample_rate: 48000,
+                        tested_real_recording: false,
+                        fallback_used: true
+                    };
+                    
+                    return cachedAudioCapabilities;
+                    
+                } catch (finalError) {
+                    console.error('[AUDIO] ❌ Final fallback also failed:', finalError.message);
+                    throw new Error('No working MediaRecorder formats found during testing');
+                }
+            }
             
             // Cache results for future use (avoid re-testing on reconnections)
             cachedAudioCapabilities = {
@@ -1163,18 +1250,43 @@
                 updateConnectionState('connected');
                 
                 // Initialize AI session with audio capabilities
-                const audioCapabilities = detectAudioCapabilities();
-                const initMessage = {
-                    type: 'init_session',
-                    sessionId: sessionId,
-                    roomId: roomId,
-                    userId: userId,
-                    userRole: userRole,
-                    audio_capabilities: audioCapabilities
-                };
-                console.log('[AI-WS] Sending to GPU:', JSON.stringify(initMessage));
-                console.log('[AI-WS] Audio capabilities:', audioCapabilities);
-                aiWs.send(JSON.stringify(initMessage));
+                try {
+                    const audioCapabilities = await detectAudioCapabilities();
+                    const initMessage = {
+                        type: 'init_session',
+                        sessionId: sessionId,
+                        roomId: roomId,
+                        userId: userId,
+                        userRole: userRole,
+                        audio_capabilities: audioCapabilities
+                    };
+                    console.log('[AI-WS] Sending to GPU:', JSON.stringify(initMessage));
+                    console.log('[AI-WS] Audio capabilities:', audioCapabilities);
+                    aiWs.send(JSON.stringify(initMessage));
+                } catch (audioError) {
+                    console.error('[AI-WS] Audio capabilities detection failed:', audioError.message);
+                    
+                    // Send initialization without audio capabilities
+                    const initMessage = {
+                        type: 'init_session',
+                        sessionId: sessionId,
+                        roomId: roomId,
+                        userId: userId,
+                        userRole: userRole,
+                        audio_capabilities: {
+                            preferred_format: null,
+                            working_formats: [],
+                            browser_info: 'unknown',
+                            error: audioError.message,
+                            audio_disabled: true
+                        }
+                    };
+                    console.log('[AI-WS] Sending to GPU (audio disabled):', JSON.stringify(initMessage));
+                    aiWs.send(JSON.stringify(initMessage));
+                    
+                    // Update status to inform user
+                    updateStatus('Audio recording disabled - text responses only', 'warning');
+                }
                 
                 // Start ping interval
                 pingInterval = setInterval(sendPing, 8000); // Ping every 8 seconds (more frequent communication)
@@ -1774,6 +1886,7 @@
                     
                     try {
                         await initializeMediaRecorder();
+                        console.log('🎤 MediaRecorder initialized successfully for audio detection');
                         
                         function setupMediaRecorderHandlers() {
                             if (!mediaRecorder) {
@@ -1999,7 +2112,15 @@
                         
                     } catch (error) {
                         console.error('[AUDIO] MediaRecorder initialization failed:', error);
+                        console.log('[AUDIO] Audio recording will be disabled for this session');
                         mediaRecorder = null;
+                        
+                        // Update voice indicator to show audio disabled
+                        if (voiceStatusDisplay) {
+                            voiceStatusDisplay.textContent = 'Audio Recording Disabled';
+                            voiceIndicator.className = 'voice-indicator noise';
+                            voiceIndicator.style.display = 'block';
+                        }
                         
                         // Send error to GPU
                         if (aiWs && aiWs.readyState === WebSocket.OPEN) {
@@ -2011,6 +2132,9 @@
                                 timestamp: Date.now()
                             }));
                         }
+                        
+                        // Continue with audio detection even without recording
+                        console.log('[AUDIO] Continuing with visual audio detection only');
                     }
                     
                     microphone.connect(analyser);
