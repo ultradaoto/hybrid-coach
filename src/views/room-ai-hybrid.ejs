@@ -1244,7 +1244,7 @@
                 return;
             }
             
-            aiWs.onopen = () => {
+            aiWs.onopen = async () => {
                 console.log('[AI-WS] GPU connection status: SUCCESS');
                 console.log('[AI-WS] WebSocket readyState:', aiWs.readyState);
                 updateConnectionState('connected');
