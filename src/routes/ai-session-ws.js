@@ -61,10 +61,17 @@ export function setupAISessionWebSocket(server) {
         // Proxy messages from client to GPU server
         clientWs.on('message', (data) => {
             if (gpuWs.readyState === WebSocket.OPEN && gpuConnected) {
-                log(`Proxying message to GPU: ${data.toString().substring(0, 100)}...`);
+                const dataStr = data.toString();
+                if (dataStr.includes('tts_keepalive')) {
+                    log(`📡 Proxying TTS keepalive to GPU`);
+                } else {
+                    log(`Proxying message to GPU: ${dataStr.substring(0, 100)}...`);
+                }
                 gpuWs.send(data);
             } else {
-                log(`Cannot proxy message - GPU state: ${gpuWs.readyState}, connected: ${gpuConnected}`);
+                log(`❌ Cannot proxy message - GPU state: ${gpuWs.readyState}, connected: ${gpuConnected}`);
+                log(`❌ Message attempted: ${data.toString().substring(0, 50)}...`);
+                
                 // Send error back to client
                 if (clientWs.readyState === WebSocket.OPEN) {
                     clientWs.send(JSON.stringify({
@@ -78,8 +85,27 @@ export function setupAISessionWebSocket(server) {
         // Proxy messages from GPU server to client
         gpuWs.on('message', (data) => {
             if (clientWs.readyState === WebSocket.OPEN) {
-                log(`Proxying message from GPU: ${data.toString().substring(0, 100)}...`);
+                const dataStr = data.toString();
+                const isLargeMessage = dataStr.length > 10000;
+                
+                if (isLargeMessage) {
+                    // Likely audio data - log differently
+                    log(`Proxying LARGE message from GPU: ${dataStr.length} chars (likely audio)`);
+                    try {
+                        const parsed = JSON.parse(dataStr);
+                        if (parsed.type === 'ai_audio_data') {
+                            log(`🔊 Proxying ElevenLabs audio: ${parsed.audioData?.length || 0} base64 chars`);
+                        }
+                    } catch (e) {
+                        log(`Large message parse failed, sending raw data`);
+                    }
+                } else {
+                    log(`Proxying message from GPU: ${dataStr.substring(0, 100)}...`);
+                }
+                
                 clientWs.send(data);
+            } else {
+                log(`❌ Cannot proxy GPU message - client WebSocket not open: ${clientWs.readyState}`);
             }
         });
         
@@ -107,11 +133,24 @@ export function setupAISessionWebSocket(server) {
         });
         
         gpuWs.on('close', (code, reason) => {
-            log(`GPU connection closed for session: ${sessionId}, code: ${code}, reason: ${reason}`);
+            log(`❌ GPU connection closed for session: ${sessionId}, code: ${code}, reason: ${reason}`);
+            log(`❌ GPU close event - was connected: ${gpuConnected}, client state: ${clientWs.readyState}`);
             gpuConnected = false;
             
+            // Notify client about GPU disconnection
             if (clientWs.readyState === WebSocket.OPEN) {
-                clientWs.close();
+                clientWs.send(JSON.stringify({
+                    type: 'websocket_disconnected',
+                    reason: `GPU disconnected: code ${code}`,
+                    timestamp: new Date().toISOString()
+                }));
+                
+                // Don't close client immediately - let it attempt reconnection
+                setTimeout(() => {
+                    if (clientWs.readyState === WebSocket.OPEN) {
+                        clientWs.close();
+                    }
+                }, 5000); // 5 second grace period
             }
         });
         

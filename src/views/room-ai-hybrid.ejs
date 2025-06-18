@@ -1483,6 +1483,14 @@
                     updateStatus('GPU configuring chunked audio processing...', 'warning');
                     break;
                     
+                case 'AUDIO_006': // Empty audio chunk - reduce spam
+                    // Only log occasionally to avoid console spam
+                    if (Math.random() < 0.1) { // 10% chance to log
+                        console.log('[AUDIO] Empty chunk detected by GPU - filtering audio more strictly');
+                    }
+                    // Don't update status for this common error
+                    return; // Skip the full error logging below
+                    
                 case 'STT_001': // Transcription failed
                     console.error('[ERROR] Speech transcription failed');
                     updateStatus('Speech recognition failed', 'warning');
@@ -1503,8 +1511,10 @@
                     updateStatus('AI system error: ' + message, 'error');
             }
             
-            // Log error for debugging
-            console.log('[ERROR] Full error details:', errorData);
+            // Log error for debugging (skip for AUDIO_006)
+            if (code !== 'AUDIO_006') {
+                console.log('[ERROR] Full error details:', errorData);
+            }
         }
 
         function handleAIMessage(data) {
@@ -2464,6 +2474,12 @@
                             // Check if chunk was already acknowledged (in case of race conditions)
                             if (acknowledgedChunks.has(chunkSequence)) {
                                 console.log(`[AUDIO] Chunk ${chunkSequence} already acknowledged, skipping send`);
+                                return;
+                            }
+                            
+                            // Additional check: Don't send if this chunk sequence was already processed
+                            if (chunkSequence === 0 && acknowledgedChunks.size > 0) {
+                                console.log(`[AUDIO] Skipping duplicate chunk 0 - session already processed`);
                                 return;
                             }
                             
