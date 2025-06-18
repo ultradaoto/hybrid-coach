@@ -849,7 +849,8 @@
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const aiWsUrl = `${protocol}//${window.location.host}/ai-session/${sessionId}`;
             
-            console.log('Connecting to AI WebSocket (via CPU proxy):', aiWsUrl);
+            console.log('[AI-WS] Connecting to GPU server via CPU proxy:', aiWsUrl);
+            console.log('[AI-WS] Session ID:', sessionId);
             
             try {
                 aiWs = new WebSocket(aiWsUrl);
@@ -860,33 +861,47 @@
             }
             
             aiWs.onopen = () => {
-                console.log('AI WebSocket connected');
+                console.log('[AI-WS] GPU connection status: SUCCESS');
+                console.log('[AI-WS] WebSocket readyState:', aiWs.readyState);
                 updateStatus('AI system connected', 'success');
                 
                 // Initialize AI session
-                aiWs.send(JSON.stringify({
+                const initMessage = {
                     type: 'init_session',
                     sessionId: sessionId,
                     roomId: roomId,
                     userId: userId,
                     userRole: userRole
-                }));
+                };
+                console.log('[AI-WS] Sending to GPU:', JSON.stringify(initMessage));
+                aiWs.send(JSON.stringify(initMessage));
             };
             
             aiWs.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                handleAIMessage(data);
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('[AI-WS] Received from GPU:', JSON.stringify(data));
+                    handleAIMessage(data);
+                } catch (error) {
+                    console.error('[AI-WS] Error parsing GPU message:', error);
+                    console.log('[AI-WS] Raw message:', event.data);
+                }
             };
             
             aiWs.onerror = (error) => {
-                console.error('AI WebSocket error:', error);
+                console.error('[AI-WS] GPU connection error:', error);
+                console.log('[AI-WS] Error type:', error.type);
+                console.log('[AI-WS] WebSocket readyState at error:', aiWs.readyState);
                 updateStatus('AI connection error - running in demo mode', 'warning');
                 // Enable demo mode
                 aiWs = null;
                 enableDemoMode();
             };
             
-            aiWs.onclose = () => {
+            aiWs.onclose = (event) => {
+                console.log('[AI-WS] GPU disconnected, reason:', event.reason);
+                console.log('[AI-WS] Close code:', event.code);
+                console.log('[AI-WS] Was clean close:', event.wasClean);
                 updateStatus('AI disconnected - running in demo mode', 'warning');
                 aiWs = null;
                 enableDemoMode();
@@ -905,7 +920,8 @@
         }
 
         function handleAIMessage(data) {
-            console.log('AI Message:', data);
+            console.log('[AI-WS] Processing GPU message type:', data.type);
+            console.log('[AI-WS] Full message:', JSON.stringify(data));
             
             switch (data.type) {
                 case 'session_ready':
@@ -1190,14 +1206,17 @@
                             
                             // Notify AI system of client speaking
                             if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                                console.log('Sending client_speaking_detected to AI WebSocket');
-                                aiWs.send(JSON.stringify({
+                                const speakingMessage = {
                                     type: 'client_speaking_detected',
                                     sessionId: sessionId,
                                     volume: average
-                                }));
+                                };
+                                console.log('[AI-WS] Sending to GPU:', JSON.stringify(speakingMessage));
+                                console.log('[AI-WS] WebSocket readyState:', aiWs.readyState);
+                                aiWs.send(JSON.stringify(speakingMessage));
                             } else {
-                                console.log('AI WebSocket not available for sending client speech');
+                                console.log('[AI-WS] Cannot send - WebSocket not ready. State:', aiWs ? aiWs.readyState : 'null');
+                                console.log('[AI-WS] WebSocket states: CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3');
                             }
                         }
                     } else if (isSpeaking && !silenceTimer) {
@@ -1254,6 +1273,15 @@
         
         // Demo mode completely removed - using real speech detection only
         console.log('AI room initialized - ready for real speech interaction');
+        console.log('');
+        console.log('🔍 DEBUGGING INFO:');
+        console.log('Look for these key log messages:');
+        console.log('  [AI-WS] Connecting to GPU server via CPU proxy: [URL]');
+        console.log('  [AI-WS] GPU connection status: SUCCESS');
+        console.log('  [AI-WS] Sending to GPU: {"type":"client_speaking_detected"...}');
+        console.log('  [AI-WS] Received from GPU: {"type":"client_speaking"...}');
+        console.log('  [AI-WS] GPU disconnected, reason: [reason]');
+        console.log('');
     </script>
 </body>
 </html>
