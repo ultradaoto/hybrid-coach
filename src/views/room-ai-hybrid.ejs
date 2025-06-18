@@ -1741,6 +1741,57 @@
                 const SILENCE_THRESHOLD = 1000; // 1 second of silence before considering speech ended
                 const SPEECH_COOLDOWN = 2000; // 2 seconds cooldown between speeches
                 
+                function startChunkedRecording() {
+                    if (!mediaRecorder) {
+                        console.log('[AUDIO] MediaRecorder not available');
+                        return;
+                    }
+                    
+                    // Force stop any existing recording
+                    if (mediaRecorder.state === 'recording') {
+                        console.log('[AUDIO] Forcing stop of existing recording');
+                        mediaRecorder.stop();
+                        isRecording = false;
+                        
+                        // Wait for it to stop, then restart
+                        setTimeout(() => {
+                            startChunkedRecording();
+                        }, 200);
+                        return;
+                    }
+                    
+                    if (mediaRecorder.state !== 'inactive') {
+                        console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state);
+                        return;
+                    }
+                    
+                    try {
+                        console.log('🎤 Starting chunked audio recording for real-time STT');
+                        console.log('[AUDIO] Starting chunked recording - chunks every', chunkDuration + 'ms');
+                        console.log('[AUDIO] MediaRecorder state before start:', mediaRecorder.state);
+                        
+                        // Reset chunking state
+                        chunkSequence = 0;
+                        overlapBuffer = [];
+                        isRecording = true;
+                        
+                        // Start recording with chunk duration (e.g., 3000ms chunks)
+                        mediaRecorder.start(chunkDuration);
+                        console.log('[AUDIO] Chunked recording started successfully');
+                        
+                    } catch (startError) {
+                        console.error('[AUDIO] Failed to start chunked recording:', startError);
+                        console.log('[AUDIO] Error details:', {
+                            name: startError.name,
+                            message: startError.message,
+                            state: mediaRecorder.state,
+                            mimeType: currentMimeType,
+                            chunkDuration: chunkDuration
+                        });
+                        isRecording = false;
+                    }
+                }
+                
                 function detectSpeaking() {
                     analyser.getByteFrequencyData(dataArray);
                     const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
@@ -1761,50 +1812,7 @@
                             
                             // Start chunked recording if available
                             if (mediaRecorder && !isRecording) {
-                                // Stop any existing recording first
-                                if (mediaRecorder.state === 'recording') {
-                                    console.log('[AUDIO] MediaRecorder already recording, stopping first');
-                                    mediaRecorder.stop();
-                                    // Wait a moment for it to stop
-                                    setTimeout(() => {
-                                        if (mediaRecorder.state === 'inactive') {
-                                            startChunkedRecording();
-                                        }
-                                    }, 100);
-                                    return;
-                                }
-                                
-                                if (mediaRecorder.state === 'inactive') {
-                                    startChunkedRecording();
-                                }
-                            }
-                            
-                            function startChunkedRecording() {
-                                try {
-                                    console.log('🎤 Starting chunked audio recording for real-time STT');
-                                    console.log('[AUDIO] Starting chunked recording - chunks every', chunkDuration + 'ms');
-                                    console.log('[AUDIO] MediaRecorder state before start:', mediaRecorder.state);
-                                    
-                                    // Reset chunking state
-                                    chunkSequence = 0;
-                                    overlapBuffer = [];
-                                    isRecording = true;
-                                    
-                                    // Start recording with chunk duration (e.g., 3000ms chunks)
-                                    mediaRecorder.start(chunkDuration);
-                                    console.log('[AUDIO] Chunked recording started successfully');
-                                    
-                                } catch (startError) {
-                                    console.error('[AUDIO] Failed to start chunked recording:', startError);
-                                    console.log('[AUDIO] Error details:', {
-                                        name: startError.name,
-                                        message: startError.message,
-                                        state: mediaRecorder.state,
-                                        mimeType: currentMimeType,
-                                        chunkDuration: chunkDuration
-                                    });
-                                    isRecording = false;
-                                }
+                                startChunkedRecording();
                             }
                             
                             // NOTE: Removed client_speaking_detected message to avoid triggering GPU mock mode
