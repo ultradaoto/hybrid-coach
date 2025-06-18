@@ -886,100 +886,102 @@
             };
         }
 
-        function initializeAIConnection() {
-            // Connection state management variables
-            let connectionState = 'connecting';
-            let missedPings = 0;
-            let lastPingTime = 0;
-            let pingInterval = null;
-            let connectionTimeout = null;
-            let reconnectAttempts = 0;
-            let maxReconnectAttempts = 5;
+        // Global connection management variables
+        let connectionState = 'disconnected';
+        let missedPings = 0;
+        let lastPingTime = 0;
+        let pingInterval = null;
+        let connectionTimeout = null;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 5;
+        
+        function updateConnectionState(newState) {
+            console.log('[AI-WS] Connection state:', connectionState, '->', newState);
+            connectionState = newState;
             
-            function updateConnectionState(newState) {
-                console.log('[AI-WS] Connection state:', connectionState, '->', newState);
-                connectionState = newState;
-                
-                // Update UI status based on connection state
-                switch (newState) {
-                    case 'connected':
-                        updateStatus('AI system connected', 'success');
-                        break;
-                    case 'reconnecting':
-                        updateStatus('AI reconnecting...', 'warning');
-                        break;
-                    case 'disconnected':
-                        updateStatus('AI disconnected - running in demo mode', 'warning');
-                        break;
-                }
+            // Update UI status based on connection state
+            switch (newState) {
+                case 'connected':
+                    updateStatus('AI system connected', 'success');
+                    break;
+                case 'reconnecting':
+                    updateStatus('AI reconnecting...', 'warning');
+                    break;
+                case 'disconnected':
+                    updateStatus('AI disconnected - running in demo mode', 'warning');
+                    break;
             }
-            
-            function sendPing() {
-                if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                    lastPingTime = Date.now();
-                    aiWs.send(JSON.stringify({
-                        type: 'ping',
-                        sessionId: sessionId,
-                        timestamp: lastPingTime
-                    }));
-                    console.log('[AI-WS] Sent keep-alive ping #' + (missedPings + 1));
+        }
+        
+        function sendPing() {
+            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                lastPingTime = Date.now();
+                aiWs.send(JSON.stringify({
+                    type: 'ping',
+                    sessionId: sessionId,
+                    timestamp: lastPingTime
+                }));
+                console.log('[AI-WS] Sent keep-alive ping #' + (missedPings + 1));
+                
+                // Set timeout for pong response
+                connectionTimeout = setTimeout(() => {
+                    missedPings++;
+                    console.log('[AI-WS] Ping timeout - missed pings:', missedPings);
                     
-                    // Set timeout for pong response
-                    connectionTimeout = setTimeout(() => {
-                        missedPings++;
-                        console.log('[AI-WS] Ping timeout - missed pings:', missedPings);
-                        
-                        if (missedPings >= 3) {
-                            console.log('[AI-WS] 3 missed pings - connection considered lost');
-                            updateConnectionState('disconnected');
-                            clearInterval(pingInterval);
-                            if (aiWs) {
-                                aiWs.close();
-                            }
+                    if (missedPings >= 3) {
+                        console.log('[AI-WS] 3 missed pings - connection considered lost');
+                        updateConnectionState('disconnected');
+                        clearInterval(pingInterval);
+                        if (aiWs) {
+                            aiWs.close();
                         }
-                    }, 10000); // 10 second timeout for pong response
-                } else {
-                    console.log('[AI-WS] Cannot send ping - WebSocket not open');
-                    clearInterval(pingInterval);
-                }
+                    }
+                }, 10000); // 10 second timeout for pong response
+            } else {
+                console.log('[AI-WS] Cannot send ping - WebSocket not open');
+                clearInterval(pingInterval);
+            }
+        }
+        
+        function handlePong() {
+            console.log('[AI-WS] Received pong from GPU - connection alive');
+            // Reset ping tracking
+            missedPings = 0;
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
+            if (connectionState !== 'connected') {
+                updateConnectionState('connected');
+            }
+            // Reset reconnect attempts on successful connection
+            reconnectAttempts = 0;
+        }
+        
+        function attemptReconnection(reason = 'unknown') {
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                console.log('[AI-WS] Max reconnection attempts reached, giving up');
+                updateConnectionState('disconnected');
+                enableDemoMode();
+                return;
             }
             
-            function handlePong() {
-                console.log('[AI-WS] Received pong from GPU - connection alive');
-                // Reset ping tracking
-                missedPings = 0;
-                if (connectionTimeout) {
-                    clearTimeout(connectionTimeout);
-                    connectionTimeout = null;
-                }
-                if (connectionState !== 'connected') {
-                    updateConnectionState('connected');
-                }
-                // Reset reconnect attempts on successful connection
-                reconnectAttempts = 0;
-            }
+            reconnectAttempts++;
+            // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000);
             
-            function attemptReconnection(reason = 'unknown') {
-                if (reconnectAttempts >= maxReconnectAttempts) {
-                    console.log('[AI-WS] Max reconnection attempts reached, giving up');
-                    updateConnectionState('disconnected');
-                    enableDemoMode();
-                    return;
-                }
-                
-                reconnectAttempts++;
-                // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000);
-                
-                console.log(`[AI-WS] Reconnection attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${delay}ms (reason: ${reason})`);
-                updateConnectionState('reconnecting');
-                
-                setTimeout(() => {
-                    console.log('[AI-WS] Attempting to reconnect to AI system');
-                    aiWs = null;
-                    initializeAIConnection(); // Recursive reconnect
-                }, delay);
-            }
+            console.log(`[AI-WS] Reconnection attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${delay}ms (reason: ${reason})`);
+            updateConnectionState('reconnecting');
+            
+            setTimeout(() => {
+                console.log('[AI-WS] Attempting to reconnect to AI system');
+                aiWs = null;
+                initializeAIConnection(); // Recursive reconnect
+            }, delay);
+        }
+
+        function initializeAIConnection() {
+            connectionState = 'connecting';
             
             // Connect through CPU server proxy to GPU server
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
