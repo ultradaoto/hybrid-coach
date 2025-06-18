@@ -15,7 +15,8 @@
       "Bash(grep:*)",
       "Bash(curl:*)",
       "Bash(pkill:*)",
-      "Bash(killall:*)"
+      "Bash(killall:*)",
+      "Bash(rg:*)"
     ],
     "deny": []
   }

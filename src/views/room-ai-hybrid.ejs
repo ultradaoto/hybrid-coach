@@ -658,6 +658,15 @@
                     Waiting for client input...
                 </div>
             </div>
+
+            <!-- 🚀 STREAMING OPTIMIZATION: Performance Dashboard -->
+            <div class="performance-dashboard" style="background: #2a2a2a; border-radius: 6px; padding: 15px; margin-top: 15px; border: 1px solid #404040;">
+                <h4 style="color: #17a2b8; margin-bottom: 10px; font-size: 0.9rem;">⚡ Streaming Performance</h4>
+                <div id="performance-panel" style="font-size: 12px; color: #ccc;">
+                    <div class="performance-metric">Streaming mode ready - waiting for conversation</div>
+                </div>
+                <div id="progress-indicator" style="font-size: 11px; color: #ffc107; margin-top: 5px; min-height: 16px;"></div>
+            </div>
         </div>
         <% } %>
     </div>
@@ -668,7 +677,11 @@
         <div>🔊 Voice: <span id="voiceStatus">Listening...</span></div>
     </div>
 
-    <script>
+    <script type="module">
+        // 🚀 STREAMING OPTIMIZATION SERVICES - Import ES6 modules
+        import { SentenceProcessor } from '/src/services/sentenceProcessor.js';
+        import { StreamingAudioPlayer } from '/src/services/streamingAudioPlayer.js';
+        
         // Configuration
         const roomId = "<%= roomId %>";
         const sessionId = "<%= sessionId %>";
@@ -690,6 +703,51 @@
         let chunkRetryAttempts = new Map(); // Track retry attempts for chunks
         let chunkRetryTimeouts = new Map(); // Track retry timeouts for chunks
         let acknowledgedChunks = new Set(); // Track successfully processed chunks
+        
+        // 🚀 STREAMING OPTIMIZATION: Initialize services
+        function initializeStreamingServices() {
+            console.log('[STREAMING] 🚀 Initializing streaming optimization services...');
+            
+            // Initialize sentence processor
+            sentenceProcessor = new SentenceProcessor({
+                minLength: 20,
+                maxLength: 150,
+                sessionId: sessionId
+            });
+            
+            // Initialize streaming audio player
+            streamingAudioPlayer = new StreamingAudioPlayer({
+                transitionGap: 25,        // 25ms between sentences
+                fadeInDuration: 0.01,     // 10ms fade-in
+                maxQueueSize: 10,         // Prevent memory issues
+                playbackTimeout: 5000     // 5s timeout per chunk
+            });
+            
+            // Initialize performance monitor
+            performanceMonitor = new PerformanceMonitor();
+            
+            // Set up streaming player callbacks
+            streamingAudioPlayer.setCallbacks(
+                (latency) => {
+                    // On first audio callback
+                    performanceMonitor.recordFirstAudio();
+                    console.log(`[STREAMING] 🎉 First audio playing with ${latency}ms total latency!`);
+                },
+                (metrics) => {
+                    // On playback complete callback
+                    console.log('[STREAMING] 🎊 Streaming audio playback complete:', metrics);
+                    isAISpeaking = false;
+                    updateAIStatus('listening');
+                },
+                (type, error, context) => {
+                    // On error callback
+                    console.error(`[STREAMING] ❌ Audio player error (${type}):`, error, context);
+                    updateStatus(`Audio streaming error: ${type}`, 'warning');
+                }
+            );
+            
+            console.log('[STREAMING] ✅ All streaming services initialized successfully');
+        }
         
         // UI Elements
         const localVideo = document.getElementById('localVideo');
@@ -967,6 +1025,76 @@
         - Use fallback_text in ai_speech_error for browser TTS
         - Always include sessionId and timestamps
         */
+        
+        // Performance monitoring for streaming optimization
+        class PerformanceMonitor {
+            constructor() {
+                this.sessions = [];
+                this.currentSession = null;
+            }
+            
+            startSession() {
+                this.currentSession = {
+                    startTime: Date.now(),
+                    speechEndTime: null,
+                    firstChunkTime: null,
+                    firstAudioTime: null,
+                    completionTime: null,
+                    totalChunks: 0,
+                    chunksProcessed: 0,
+                    averageChunkLatency: 0
+                };
+                console.log('[PERF_MONITOR] 🚀 New performance session started');
+            }
+            
+            recordSpeechEnd() {
+                if (this.currentSession) {
+                    this.currentSession.speechEndTime = Date.now();
+                    console.log('[PERF_MONITOR] 📝 Speech end recorded');
+                }
+            }
+            
+            recordFirstChunk() {
+                if (this.currentSession && !this.currentSession.firstChunkTime) {
+                    this.currentSession.firstChunkTime = Date.now();
+                    const latency = this.currentSession.firstChunkTime - this.currentSession.speechEndTime;
+                    console.log(`[PERF_MONITOR] 🎯 Speech-to-first-chunk: ${latency}ms`);
+                }
+            }
+            
+            recordFirstAudio() {
+                if (this.currentSession && !this.currentSession.firstAudioTime) {
+                    this.currentSession.firstAudioTime = Date.now();
+                    const totalLatency = this.currentSession.firstAudioTime - this.currentSession.speechEndTime;
+                    console.log(`[PERF_MONITOR] 🎉 TOTAL LATENCY: ${totalLatency}ms`);
+                    
+                    // Update performance dashboard
+                    this.updateDashboard(totalLatency);
+                }
+            }
+            
+            updateDashboard(latency) {
+                if (userRole === 'coach') {
+                    const performancePanel = document.getElementById('performance-panel');
+                    if (performancePanel) {
+                        const color = latency < 1000 ? 'green' : latency < 2000 ? 'orange' : 'red';
+                        performancePanel.innerHTML = `
+                            <div class="performance-metric" style="color: ${color}; font-size: 14px; font-weight: bold;">
+                                <strong>Response Time: ${latency}ms</strong>
+                                <small style="display: block; font-size: 12px;">${latency < 1000 ? '🚀 Excellent' : latency < 2000 ? '⚡ Good' : '⏳ Slow'}</small>
+                            </div>
+                        `;
+                    }
+                }
+            }
+        }
+        
+        // Initialize streaming services
+        let sentenceProcessor = null;
+        let streamingAudioPlayer = null;
+        let performanceMonitor = null;
+        let streamingEnabled = false;
+        let maxParallelSentences = 3;
         
         // Enhanced MediaRecorder testing with better fallbacks
         async function detectAudioCapabilities() {
@@ -1340,7 +1468,18 @@
                         roomId: roomId,
                         userId: userId,
                         userRole: userRole,
-                        audio_capabilities: audioCapabilities
+                        audio_capabilities: audioCapabilities,
+                        
+                        // 🚀 STREAMING OPTIMIZATION: Enable streaming mode
+                        streaming_mode: {
+                            enabled: true,
+                            sentence_chunking: true,
+                            max_sentence_length: 150,
+                            min_sentence_length: 20,
+                            progressive_playback: true,
+                            target_latency: 800, // milliseconds
+                            max_parallel_sentences: 3
+                        }
                     };
                     console.log('[AI-WS] Sending to GPU:', JSON.stringify(initMessage));
                     console.log('[AI-WS] Audio capabilities:', audioCapabilities);
@@ -1361,6 +1500,17 @@
                             browser_info: 'unknown',
                             error: audioError.message,
                             audio_disabled: true
+                        },
+                        
+                        // 🚀 STREAMING OPTIMIZATION: Enable streaming mode even without audio
+                        streaming_mode: {
+                            enabled: true,
+                            sentence_chunking: true,
+                            max_sentence_length: 150,
+                            min_sentence_length: 20,
+                            progressive_playback: true,
+                            target_latency: 800, // milliseconds
+                            max_parallel_sentences: 3
                         }
                     };
                     console.log('[AI-WS] Sending to GPU (audio disabled):', JSON.stringify(initMessage));
@@ -1951,6 +2101,119 @@
                 case 'error':
                     console.error('[AI-WS] Received error from GPU:', data.error_code, data.message);
                     handleGPUError(data);
+                    break;
+                    
+                // 🚀 STREAMING OPTIMIZATION: New message handlers for streaming protocol
+                case 'streaming_mode_enabled':
+                    console.log('[AI-WS] 🚀 Streaming mode activated:', data.config);
+                    streamingEnabled = true;
+                    maxParallelSentences = data.config?.maxParallel || 3;
+                    updateStatus('AI streaming mode enabled - faster responses!', 'success');
+                    
+                    // Start performance monitoring session
+                    if (performanceMonitor) {
+                        performanceMonitor.startSession();
+                    }
+                    break;
+
+                case 'chunk_processing_started':
+                    console.log('[AI-WS] 🎯 GPU processing sentence:', data.sequence);
+                    updateStatus(`Processing sentence ${data.sequence + 1}...`, 'info');
+                    
+                    // Track first chunk processing
+                    if (performanceMonitor && data.sequence === 0) {
+                        performanceMonitor.recordFirstChunk();
+                    }
+                    
+                    // Update progress indicator for coaches
+                    if (userRole === 'coach') {
+                        const progressIndicator = document.getElementById('progress-indicator');
+                        if (progressIndicator) {
+                            progressIndicator.textContent = `Processing ${data.sequence + 1}...`;
+                        }
+                    }
+                    break;
+
+                case 'ai_audio_chunk':
+                    console.log('[AI-WS] 🔊 Audio chunk received:', {
+                        sequence: data.sequence,
+                        size: data.audioData?.length || 0,
+                        duration: data.duration,
+                        mimeType: data.mimeType
+                    });
+                    
+                    // Validate chunk data
+                    if (!data.audioData || !data.mimeType || typeof data.sequence !== 'number') {
+                        console.error('[AI-WS] ❌ Invalid audio chunk data:', data);
+                        return;
+                    }
+                    
+                    // Send to streaming audio player
+                    if (streamingAudioPlayer) {
+                        streamingAudioPlayer.onChunkReceived({
+                            sequence: data.sequence,
+                            audioData: data.audioData,
+                            mimeType: data.mimeType,
+                            duration: data.duration,
+                            text: data.text,
+                            sessionId: data.sessionId
+                        });
+                        
+                        // Update AI status to speaking
+                        if (data.sequence === 0) {
+                            updateAIStatus('speaking');
+                            isAISpeaking = true;
+                            updateSpeakingIndicator('ai');
+                        }
+                        
+                        // Add text to transcript if available and coach
+                        if (data.text && userRole === 'coach' && data.sequence === 0) {
+                            addTranscriptItem('AI (Streaming)', data.text, 'ai');
+                        }
+                    } else {
+                        console.error('[AI-WS] ❌ Streaming audio player not initialized');
+                    }
+                    
+                    // Send acknowledgment to GPU
+                    if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                        aiWs.send(JSON.stringify({
+                            type: 'chunk_acknowledged',
+                            sequence: data.sequence,
+                            sessionId: sessionId,
+                            timestamp: Date.now()
+                        }));
+                        console.log('[AI-WS] ✅ Sent chunk acknowledgment for sequence:', data.sequence);
+                    }
+                    break;
+
+                case 'streaming_complete':
+                    console.log('[AI-WS] 🎊 All sentences processed:', data.totalChunks);
+                    updateStatus(`AI response complete (${data.totalChunks} chunks)`, 'success');
+                    
+                    // Mark streaming audio player as complete
+                    if (streamingAudioPlayer) {
+                        streamingAudioPlayer.markComplete();
+                    }
+                    
+                    // Clear any processing indicators
+                    if (userRole === 'coach') {
+                        const progressIndicator = document.getElementById('progress-indicator');
+                        if (progressIndicator) {
+                            progressIndicator.textContent = '';
+                        }
+                    }
+                    break;
+
+                case 'streaming_error':
+                    console.error('[AI-WS] ❌ Streaming error:', data.message);
+                    updateStatus(`Streaming error: ${data.message}`, 'error');
+                    
+                    // Reset streaming state
+                    if (streamingAudioPlayer) {
+                        streamingAudioPlayer.reset();
+                    }
+                    isAISpeaking = false;
+                    updateAIStatus('listening');
                     break;
                     
                 default:
@@ -3052,6 +3315,11 @@
                                     lastSpeechTime = Date.now();
                                     speechStartTime = 0;
                                     
+                                    // 🚀 STREAMING OPTIMIZATION: Record speech end for performance monitoring
+                                    if (performanceMonitor) {
+                                        performanceMonitor.recordSpeechEnd();
+                                    }
+                                    
                                     const totalSessionTime = Date.now() - recordingSessionStartTime;
                                     console.log(`🔇 RECORDING SESSION ENDED - Total duration: ${totalSessionTime}ms`);
                                     
@@ -3112,6 +3380,9 @@
 
         // Start the application
         initializeMedia();
+        
+        // Initialize streaming optimization services
+        initializeStreamingServices();
         
         // Set up audio detection after media is ready
         setTimeout(async () => {
