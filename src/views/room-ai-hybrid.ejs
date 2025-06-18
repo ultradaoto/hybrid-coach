@@ -1807,19 +1807,9 @@
                                 }
                             }
                             
-                            // Also send speaking detected for immediate feedback
-                            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                                const speakingMessage = {
-                                    type: 'client_speaking_detected',
-                                    sessionId: sessionId,
-                                    volume: average
-                                };
-                                console.log('[AI-WS] Sending speaking detection to GPU');
-                                aiWs.send(JSON.stringify(speakingMessage));
-                            } else {
-                                console.log('[AI-WS] Cannot send - WebSocket not ready. State:', aiWs ? aiWs.readyState : 'null');
-                                console.log('[AI-WS] WebSocket states: CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3');
-                            }
+                            // NOTE: Removed client_speaking_detected message to avoid triggering GPU mock mode
+                            // Only send real audio chunks via client_audio_data or audio_chunk messages
+                            console.log('[AI-WS] Speech detected, waiting for MediaRecorder to start and send real audio chunks');
                         }
                     } else if (isSpeaking && !silenceTimer) {
                         // Start silence timer when speech stops
