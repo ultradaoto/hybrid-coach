@@ -1605,6 +1605,14 @@
                     }
                     break;
                     
+                case 'chunked_processing_auto_enabled':
+                    console.log('[AI-WS] 🧩 GPU chunked processing enabled:', data.message);
+                    if (data.config) {
+                        console.log('[AI-WS] Chunked config:', data.config);
+                    }
+                    updateStatus('GPU chunked processing enabled', 'info');
+                    break;
+                    
                 case 'chunk_received':
                     console.log('[AI-WS] GPU confirmed chunk received:', data.chunk_sequence);
                     if (data.processing_status) {
@@ -2471,15 +2479,11 @@
                         }
                         
                         function sendAudioChunk(audioBlob, isLastChunk = false, retryAttempt = 0) {
-                            // Check if chunk was already acknowledged (in case of race conditions)
-                            if (acknowledgedChunks.has(chunkSequence)) {
-                                console.log(`[AUDIO] Chunk ${chunkSequence} already acknowledged, skipping send`);
-                                return;
-                            }
+                            const currentChunkId = chunkSequence; // Capture current chunk ID
                             
-                            // Additional check: Don't send if this chunk sequence was already processed
-                            if (chunkSequence === 0 && acknowledgedChunks.size > 0) {
-                                console.log(`[AUDIO] Skipping duplicate chunk 0 - session already processed`);
+                            // Check if this specific chunk was already acknowledged
+                            if (acknowledgedChunks.has(currentChunkId)) {
+                                console.log(`[AUDIO] Chunk ${currentChunkId} already acknowledged, skipping send`);
                                 return;
                             }
                             
@@ -2514,8 +2518,8 @@
                                     const chunkMessage = {
                                         type: 'audio_chunk',
                                         sessionId: sessionId,
-                                        chunk_sequence: chunkSequence,
-                                        total_chunks: isLastChunk ? chunkSequence + 1 : null,
+                                        chunk_sequence: currentChunkId,
+                                        total_chunks: isLastChunk ? currentChunkId + 1 : null,
                                         audioData: base64Audio,
                                         mimeType: currentMimeType,
                                         duration: chunkDuration,
@@ -2524,41 +2528,41 @@
                                         retry_attempt: retryAttempt
                                     };
                                     
-                                    const logMessage = `[AUDIO] Sending chunk ${chunkSequence}${isLastChunk ? ' (final)' : ''}${retryAttempt > 0 ? ` (retry ${retryAttempt})` : ''}, size: ${audioBlob.size} bytes`;
+                                    const logMessage = `[AUDIO] Sending chunk ${currentChunkId}${isLastChunk ? ' (final)' : ''}${retryAttempt > 0 ? ` (retry ${retryAttempt})` : ''}, size: ${audioBlob.size} bytes`;
                                     if (debugMode || retryAttempt > 0) {
                                         console.log(logMessage);
                                     }
                                     
                                     try {
                                         aiWs.send(JSON.stringify(chunkMessage));
-                                        console.log(`[AUDIO] ✅ Chunk ${chunkSequence} sent successfully to GPU`);
+                                        console.log(`[AUDIO] ✅ Chunk ${currentChunkId} sent successfully to GPU`);
                                         
                                         // Set up retry timeout (only for non-final chunks)
                                         if (!isLastChunk && retryAttempt === 0) {
-                                            const currentChunkSequence = chunkSequence; // Capture current value
                                             const retryTimeout = setTimeout(() => {
                                                 // Check if chunk was already acknowledged
-                                                if (acknowledgedChunks.has(currentChunkSequence)) {
-                                                    console.log(`[AUDIO] Chunk ${currentChunkSequence} already acknowledged, skipping retry`);
-                                                    chunkRetryTimeouts.delete(currentChunkSequence);
+                                                if (acknowledgedChunks.has(currentChunkId)) {
+                                                    console.log(`[AUDIO] Chunk ${currentChunkId} already acknowledged, skipping retry`);
+                                                    chunkRetryTimeouts.delete(currentChunkId);
                                                     return;
                                                 }
                                                 
-                                                const attempts = chunkRetryAttempts.get(currentChunkSequence) || 0;
+                                                const attempts = chunkRetryAttempts.get(currentChunkId) || 0;
                                                 if (attempts < 2) { // Max 2 retries
-                                                    console.log(`[AUDIO] Chunk ${currentChunkSequence} timeout, retrying...`);
-                                                    chunkRetryAttempts.set(currentChunkSequence, attempts + 1);
+                                                    console.log(`[AUDIO] Chunk ${currentChunkId} timeout, retrying...`);
+                                                    chunkRetryAttempts.set(currentChunkId, attempts + 1);
                                                     sendAudioChunk(audioBlob, isLastChunk, attempts + 1);
                                                 } else {
-                                                    console.error(`[AUDIO] Chunk ${currentChunkSequence} failed after 2 retries`);
-                                                    chunkRetryAttempts.delete(currentChunkSequence);
+                                                    console.error(`[AUDIO] Chunk ${currentChunkId} failed after 2 retries`);
+                                                    chunkRetryAttempts.delete(currentChunkId);
                                                 }
                                             }, 5000); // 5 second timeout
                                             
                                             // Store retry timeout reference
-                                            chunkRetryTimeouts.set(currentChunkSequence, retryTimeout);
+                                            chunkRetryTimeouts.set(currentChunkId, retryTimeout);
                                         }
                                         
+                                        // Only increment chunk sequence AFTER successful send
                                         chunkSequence++;
                                     } catch (sendError) {
                                         console.error('[AUDIO] Failed to send chunk:', sendError);
@@ -2978,6 +2982,11 @@
                         recordingSessionStartTime = Date.now();
                         isSpeaking = true;
                         speechStartTime = Date.now();
+                        
+                        // Clear previous session's chunk acknowledgments
+                        acknowledgedChunks.clear();
+                        chunkRetryTimeouts.clear();
+                        chunkRetryAttempts.clear();
                         
                         console.log(`🎤 RECORDING SESSION STARTED - Level: ${audioLevel.toFixed(1)}, Voice Ratio: ${voiceRatio.toFixed(3)}`);
                         console.log(`🎤 Minimum session time: ${MIN_RECORDING_TIME}ms`);
