@@ -1055,6 +1055,7 @@
 
         // Initialize media and connections
         async function initializeMedia() {
+            console.log('Initializing media...');
             try {
                 updateStatus('Accessing camera and microphone...');
                 
@@ -1073,6 +1074,10 @@
                 
                 localStream = await navigator.mediaDevices.getUserMedia(constraints);
                 localVideo.srcObject = localStream;
+                
+                console.log('✅ Media initialized successfully');
+                console.log('Local stream audio tracks:', localStream.getAudioTracks().length);
+                console.log('Local stream video tracks:', localStream.getVideoTracks().length);
                 
                 updateStatus('Media ready', 'success');
                 setupControls();
@@ -1147,14 +1152,17 @@
 
         // Audio detection for speaking indicators
         function setupAudioDetection() {
+            console.log('Setting up audio detection...');
             if (localStream) {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const analyser = audioContext.createAnalyser();
-                const microphone = audioContext.createMediaStreamSource(localStream);
-                const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                
-                microphone.connect(analyser);
-                analyser.fftSize = 256;
+                console.log('✅ Local stream available, initializing audio detection');
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const analyser = audioContext.createAnalyser();
+                    const microphone = audioContext.createMediaStreamSource(localStream);
+                    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                    
+                    microphone.connect(analyser);
+                    analyser.fftSize = 256;
                 
                 let isSpeaking = false;
                 let silenceTimer = null;
@@ -1206,6 +1214,13 @@
                 }
                 
                 detectSpeaking();
+                console.log('🎧 Audio detection started successfully');
+                
+                } catch (error) {
+                    console.error('❌ Audio detection setup failed:', error);
+                }
+            } else {
+                console.log('❌ No local stream available for audio detection');
             }
         }
 
@@ -1231,37 +1246,14 @@
         // Start the application
         initializeMedia();
         
-        // Set up audio detection after a short delay
-        setTimeout(setupAudioDetection, 1000);
+        // Set up audio detection after media is ready
+        setTimeout(() => {
+            console.log('Setting up audio detection after delay...');
+            setupAudioDetection();
+        }, 2000);
         
-        // Demo: Simulate multiple AI interactions
-        let demoInteractionCount = 0;
-        const demoQuestions = [
-            'Hi, I need help with my computer setup',
-            'My email is not working properly',
-            'Can you help me backup my files?',
-            'I think I need to update my software'
-        ];
-        
-        function simulateNextInteraction() {
-            if (demoInteractionCount < demoQuestions.length && aiWs && aiWs.readyState === WebSocket.OPEN) {
-                console.log(`Demo: Simulating interaction ${demoInteractionCount + 1}`);
-                aiWs.send(JSON.stringify({
-                    type: 'simulate_interaction',
-                    text: demoQuestions[demoInteractionCount],
-                    speaker: 'client'
-                }));
-                demoInteractionCount++;
-                
-                // Schedule next interaction 10 seconds later
-                if (demoInteractionCount < demoQuestions.length) {
-                    setTimeout(simulateNextInteraction, 10000);
-                }
-            }
-        }
-        
-        // Demo disabled - using real speech detection
-        // setTimeout(simulateNextInteraction, 5000);
+        // Demo mode completely removed - using real speech detection only
+        console.log('AI room initialized - ready for real speech interaction');
     </script>
 </body>
 </html>

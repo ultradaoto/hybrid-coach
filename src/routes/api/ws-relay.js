@@ -176,15 +176,15 @@ function initWebSocketRelay(server) {
     }
   });
 
-  // Log stats periodically
-  setInterval(() => {
-    console.log(`[WebSocket Relay] Active rooms: ${roomConnections.size}`);
-    let totalClients = 0;
-    roomConnections.forEach(clients => {
-      totalClients += clients.size;
-    });
-    console.log(`[WebSocket Relay] Total connected clients: ${totalClients}`);
-  }, 30000);
+  // Periodic logging disabled - too noisy
+  // setInterval(() => {
+  //   console.log(`[WebSocket Relay] Active rooms: ${roomConnections.size}`);
+  //   let totalClients = 0;
+  //   roomConnections.forEach(clients => {
+  //     totalClients += clients.size;
+  //   });
+  //   console.log(`[WebSocket Relay] Total connected clients: ${totalClients}`);
+  // }, 30000);
 }
 
 // Broadcast a message to all clients in a room except the sender

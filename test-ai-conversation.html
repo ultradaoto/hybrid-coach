@@ -22,8 +22,8 @@
         }
         
         document.getElementById('connect').onclick = () => {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ai-session/${sessionId}`;
+            // Connect directly to GPU server for testing
+            const wsUrl = `ws://localhost:8001/ai-session/${sessionId}`;
             
             ws = new WebSocket(wsUrl);
             
