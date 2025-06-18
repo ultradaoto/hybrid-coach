@@ -2484,10 +2484,10 @@
                 const SPEECH_COOLDOWN = 2000; // 2 seconds cooldown between speeches
                 
                 // Enhanced voice detection parameters - more responsive
-                const VOICE_THRESHOLD = 15; // Minimum volume for voice detection (reduced from 25)
+                const VOICE_THRESHOLD = 8; // Minimum volume for voice detection (reduced to catch normal speech)
                 const FREQUENCY_THRESHOLD = 5; // Minimum frequency activity for voice
-                const SUSTAINED_SPEECH_TIME = 150; // Must speak for 150ms before triggering (reduced from 300ms)
-                const NOISE_GATE_SAMPLES = 5; // Number of samples to analyze for consistency (reduced from 10)
+                const SUSTAINED_SPEECH_TIME = 100; // Must speak for 100ms before triggering (reduced further)
+                const NOISE_GATE_SAMPLES = 3; // Number of samples to analyze for consistency (reduced for faster response)
                 
                 let audioSamples = []; // Rolling buffer for audio level analysis
                 let frequencySamples = []; // Rolling buffer for frequency analysis
@@ -2614,7 +2614,7 @@
                     // Voice should represent reasonable portion of total energy
                     const voiceRatio = totalEnergy > 0 ? (voiceEnergy / totalEnergy) : 0;
                     
-                    return voiceRatio > 0.2; // At least 20% of energy should be in voice range (reduced from 30%)
+                    return voiceRatio > 0.15; // At least 15% of energy should be in voice range (reduced further)
                 }
                 
                 function detectSpeaking() {
@@ -2637,8 +2637,8 @@
                     const isConsistent = variance < 200; // Increased variance tolerance for more responsive detection
                     
                     // Check if current audio qualifies as voice activity
-                    // High audio override: if audio is very loud (>35), bypass some strict checks
-                    const highAudioOverride = audioLevel > 35;
+                    // High audio override: if audio is moderately loud (>20), bypass some strict checks
+                    const highAudioOverride = audioLevel > 20;
                     const passesVoiceCheck = highAudioOverride || isVoiceActivity(audioLevel, frequencyData);
                     const passesConsistencyCheck = highAudioOverride || isConsistent;
                     
@@ -2687,17 +2687,41 @@
                             voiceIndicator.className = 'voice-indicator detecting';
                         }
                         voiceIndicator.style.display = 'block';
-                    } else if (audioLevel > 8) {
-                        // Show why it's not detecting voice
+                    } else if (audioLevel > 5) {
+                        // Show why it's not detecting voice and log for debugging
                         let reason = '';
-                        if (audioLevel < VOICE_THRESHOLD) reason = 'Too quiet';
-                        else if (voiceRatio < 0.2) reason = `Voice ratio: ${voiceRatio.toFixed(2)}`;
-                        else if (!isConsistent) reason = `Variance: ${currentVariance.toFixed(0)}`;
-                        else reason = 'Other conditions';
+                        if (audioLevel < VOICE_THRESHOLD) {
+                            reason = `Too quiet (${audioLevel.toFixed(1)} < ${VOICE_THRESHOLD})`;
+                        } else if (voiceRatio < 0.15) {
+                            reason = `Voice ratio: ${voiceRatio.toFixed(2)} < 0.15`;
+                        } else if (!isConsistent) {
+                            reason = `Variance: ${currentVariance.toFixed(0)} >= 200`;
+                        } else if (!isAudioEnabled) {
+                            reason = 'Audio disabled';
+                        } else if (isAIPaused) {
+                            reason = 'AI paused';
+                        } else if (isAISpeaking) {
+                            reason = 'AI speaking';
+                        } else {
+                            reason = 'Other conditions';
+                        }
                         
                         voiceStatusDisplay.textContent = reason;
                         voiceIndicator.className = 'voice-indicator noise';
                         voiceIndicator.style.display = 'block';
+                        
+                        // Debug logging for troubleshooting
+                        if (audioLevel > 6) {
+                            console.log(`🔍 Audio detected but not voice: ${reason}`, {
+                                audioLevel: audioLevel.toFixed(1),
+                                voiceRatio: voiceRatio.toFixed(3),
+                                variance: currentVariance.toFixed(0),
+                                isConsistent,
+                                passesVoiceCheck,
+                                passesConsistencyCheck,
+                                highAudioOverride
+                            });
+                        }
                     } else {
                         voiceStatusDisplay.textContent = 'Listening...';
                         voiceIndicator.className = 'voice-indicator';
@@ -2730,6 +2754,7 @@
                             
                             isSpeaking = true;
                             console.log(`🎤 VOICE DETECTED - Level: ${audioLevel.toFixed(1)}, Consistency: ${isConsistent}, Duration: ${speechDuration}ms`);
+                            console.log(`🎤 Voice Ratio: ${voiceRatio.toFixed(3)}, High Override: ${highAudioOverride}`);
                             console.log(`AI State: ${isAISpeaking ? 'AI Speaking' : 'AI Not Speaking'}, Paused: ${isAIPaused}`);
                             
                             // Start chunked recording if available
