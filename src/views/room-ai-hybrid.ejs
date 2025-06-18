@@ -846,60 +846,117 @@
         }
 
         // Initialize AI WebSocket for coaching session communication
-        // Detect browser audio capabilities with GPU Claude's recommendations
-        function detectAudioCapabilities() {
-            console.log('[AUDIO] Detecting browser capabilities...');
+        // REAL MediaRecorder testing - don't trust isTypeSupported()!
+        async function detectAudioCapabilities() {
+            console.log('[AUDIO] 🧪 REAL MediaRecorder testing (not trusting isTypeSupported)...');
             
-            // Test formats in order of WHISPER COMPATIBILITY (prioritizing what Whisper likes)
+            // Test formats in order of WHISPER COMPATIBILITY 
             const formatTests = [
-                'audio/wav',              // Whisper's favorite - universal compatibility
-                'audio/mp4',              // Whisper supports, Safari preferred  
-                'audio/webm',             // Whisper supports, but without Opus codec
-                'audio/webm;codecs=opus'  // Last resort - known Whisper issue
+                { format: null, name: 'browser-default' },           // Let browser choose (most reliable)
+                { format: 'audio/webm', name: 'webm' },             // Usually works, Whisper supported
+                { format: 'audio/mp4', name: 'mp4' },               // Whisper likes, but often fails
+                { format: 'audio/wav', name: 'wav' },               // Whisper's favorite, rarely supported
+                { format: 'audio/webm;codecs=opus', name: 'webm-opus' }  // Last resort
             ];
             
-            const capabilities = {};
-            const supportedFormats = [];
+            const workingFormats = [];
+            let preferredFormat = null;
             
-            formatTests.forEach(format => {
-                const isSupported = MediaRecorder.isTypeSupported(format);
-                capabilities[format] = isSupported;
-                if (isSupported) {
-                    supportedFormats.push(format);
-                }
-                console.log(`[AUDIO] ${format}: ${isSupported ? '✅ Supported' : '❌ Not supported'}`);
-            });
-            
-            // Determine browser and preferred format
-            let preferredFormat = 'audio/wav'; // Universal fallback
-            let browserInfo = 'unknown';
-            
-            if (supportedFormats.length > 0) {
-                preferredFormat = supportedFormats[0]; // First supported format is preferred
+            for (const test of formatTests) {
+                const { format, name } = test;
+                console.log(`[AUDIO] 🧪 Testing ${name} (${format || 'default'})...`);
                 
-                // Browser detection for context
-                const userAgent = navigator.userAgent.toLowerCase();
-                if (userAgent.includes('chrome') && !userAgent.includes('edg')) {
-                    browserInfo = 'chrome';
-                } else if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
-                    browserInfo = 'safari';
-                } else if (userAgent.includes('firefox')) {
-                    browserInfo = 'firefox';
-                } else if (userAgent.includes('edg')) {
-                    browserInfo = 'edge';
+                // First check isTypeSupported (quick filter)
+                if (format && !MediaRecorder.isTypeSupported(format)) {
+                    console.log(`[AUDIO] ❌ ${name} - isTypeSupported says no`);
+                    continue;
+                }
+                
+                // REAL TEST: Try to actually create and start MediaRecorder
+                try {
+                    const testOptions = format ? { mimeType: format } : {};
+                    const testRecorder = new MediaRecorder(localStream, testOptions);
+                    
+                    // Test if we can actually start recording
+                    await new Promise((resolve, reject) => {
+                        let testStarted = false;
+                        
+                        testRecorder.onstart = () => {
+                            testStarted = true;
+                            console.log(`[AUDIO] ✅ ${name} - MediaRecorder.start() SUCCESS!`);
+                            testRecorder.stop(); // Stop immediately
+                        };
+                        
+                        testRecorder.onstop = () => {
+                            if (testStarted) {
+                                resolve(testRecorder.mimeType);
+                            } else {
+                                reject(new Error('Never started'));
+                            }
+                        };
+                        
+                        testRecorder.onerror = (event) => {
+                            reject(new Error(`MediaRecorder error: ${event.error}`));
+                        };
+                        
+                        // Try to start
+                        try {
+                            testRecorder.start(100); // Very short test
+                        } catch (startError) {
+                            reject(startError);
+                        }
+                        
+                        // Timeout after 2 seconds
+                        setTimeout(() => {
+                            if (!testStarted) {
+                                reject(new Error('Start timeout'));
+                            }
+                        }, 2000);
+                    });
+                    
+                    // If we get here, it works!
+                    const actualMimeType = testRecorder.mimeType;
+                    workingFormats.push({
+                        requestedFormat: format,
+                        actualFormat: actualMimeType,
+                        name: name
+                    });
+                    
+                    if (!preferredFormat) {
+                        preferredFormat = actualMimeType;
+                    }
+                    
+                    console.log(`[AUDIO] 🎯 ${name} WORKS! Actual format: ${actualMimeType}`);
+                    
+                } catch (error) {
+                    console.log(`[AUDIO] ❌ ${name} FAILED:`, error.message);
                 }
             }
             
-            console.log(`[AUDIO] Browser: ${browserInfo}, Preferred format: ${preferredFormat}`);
-            console.log(`[AUDIO] ${supportedFormats.length} formats supported:`, supportedFormats);
+            // Browser detection for context
+            let browserInfo = 'unknown';
+            const userAgent = navigator.userAgent.toLowerCase();
+            if (userAgent.includes('chrome') && !userAgent.includes('edg')) {
+                browserInfo = userAgent.includes('cros') ? 'chrome-os' : 'chrome';
+            } else if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
+                browserInfo = 'safari';
+            } else if (userAgent.includes('firefox')) {
+                browserInfo = 'firefox';
+            } else if (userAgent.includes('edg')) {
+                browserInfo = 'edge';
+            }
+            
+            console.log(`[AUDIO] 🎯 Browser: ${browserInfo}`);
+            console.log(`[AUDIO] 🎯 Preferred (first working): ${preferredFormat}`);
+            console.log(`[AUDIO] 🎯 All working formats:`, workingFormats);
             
             return {
                 preferred_format: preferredFormat,
-                supported_formats: supportedFormats,
+                working_formats: workingFormats,
                 browser_info: browserInfo,
-                chunk_duration: 3000, // 3 seconds default
+                chunk_duration: 3000,
                 sample_rate: 48000,
-                format_capabilities: capabilities
+                tested_real_recording: true
             };
         }
 
@@ -1548,11 +1605,11 @@
                     const microphone = audioContext.createMediaStreamSource(localStream);
                     const dataArray = new Uint8Array(analyser.frequencyBinCount);
                     
-                    // Use audio capabilities already detected
-                    const audioCapabilities = detectAudioCapabilities();
-                    const supportedFormats = audioCapabilities.supported_formats;
+                    // Use REAL tested audio capabilities
+                    const audioCapabilities = await detectAudioCapabilities();
+                    const workingFormats = audioCapabilities.working_formats;
                     
-                    console.log('[AUDIO] Attempting format fallback strategy...');
+                    console.log('[AUDIO] Using REAL tested formats:', workingFormats);
                     
                     // Set up chunked audio recording for real speech-to-text
                     let mediaRecorder = null;
@@ -1563,49 +1620,43 @@
                     let chunkDuration = 3000; // 3 seconds per chunk
                     let overlapBuffer = []; // Store last chunk for overlap
                     
-                    // Try formats in order until one works
+                    // Use ALREADY TESTED working formats (no more guessing!)
                     async function initializeMediaRecorder() {
-                        for (let i = 0; i < supportedFormats.length; i++) {
-                            const format = supportedFormats[i];
-                            console.log(`[AUDIO] Attempting format ${i + 1}/${supportedFormats.length}: ${format}`);
+                        if (workingFormats.length === 0) {
+                            throw new Error('No working MediaRecorder formats found during testing');
+                        }
+                        
+                        // Use the first (preferred) working format
+                        const bestFormat = workingFormats[0];
+                        console.log(`[AUDIO] 🎯 Using PROVEN working format: ${bestFormat.name} (${bestFormat.actualFormat})`);
+                        
+                        try {
+                            const options = bestFormat.requestedFormat ? { mimeType: bestFormat.requestedFormat } : {};
+                            mediaRecorder = new MediaRecorder(localStream, options);
+                            currentMimeType = mediaRecorder.mimeType;
                             
-                            try {
-                                const options = format === 'audio/wav' ? {} : { mimeType: format };
-                                const testRecorder = new MediaRecorder(localStream, options);
-                                
-                                // Test if the recorder actually works
-                                console.log(`[AUDIO] ✅ MediaRecorder created successfully with ${format}`);
-                                console.log(`[AUDIO] Actual mimeType: ${testRecorder.mimeType}`);
-                                
-                                mediaRecorder = testRecorder;
-                                currentMimeType = testRecorder.mimeType;
-                                
-                                // Success! Use this format
-                                console.log(`[AUDIO] 🎯 Selected working format: ${currentMimeType}`);
-                                break;
-                                
-                            } catch (error) {
-                                console.log(`[AUDIO] ❌ Format ${format} failed:`, error.name, error.message);
-                                
-                                // Try next format
-                                continue;
-                            }
-                        }
-                        
-                        // Final fallback - try without any format specification
-                        if (!mediaRecorder) {
-                            console.log('[AUDIO] 🔄 Trying fallback: MediaRecorder with no format specification');
-                            try {
-                                mediaRecorder = new MediaRecorder(localStream);
+                            console.log(`[AUDIO] ✅ MediaRecorder created with tested format`);
+                            console.log(`[AUDIO] ✅ Requested: ${bestFormat.requestedFormat || 'browser-default'}`);
+                            console.log(`[AUDIO] ✅ Actual: ${currentMimeType}`);
+                            
+                            return mediaRecorder;
+                            
+                        } catch (error) {
+                            console.error(`[AUDIO] ❌ IMPOSSIBLE! Tested format ${bestFormat.name} failed:`, error);
+                            
+                            // This should never happen since we tested it, but try next format as safety
+                            if (workingFormats.length > 1) {
+                                console.log('[AUDIO] 🔄 Trying next tested format as emergency fallback...');
+                                const secondFormat = workingFormats[1];
+                                const options2 = secondFormat.requestedFormat ? { mimeType: secondFormat.requestedFormat } : {};
+                                mediaRecorder = new MediaRecorder(localStream, options2);
                                 currentMimeType = mediaRecorder.mimeType;
-                                console.log(`[AUDIO] ✅ Fallback successful with format: ${currentMimeType}`);
-                            } catch (error) {
-                                console.error('[AUDIO] ❌ All format attempts failed:', error);
-                                throw error;
+                                console.log(`[AUDIO] ✅ Emergency fallback to: ${currentMimeType}`);
+                                return mediaRecorder;
                             }
+                            
+                            throw error;
                         }
-                        
-                        return mediaRecorder;
                     }
                     
                     try {
@@ -1840,27 +1891,23 @@
                     if (mediaRecorder.state !== 'inactive') {
                         console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state, '- recreating MediaRecorder');
                         
-                        // Recreate MediaRecorder if it's in a bad state
+                        // Recreate MediaRecorder using TESTED working formats
                         try {
-                            const supportedFormats = audioCapabilities.supported_formats;
-                            for (let i = 0; i < supportedFormats.length; i++) {
-                                const format = supportedFormats[i];
-                                try {
-                                    const options = format === 'audio/wav' ? {} : { mimeType: format };
-                                    mediaRecorder = new MediaRecorder(localStream, options);
-                                    currentMimeType = mediaRecorder.mimeType;
-                                    console.log('[AUDIO] ✅ Recreated MediaRecorder with format:', currentMimeType);
-                                    
-                                    // Re-setup event handlers
-                                    setupMediaRecorderHandlers();
-                                    break;
-                                } catch (error) {
-                                    console.log('[AUDIO] Format', format, 'failed during recreation');
-                                    continue;
-                                }
+                            if (workingFormats.length > 0) {
+                                const bestFormat = workingFormats[0];
+                                const options = bestFormat.requestedFormat ? { mimeType: bestFormat.requestedFormat } : {};
+                                mediaRecorder = new MediaRecorder(localStream, options);
+                                currentMimeType = mediaRecorder.mimeType;
+                                console.log('[AUDIO] ✅ Recreated MediaRecorder with tested format:', currentMimeType);
+                                
+                                // Re-setup event handlers
+                                setupMediaRecorderHandlers();
+                            } else {
+                                console.error('[AUDIO] No working formats available for recreation');
+                                return;
                             }
                         } catch (error) {
-                            console.error('[AUDIO] Failed to recreate MediaRecorder:', error);
+                            console.error('[AUDIO] Failed to recreate MediaRecorder with tested format:', error);
                             return;
                         }
                     }
