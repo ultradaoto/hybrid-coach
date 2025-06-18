@@ -893,14 +893,28 @@
                 aiWs.send(JSON.stringify(initMessage));
             };
             
-            aiWs.onmessage = (event) => {
+            aiWs.onmessage = async (event) => {
                 try {
-                    const data = JSON.parse(event.data);
+                    let messageText;
+                    
+                    // Handle both string and Blob messages
+                    if (event.data instanceof Blob) {
+                        console.log('[AI-WS] Received Blob message, converting to text');
+                        messageText = await event.data.text();
+                    } else {
+                        messageText = event.data;
+                    }
+                    
+                    const data = JSON.parse(messageText);
                     console.log('[AI-WS] Received from GPU:', JSON.stringify(data));
                     handleAIMessage(data);
                 } catch (error) {
                     console.error('[AI-WS] Error parsing GPU message:', error);
                     console.log('[AI-WS] Raw message:', event.data);
+                    console.log('[AI-WS] Message type:', typeof event.data);
+                    if (event.data instanceof Blob) {
+                        console.log('[AI-WS] Blob size:', event.data.size);
+                    }
                 }
             };
             
