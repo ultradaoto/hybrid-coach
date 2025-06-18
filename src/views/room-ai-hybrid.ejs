@@ -846,8 +846,18 @@
         }
 
         // Initialize AI WebSocket for coaching session communication
+        // Cache audio capabilities to avoid re-testing on reconnections
+        let cachedAudioCapabilities = null;
+        
         // REAL MediaRecorder testing - don't trust isTypeSupported()!
         async function detectAudioCapabilities() {
+            // Return cached results if we already tested
+            if (cachedAudioCapabilities) {
+                console.log('[AUDIO] 🎯 Using cached audio capabilities (already tested)');
+                console.log('[AUDIO] 🎯 Cached preferred format:', cachedAudioCapabilities.preferred_format);
+                return cachedAudioCapabilities;
+            }
+            
             console.log('[AUDIO] 🧪 REAL MediaRecorder testing (not trusting isTypeSupported)...');
             
             // Test formats in order of WHISPER COMPATIBILITY 
@@ -956,7 +966,8 @@
             console.log(`[AUDIO] 🎯 Preferred (first working): ${preferredFormat}`);
             console.log(`[AUDIO] 🎯 All working formats:`, workingFormats);
             
-            return {
+            // Cache results for future use (avoid re-testing on reconnections)
+            cachedAudioCapabilities = {
                 preferred_format: preferredFormat,
                 working_formats: workingFormats,
                 browser_info: browserInfo,
@@ -964,6 +975,10 @@
                 sample_rate: 48000,
                 tested_real_recording: true
             };
+            
+            console.log('[AUDIO] 🎯 Audio capabilities cached for future reconnections');
+            
+            return cachedAudioCapabilities;
         }
 
         // Global connection management variables
@@ -1600,8 +1615,16 @@
             }
         }
 
+        // Track if audio detection is already set up
+        let audioDetectionSetup = false;
+        
         // Audio detection for speaking indicators
         async function setupAudioDetection() {
+            if (audioDetectionSetup) {
+                console.log('[AUDIO] 🎯 Audio detection already setup, skipping...');
+                return;
+            }
+            
             console.log('Setting up audio detection...');
             if (localStream) {
                 console.log('✅ Local stream available, initializing audio detection');
@@ -1853,6 +1876,10 @@
                         console.log('🎤 MediaRecorder initialized successfully');
                         console.log('[AUDIO] Format:', currentMimeType, 'State:', mediaRecorder.state);
                         console.log('[AUDIO] Browser capabilities confirmed:', audioCapabilities.preferred_format, 'supported');
+                        
+                        // Mark audio detection as successfully set up
+                        audioDetectionSetup = true;
+                        console.log('[AUDIO] 🎯 Audio detection setup complete - won\'t run again');
                         
                     } catch (error) {
                         console.error('[AUDIO] MediaRecorder initialization failed:', error);
