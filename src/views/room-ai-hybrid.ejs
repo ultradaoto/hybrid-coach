@@ -2483,16 +2483,19 @@
                 const SILENCE_THRESHOLD = 1500; // 1.5 seconds of silence before considering speech ended
                 const SPEECH_COOLDOWN = 2000; // 2 seconds cooldown between speeches
                 
-                // Enhanced voice detection parameters - smart voice vs keyboard detection
-                const VOICE_THRESHOLD = 6; // Minimum volume for voice detection (lowered to catch your levels)
-                const FREQUENCY_THRESHOLD = 5; // Minimum frequency activity for voice
-                const SUSTAINED_SPEECH_TIME = 200; // Must speak for 200ms before triggering (increased to filter keyboard)
-                const NOISE_GATE_SAMPLES = 8; // Number of samples to analyze for consistency (increased for keyboard filtering)
+                // Enhanced voice detection parameters - stable recording sessions
+                const VOICE_START_THRESHOLD = 6.0; // Level to START recording
+                const VOICE_CONTINUE_THRESHOLD = 4.0; // Level to CONTINUE recording (lower to bridge syllables)
+                const MIN_RECORDING_TIME = 300; // Minimum recording duration (300ms as requested)
+                const SUSTAINED_SPEECH_TIME = 100; // Quick trigger once threshold met
+                const NOISE_GATE_SAMPLES = 5; // Balanced for responsiveness vs stability
                 const KEYBOARD_FILTER_TIME = 50; // Keyboard clicks are typically < 50ms
                 
                 let audioSamples = []; // Rolling buffer for audio level analysis
                 let frequencySamples = []; // Rolling buffer for frequency analysis
                 let speechStartTime = 0;
+                let recordingSessionActive = false; // Track if we're in a recording session
+                let recordingSessionStartTime = 0; // When current recording session started
                 
                 function startChunkedRecording() {
                     if (!mediaRecorder) {
@@ -2592,10 +2595,7 @@
                 
                 // Enhanced voice activity detection with keyboard filtering
                 function isVoiceActivity(audioLevel, frequencyData) {
-                    // Check if audio level meets minimum threshold
-                    if (audioLevel < VOICE_THRESHOLD) {
-                        return false;
-                    }
+                    // Remove the level check here - handled by calling functions
                     
                     // Analyze frequency distribution for human voice characteristics
                     // Human voice typically has energy in 85Hz - 3000Hz range
@@ -2624,13 +2624,67 @@
                     
                     // Keyboard clicks have lots of high frequency energy, voice doesn't
                     const isLikelyKeyboard = highFreqRatio > 0.4 && voiceRatio < 0.3;
+                    const passesVoiceRatio = voiceRatio > 0.15;
                     
                     if (isLikelyKeyboard) {
                         console.log(`⌨️ Keyboard detected: high freq ${(highFreqRatio * 100).toFixed(0)}%, voice ${(voiceRatio * 100).toFixed(0)}%`);
                         return false;
                     }
                     
-                    return voiceRatio > 0.15; // At least 15% of energy should be in voice range
+                    // Debug voice activity check
+                    if (audioLevel > 6) {
+                        console.log(`🎤 Voice activity check:`, {
+                            audioLevel: audioLevel.toFixed(1),
+                            voiceRatio: voiceRatio.toFixed(3),
+                            highFreqRatio: highFreqRatio.toFixed(3),
+                            passesVoiceRatio,
+                            voiceRatioThreshold: 0.15,
+                            isLikelyKeyboard,
+                            keyboardThresholds: { highFreq: 0.4, voiceMax: 0.3 },
+                            result: passesVoiceRatio && !isLikelyKeyboard
+                        });
+                    }
+                    
+                    return passesVoiceRatio;
+                }
+                
+                // Stable recording session management
+                function shouldStartRecording(audioLevel, frequencyData) {
+                    const levelCheck = audioLevel >= VOICE_START_THRESHOLD;
+                    const voiceCheck = isVoiceActivity(audioLevel, frequencyData);
+                    const stateCheck = isAudioEnabled && !isAIPaused && !isAISpeaking;
+                    
+                    // Debug logging to see what's failing
+                    if (audioLevel > 5) {
+                        console.log(`🔍 shouldStartRecording check:`, {
+                            audioLevel: audioLevel.toFixed(1),
+                            threshold: VOICE_START_THRESHOLD,
+                            levelCheck,
+                            voiceCheck,
+                            stateCheck,
+                            isAudioEnabled,
+                            isAIPaused,
+                            isAISpeaking,
+                            recordingSessionActive,
+                            wouldStart: levelCheck && voiceCheck && stateCheck
+                        });
+                    }
+                    
+                    return levelCheck && voiceCheck && stateCheck;
+                }
+                
+                function shouldContinueRecording(audioLevel) {
+                    if (!recordingSessionActive) return false;
+                    
+                    const sessionDuration = Date.now() - recordingSessionStartTime;
+                    
+                    // Always continue if under minimum time (bridges syllables)
+                    if (sessionDuration < MIN_RECORDING_TIME) {
+                        return true;
+                    }
+                    
+                    // After minimum time, use continue threshold
+                    return audioLevel >= VOICE_CONTINUE_THRESHOLD;
                 }
                 
                 function detectSpeaking() {
@@ -2690,7 +2744,7 @@
                     // Calculate variance using the already computed avgLevel and variance from above
                     const currentVariance = variance;
                     
-                    if (audioLevel > VOICE_THRESHOLD && !isAudioEnabled) {
+                    if (audioLevel > VOICE_START_THRESHOLD && !isAudioEnabled) {
                         voiceStatusDisplay.textContent = 'Muted';
                         voiceIndicator.className = 'voice-indicator noise';
                         voiceIndicator.style.display = 'block';
@@ -2698,26 +2752,21 @@
                         voiceStatusDisplay.textContent = 'AI Speaking';
                         voiceIndicator.className = 'voice-indicator';
                         voiceIndicator.style.display = 'block';
-                    } else if (hasVoiceActivity && speechStartTime > 0) {
-                        const speechDuration = Date.now() - speechStartTime;
-                        if (speechDuration > SUSTAINED_SPEECH_TIME) {
-                            const status = highAudioOverride ? `Voice (HIGH): ${audioLevel.toFixed(1)}` : `Voice: ${voiceRatio.toFixed(2)} ratio`;
-                            voiceStatusDisplay.textContent = status;
-                            voiceIndicator.className = 'voice-indicator speaking';
-                        } else {
-                            voiceStatusDisplay.textContent = `Analyzing... ${speechDuration}ms`;
-                            voiceIndicator.className = 'voice-indicator detecting';
-                        }
+                    } else if (recordingSessionActive) {
+                        const sessionDuration = Date.now() - recordingSessionStartTime;
+                        const status = `Recording: ${sessionDuration}ms (min: ${MIN_RECORDING_TIME}ms)`;
+                        voiceStatusDisplay.textContent = status;
+                        voiceIndicator.className = 'voice-indicator speaking';
                         voiceIndicator.style.display = 'block';
                     } else if (audioLevel > 5) {
                         // Show why it's not detecting voice and log for debugging
                         let reason = '';
-                        if (audioLevel < VOICE_THRESHOLD) {
-                            reason = `Too quiet (${audioLevel.toFixed(1)} < ${VOICE_THRESHOLD})`;
+                        if (audioLevel < VOICE_START_THRESHOLD) {
+                            reason = `Too quiet (${audioLevel.toFixed(1)} < ${VOICE_START_THRESHOLD})`;
                         } else if (voiceRatio < 0.15) {
                             reason = `Voice ratio: ${voiceRatio.toFixed(2)} < 0.15`;
                         } else if (!isConsistent) {
-                            reason = `Variance: ${currentVariance.toFixed(0)} >= 200`;
+                            reason = `Variance: ${currentVariance.toFixed(0)} >= 150`;
                         } else if (!isAudioEnabled) {
                             reason = 'Audio disabled';
                         } else if (isAIPaused) {
@@ -2725,7 +2774,15 @@
                         } else if (isAISpeaking) {
                             reason = 'AI speaking';
                         } else {
-                            reason = 'Other conditions';
+                            // More specific debugging for "Other conditions"
+                            const wouldStartRecording = shouldStartRecording(audioLevel, frequencyData);
+                            if (!wouldStartRecording) {
+                                reason = 'shouldStartRecording failed';
+                            } else if (currentVariance >= 150) {
+                                reason = `High variance: ${currentVariance.toFixed(0)}`;
+                            } else {
+                                reason = 'Unknown other condition';
+                            }
                         }
                         
                         voiceStatusDisplay.textContent = reason;
@@ -2756,77 +2813,78 @@
                         }
                     }
                     
-                    if (hasVoiceActivity) {
-                        updateSpeakingIndicator('local'); // Light up your video box
+                    // NEW STABLE RECORDING SESSION LOGIC
+                    
+                    // Check if we should start a new recording session
+                    if (!recordingSessionActive && shouldStartRecording(audioLevel, frequencyData)) {
+                        recordingSessionActive = true;
+                        recordingSessionStartTime = Date.now();
+                        isSpeaking = true;
+                        speechStartTime = Date.now();
                         
-                        // Clear silence timer if speaking
+                        console.log(`🎤 RECORDING SESSION STARTED - Level: ${audioLevel.toFixed(1)}, Voice Ratio: ${voiceRatio.toFixed(3)}`);
+                        console.log(`🎤 Minimum session time: ${MIN_RECORDING_TIME}ms`);
+                        
+                        updateSpeakingIndicator('local');
+                        
+                        // Clear any existing silence timer
                         if (silenceTimer) {
                             clearTimeout(silenceTimer);
                             silenceTimer = null;
                         }
                         
-                        // Track when potential speech started
-                        if (speechStartTime === 0) {
-                            speechStartTime = Date.now();
+                        // Start chunked recording if available
+                        if (mediaRecorder && !isRecording) {
+                            startChunkedRecording();
                         }
+                    }
+                    
+                    // Check if we should continue the current recording session
+                    else if (recordingSessionActive) {
+                        const sessionDuration = Date.now() - recordingSessionStartTime;
+                        const shouldContinue = shouldContinueRecording(audioLevel);
                         
-                        // Only trigger speech detection after sustained speech
-                        const speechDuration = Date.now() - speechStartTime;
-                        if (!isSpeaking && 
-                            speechDuration > SUSTAINED_SPEECH_TIME && 
-                            Date.now() - lastSpeechTime > SPEECH_COOLDOWN) {
-                            
-                            isSpeaking = true;
-                            console.log(`🎤 VOICE DETECTED - Level: ${audioLevel.toFixed(1)}, Consistency: ${isConsistent}, Duration: ${speechDuration}ms`);
-                            console.log(`🎤 Voice Ratio: ${voiceRatio.toFixed(3)}, High Override: ${highAudioOverride}`);
-                            console.log(`AI State: ${isAISpeaking ? 'AI Speaking' : 'AI Not Speaking'}, Paused: ${isAIPaused}`);
-                            
-                            // Start chunked recording if available
-                            if (mediaRecorder && !isRecording) {
-                                startChunkedRecording();
+                        if (shouldContinue) {
+                            // Continue recording - clear any silence timer
+                            if (silenceTimer) {
+                                clearTimeout(silenceTimer);
+                                silenceTimer = null;
                             }
-                            
-                            // NOTE: Removed client_speaking_detected message to avoid triggering GPU mock mode
-                            // Only send real audio chunks via client_audio_data or audio_chunk messages
-                            console.log('[AI-WS] Voice detected, waiting for MediaRecorder to start and send real audio chunks');
-                        }
-                    } else {
-                        // Not speaking or noise detected
-                        if (isSpeaking && !silenceTimer) {
-                            // Start silence timer when speech stops
-                            console.log('🔇 Voice activity ended, starting silence timer');
-                            silenceTimer = setTimeout(() => {
-                                isSpeaking = false;
-                                lastSpeechTime = Date.now();
-                                speechStartTime = 0; // Reset speech start time
-                                console.log('🔇 VOICE ENDED - Silence confirmed after timeout');
-                                
-                                // Stop chunked recording when speech ends
-                                if (mediaRecorder && mediaRecorder.state === 'recording' && isRecording) {
-                                    try {
-                                        console.log('🎤 Stopping chunked recording - voice ended');
-                                        console.log('[AUDIO] MediaRecorder state before stop:', mediaRecorder.state);
-                                        console.log('[AUDIO] Sent', chunkSequence, 'chunks during this speech session');
-                                        mediaRecorder.stop();
-                                        console.log('[AUDIO] Chunked recording stopped successfully');
-                                    } catch (stopError) {
-                                        console.error('[AUDIO] Failed to stop chunked recording:', stopError);
-                                        isRecording = false;
+                            updateSpeakingIndicator('local');
+                        } else {
+                            // Start silence timer if not already started
+                            if (!silenceTimer) {
+                                console.log(`🔇 Voice dipped below continue threshold (${audioLevel.toFixed(1)} < ${VOICE_CONTINUE_THRESHOLD}) after ${sessionDuration}ms session`);
+                                silenceTimer = setTimeout(() => {
+                                    // End recording session
+                                    recordingSessionActive = false;
+                                    isSpeaking = false;
+                                    lastSpeechTime = Date.now();
+                                    speechStartTime = 0;
+                                    
+                                    const totalSessionTime = Date.now() - recordingSessionStartTime;
+                                    console.log(`🔇 RECORDING SESSION ENDED - Total duration: ${totalSessionTime}ms`);
+                                    
+                                    // Stop chunked recording
+                                    if (mediaRecorder && mediaRecorder.state === 'recording' && isRecording) {
+                                        try {
+                                            console.log('🎤 Stopping chunked recording - session ended');
+                                            mediaRecorder.stop();
+                                        } catch (stopError) {
+                                            console.error('[AUDIO] Failed to stop chunked recording:', stopError);
+                                            isRecording = false;
+                                        }
                                     }
-                                } else if (mediaRecorder) {
-                                    if (!isRecording) {
-                                        console.log('[AUDIO] Not currently recording chunks');
-                                    } else {
-                                        console.log('[AUDIO] MediaRecorder not recording, state:', mediaRecorder.state);
-                                    }
-                                }
-                                
-                                updateSpeakingIndicator(null);
-                            }, SILENCE_THRESHOLD);
-                        } else if (!hasVoiceActivity) {
-                            // Reset speech start time if no voice activity
-                            speechStartTime = 0;
+                                    
+                                    updateSpeakingIndicator(null);
+                                }, SILENCE_THRESHOLD);
+                            }
                         }
+                    }
+                    
+                    // Reset speech start time if no activity and not in session
+                    if (!recordingSessionActive && !shouldStartRecording(audioLevel, frequencyData)) {
+                        speechStartTime = 0;
                     }
                     
                     requestAnimationFrame(detectSpeaking);
