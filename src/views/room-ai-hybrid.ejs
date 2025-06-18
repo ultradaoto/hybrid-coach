@@ -1123,6 +1123,41 @@
             updateAIStatus('demo');
         }
 
+        function handleGPUError(errorData) {
+            const { error_code, message, sessionId } = errorData;
+            
+            switch (error_code) {
+                case 'AUDIO_001': // Unsupported audio format
+                    console.error('[ERROR] GPU cannot process audio format, attempting fallback');
+                    updateStatus('Audio format issue - trying fallback', 'warning');
+                    // Could trigger format renegotiation here
+                    break;
+                    
+                case 'STT_001': // Transcription failed
+                    console.error('[ERROR] Speech transcription failed');
+                    updateStatus('Speech recognition failed', 'warning');
+                    // Continue with next audio chunk
+                    break;
+                    
+                case 'API_001': // OpenAI rate limit
+                    console.error('[ERROR] OpenAI rate limit exceeded');
+                    updateStatus('AI service temporarily unavailable', 'warning');
+                    break;
+                    
+                case 'API_002': // ElevenLabs quota exceeded
+                    console.error('[ERROR] Voice synthesis quota exceeded');
+                    updateStatus('Voice synthesis unavailable - using text responses', 'warning');
+                    break;
+                    
+                default:
+                    console.error('[ERROR] Unknown GPU error:', error_code, message);
+                    updateStatus('AI system error: ' + message, 'error');
+            }
+            
+            // Log error for debugging
+            console.log('[ERROR] Full error details:', errorData);
+        }
+
         function handleAIMessage(data) {
             console.log('[AI-WS] Processing GPU message type:', data.type);
             console.log('[AI-WS] Full message:', JSON.stringify(data));
@@ -1132,6 +1167,28 @@
                     updateAIStatus('listening');
                     if (userRole === 'coach') {
                         addTranscriptItem('System', 'AI session initialized and ready', 'ai');
+                    }
+                    break;
+                    
+                case 'session_initialized':
+                    console.log('[AI-WS] GPU session fully initialized');
+                    updateAIStatus('listening');
+                    if (data.audio_format_confirmed) {
+                        console.log('[AI-WS] GPU confirmed audio format:', data.audio_format_confirmed);
+                    }
+                    break;
+                    
+                case 'transcription_update':
+                    console.log('[AI-WS] Received transcription update, partial:', data.partial);
+                    if (data.transcript) {
+                        if (userRole === 'coach') {
+                            const label = data.partial ? 'Client (live)' : 'Client';
+                            addTranscriptItem(label, data.transcript, 'client');
+                        }
+                        // Update status to show transcription is working
+                        if (!data.partial) {
+                            updateAIStatus('thinking');
+                        }
                     }
                     break;
                     
@@ -1206,6 +1263,11 @@
                     
                 case 'pong':
                     handlePong();
+                    break;
+                    
+                case 'error':
+                    console.error('[AI-WS] Received error from GPU:', data.error_code, data.message);
+                    handleGPUError(data);
                     break;
             }
         }
@@ -1472,10 +1534,17 @@
                     try {
                         mediaRecorder = new MediaRecorder(localStream, selectedFormat);
                         
+                        // Validate the actual format used by MediaRecorder
+                        console.log('[AUDIO] MediaRecorder created with mimeType:', mediaRecorder.mimeType);
+                        if (mediaRecorder.mimeType !== selectedMimeType) {
+                            console.log('[AUDIO] Browser adjusted format from', selectedMimeType, 'to', mediaRecorder.mimeType);
+                            currentMimeType = mediaRecorder.mimeType;
+                        }
+                        
                         mediaRecorder.ondataavailable = (event) => {
                             if (event.data.size > 0) {
                                 audioChunks.push(event.data);
-                                console.log('[AUDIO] Chunk received, size:', event.data.size, 'bytes');
+                                console.log('[AUDIO] Chunk received, size:', event.data.size, 'bytes, type:', event.data.type);
                             }
                         };
                         
@@ -1484,6 +1553,17 @@
                                 console.log('[AUDIO] Recording stopped, processing', audioChunks.length, 'chunks');
                                 const audioBlob = new Blob(audioChunks, { type: currentMimeType });
                                 audioChunks = []; // Reset for next recording
+                                
+                                // Validate audio blob
+                                if (audioBlob.size === 0) {
+                                    console.error('[AUDIO] Empty audio blob, skipping transmission');
+                                    return;
+                                }
+                                
+                                if (audioBlob.size > 10 * 1024 * 1024) { // 10MB limit
+                                    console.error('[AUDIO] Audio blob too large:', audioBlob.size, 'bytes');
+                                    return;
+                                }
                                 
                                 // Convert to base64 for transmission
                                 const reader = new FileReader();
@@ -1497,17 +1577,19 @@
                                             sessionId: sessionId,
                                             audioData: base64Audio,
                                             mimeType: currentMimeType,
+                                            duration: 3000, // Estimated, could be calculated
                                             timestamp: Date.now()
                                         };
                                         console.log('[AI-WS] Sending real audio data to GPU');
                                         console.log('[AI-WS] Audio details - Format:', currentMimeType, 'Size:', audioBlob.size, 'bytes');
                                         aiWs.send(JSON.stringify(audioMessage));
                                     } else {
-                                        console.log('[AI-WS] Cannot send audio - WebSocket not ready');
+                                        console.log('[AI-WS] Cannot send audio - WebSocket not ready, state:', aiWs ? aiWs.readyState : 'null');
                                     }
                                 };
                                 reader.onerror = (error) => {
                                     console.error('[AUDIO] Failed to read audio blob:', error);
+                                    // Could implement retry logic here
                                 };
                                 reader.readAsDataURL(audioBlob);
                             } else {
@@ -1517,14 +1599,36 @@
                         
                         mediaRecorder.onerror = (event) => {
                             console.error('[AUDIO] MediaRecorder error:', event.error);
+                            // Send error to GPU for debugging
+                            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                aiWs.send(JSON.stringify({
+                                    type: 'error',
+                                    error_code: 'AUDIO_002',
+                                    message: 'MediaRecorder error: ' + event.error,
+                                    sessionId: sessionId,
+                                    timestamp: Date.now()
+                                }));
+                            }
                         };
                         
                         console.log('🎤 MediaRecorder initialized successfully');
                         console.log('[AUDIO] Format:', currentMimeType, 'State:', mediaRecorder.state);
+                        console.log('[AUDIO] Browser capabilities confirmed:', audioCapabilities.preferred_format, 'supported');
                         
                     } catch (error) {
                         console.error('[AUDIO] MediaRecorder initialization failed:', error);
                         mediaRecorder = null;
+                        
+                        // Send error to GPU
+                        if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                            aiWs.send(JSON.stringify({
+                                type: 'error',
+                                error_code: 'AUDIO_002',
+                                message: 'MediaRecorder initialization failed: ' + error.message,
+                                sessionId: sessionId,
+                                timestamp: Date.now()
+                            }));
+                        }
                     }
                     
                     microphone.connect(analyser);

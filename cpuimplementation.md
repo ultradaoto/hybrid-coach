@@ -24,19 +24,24 @@ This document tracks the CPU-side implementation for the real-time speech-to-spe
 **Checkpoint 1:** Verify connections stay alive for 20+ minutes ✅
 
 ### Phase 2: Multi-Format Audio Support
-- [ ] Detect browser audio capabilities on initialization
+- [x] Detect browser audio capabilities on initialization
   ```javascript
-  // Browser detection logic
+  // Browser detection logic implemented
   const audioCapabilities = {
     webm: MediaRecorder.isTypeSupported('audio/webm;codecs=opus'),
     mp3: MediaRecorder.isTypeSupported('audio/mp3'),
-    wav: MediaRecorder.isTypeSupported('audio/wav')
+    wav: MediaRecorder.isTypeSupported('audio/wav'),
+    webmBasic: MediaRecorder.isTypeSupported('audio/webm')
   };
   ```
-- [ ] Implement format fallback chain: WebM/Opus → MP3 → WAV
-- [ ] Add audio capabilities to init_session message
-- [ ] Create MediaRecorder with appropriate format
-- [ ] Add format validation before recording
+- [x] Implement format fallback chain: WebM/Opus → MP3 → WAV → WebM basic
+- [x] Add audio capabilities to init_session message
+- [x] Create MediaRecorder with appropriate format
+- [x] Add format validation before recording
+- [x] Add audio blob size validation (10MB limit)
+- [x] Implement standardized error handling (AUDIO_xxx, STT_xxx codes)
+- [x] Add transcription_update message handler for progressive STT
+- [x] Validate actual MediaRecorder format vs requested format
 
 **Checkpoint 2:** Test all browsers with appropriate formats ✅
 
