@@ -1128,19 +1128,23 @@
         }
 
         function handleGPUError(errorData) {
-            const { error_code, message, sessionId } = errorData;
+            const { error_code, errorCode, message, sessionId } = errorData;
+            const code = error_code || errorCode; // Handle both formats
             
-            switch (error_code) {
+            switch (code) {
                 case 'AUDIO_001': // Unsupported audio format
                     console.error('[ERROR] GPU cannot process audio format, attempting fallback');
                     updateStatus('Audio format issue - trying fallback', 'warning');
-                    // Could trigger format renegotiation here
+                    break;
+                    
+                case 'AUDIO_005': // Chunked processing not enabled
+                    console.error('[ERROR] GPU chunked processing not enabled');
+                    updateStatus('GPU configuring chunked audio processing...', 'warning');
                     break;
                     
                 case 'STT_001': // Transcription failed
                     console.error('[ERROR] Speech transcription failed');
                     updateStatus('Speech recognition failed', 'warning');
-                    // Continue with next audio chunk
                     break;
                     
                 case 'API_001': // OpenAI rate limit
@@ -1154,7 +1158,7 @@
                     break;
                     
                 default:
-                    console.error('[ERROR] Unknown GPU error:', error_code, message);
+                    console.error('[ERROR] Unknown GPU error:', code, message);
                     updateStatus('AI system error: ' + message, 'error');
             }
             
