@@ -1051,6 +1051,16 @@
             }
             // Reset reconnect attempts on successful connection
             reconnectAttempts = 0;
+            
+            // Send pong acknowledgment back to GPU to confirm we received it
+            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                aiWs.send(JSON.stringify({
+                    type: 'pong_ack',
+                    sessionId: sessionId,
+                    timestamp: Date.now()
+                }));
+                console.log('[AI-WS] Sent pong acknowledgment to GPU');
+            }
         }
         
         function attemptReconnection(reason = 'unknown') {
@@ -1129,7 +1139,7 @@
                 aiWs.send(JSON.stringify(initMessage));
                 
                 // Start ping interval
-                pingInterval = setInterval(sendPing, 12000); // Ping every 12 seconds (GPU recommends 10-15s)
+                pingInterval = setInterval(sendPing, 8000); // Ping every 8 seconds (more frequent communication)
                 sendPing(); // Send first ping immediately
             };
             
