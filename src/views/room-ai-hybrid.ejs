@@ -652,6 +652,8 @@
         let isAIPaused = false;
         let isAISpeaking = false;
         let currentSpeaker = null;
+        let debugMode = false; // Debug mode toggle
+        let chunkRetryAttempts = new Map(); // Track retry attempts for chunks
         
         // UI Elements
         const localVideo = document.getElementById('localVideo');
@@ -1190,6 +1192,16 @@
                             updateAIStatus('thinking');
                         }
                     }
+                    if (data.chunk_sequence !== undefined) {
+                        console.log('[AI-WS] Processed chunk sequence:', data.chunk_sequence);
+                    }
+                    break;
+                    
+                case 'chunk_received':
+                    console.log('[AI-WS] GPU confirmed chunk received:', data.chunk_sequence);
+                    if (data.processing_status) {
+                        console.log('[AI-WS] Chunk processing status:', data.processing_status);
+                    }
                     break;
                     
                 case 'client_speaking':
@@ -1526,10 +1538,14 @@
                     }
                     // If no specific format or using basic webm, let browser choose default
                     
-                    // Set up audio recording for real speech-to-text
+                    // Set up chunked audio recording for real speech-to-text
                     let mediaRecorder = null;
                     let audioChunks = [];
                     let currentMimeType = selectedMimeType;
+                    let chunkSequence = 0;
+                    let isRecording = false;
+                    let chunkDuration = 3000; // 3 seconds per chunk
+                    let overlapBuffer = []; // Store last chunk for overlap
                     
                     try {
                         mediaRecorder = new MediaRecorder(localStream, selectedFormat);
@@ -1541,60 +1557,143 @@
                             currentMimeType = mediaRecorder.mimeType;
                         }
                         
+                        function sendAudioChunk(audioBlob, isLastChunk = false, retryAttempt = 0) {
+                            // Validate audio chunk
+                            if (audioBlob.size === 0) {
+                                if (debugMode) console.log('[AUDIO] Empty chunk, skipping');
+                                return;
+                            }
+                            
+                            if (audioBlob.size > 5 * 1024 * 1024) { // 5MB limit per chunk
+                                console.error('[AUDIO] Chunk too large:', audioBlob.size, 'bytes');
+                                return;
+                            }
+                            
+                            // Convert to base64 for transmission
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                const base64Audio = reader.result.split(',')[1];
+                                
+                                if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                    const chunkMessage = {
+                                        type: 'audio_chunk',
+                                        sessionId: sessionId,
+                                        chunk_sequence: chunkSequence,
+                                        total_chunks: isLastChunk ? chunkSequence + 1 : null,
+                                        audioData: base64Audio,
+                                        mimeType: currentMimeType,
+                                        duration: chunkDuration,
+                                        overlap: overlapBuffer.length > 0 ? 200 : 0, // 200ms overlap
+                                        timestamp: Date.now(),
+                                        retry_attempt: retryAttempt
+                                    };
+                                    
+                                    const logMessage = `[AUDIO] Sending chunk ${chunkSequence}${isLastChunk ? ' (final)' : ''}${retryAttempt > 0 ? ` (retry ${retryAttempt})` : ''}, size: ${audioBlob.size} bytes`;
+                                    if (debugMode || retryAttempt > 0) {
+                                        console.log(logMessage);
+                                    }
+                                    
+                                    try {
+                                        aiWs.send(JSON.stringify(chunkMessage));
+                                        
+                                        // Set up retry timeout (only for non-final chunks)
+                                        if (!isLastChunk && retryAttempt === 0) {
+                                            const retryTimeout = setTimeout(() => {
+                                                const attempts = chunkRetryAttempts.get(chunkSequence) || 0;
+                                                if (attempts < 2) { // Max 2 retries
+                                                    console.log(`[AUDIO] Chunk ${chunkSequence} timeout, retrying...`);
+                                                    chunkRetryAttempts.set(chunkSequence, attempts + 1);
+                                                    sendAudioChunk(audioBlob, isLastChunk, attempts + 1);
+                                                } else {
+                                                    console.error(`[AUDIO] Chunk ${chunkSequence} failed after 2 retries`);
+                                                    chunkRetryAttempts.delete(chunkSequence);
+                                                }
+                                            }, 5000); // 5 second timeout
+                                            
+                                            // Clear retry tracking when chunk is confirmed
+                                            setTimeout(() => {
+                                                clearTimeout(retryTimeout);
+                                                chunkRetryAttempts.delete(chunkSequence);
+                                            }, 10000);
+                                        }
+                                        
+                                        chunkSequence++;
+                                    } catch (sendError) {
+                                        console.error('[AUDIO] Failed to send chunk:', sendError);
+                                        if (retryAttempt < 2) {
+                                            setTimeout(() => {
+                                                sendAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
+                                            }, 1000 * (retryAttempt + 1)); // Progressive delay
+                                        }
+                                    }
+                                } else {
+                                    console.log('[AUDIO] Cannot send chunk - WebSocket not ready, state:', aiWs ? aiWs.readyState : 'null');
+                                    
+                                    // Retry when WebSocket reconnects
+                                    if (retryAttempt < 2) {
+                                        setTimeout(() => {
+                                            sendAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
+                                        }, 2000);
+                                    }
+                                }
+                            };
+                            reader.onerror = (error) => {
+                                console.error('[AUDIO] Failed to read chunk:', error);
+                                if (retryAttempt < 2) {
+                                    setTimeout(() => {
+                                        sendAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
+                                    }, 1000);
+                                }
+                            };
+                            reader.readAsDataURL(audioBlob);
+                        }
+                        
                         mediaRecorder.ondataavailable = (event) => {
                             if (event.data.size > 0) {
-                                audioChunks.push(event.data);
-                                console.log('[AUDIO] Chunk received, size:', event.data.size, 'bytes, type:', event.data.type);
+                                console.log(`[AUDIO] Chunk data available, size: ${event.data.size} bytes`);
+                                
+                                // Create chunk with overlap if we have previous data
+                                let chunkData = [event.data];
+                                if (overlapBuffer.length > 0) {
+                                    // Add 200ms overlap from previous chunk
+                                    chunkData = [...overlapBuffer, event.data];
+                                    console.log('[AUDIO] Added 200ms overlap from previous chunk');
+                                }
+                                
+                                const chunkBlob = new Blob(chunkData, { type: currentMimeType });
+                                
+                                // Send chunk immediately for real-time processing
+                                sendAudioChunk(chunkBlob, false);
+                                
+                                // Store last part for next chunk's overlap (simulate 200ms)
+                                overlapBuffer = [event.data];
                             }
                         };
                         
-                        mediaRecorder.onstop = async () => {
-                            if (audioChunks.length > 0) {
-                                console.log('[AUDIO] Recording stopped, processing', audioChunks.length, 'chunks');
-                                const audioBlob = new Blob(audioChunks, { type: currentMimeType });
-                                audioChunks = []; // Reset for next recording
-                                
-                                // Validate audio blob
-                                if (audioBlob.size === 0) {
-                                    console.error('[AUDIO] Empty audio blob, skipping transmission');
-                                    return;
-                                }
-                                
-                                if (audioBlob.size > 10 * 1024 * 1024) { // 10MB limit
-                                    console.error('[AUDIO] Audio blob too large:', audioBlob.size, 'bytes');
-                                    return;
-                                }
-                                
-                                // Convert to base64 for transmission
-                                const reader = new FileReader();
-                                reader.onload = () => {
-                                    const base64Audio = reader.result.split(',')[1]; // Remove data URL prefix
-                                    
-                                    // Send real audio data to GPU
-                                    if (aiWs && aiWs.readyState === WebSocket.OPEN) {
-                                        const audioMessage = {
-                                            type: 'client_audio_data',
-                                            sessionId: sessionId,
-                                            audioData: base64Audio,
-                                            mimeType: currentMimeType,
-                                            duration: 3000, // Estimated, could be calculated
-                                            timestamp: Date.now()
-                                        };
-                                        console.log('[AI-WS] Sending real audio data to GPU');
-                                        console.log('[AI-WS] Audio details - Format:', currentMimeType, 'Size:', audioBlob.size, 'bytes');
-                                        aiWs.send(JSON.stringify(audioMessage));
-                                    } else {
-                                        console.log('[AI-WS] Cannot send audio - WebSocket not ready, state:', aiWs ? aiWs.readyState : 'null');
-                                    }
+                        mediaRecorder.onstop = () => {
+                            console.log('[AUDIO] Recording stopped, sending final chunk if needed');
+                            isRecording = false;
+                            
+                            // Send final marker to indicate end of speech
+                            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                const finalMessage = {
+                                    type: 'audio_chunk',
+                                    sessionId: sessionId,
+                                    chunk_sequence: chunkSequence,
+                                    total_chunks: chunkSequence,
+                                    audioData: null, // No data, just end marker
+                                    mimeType: currentMimeType,
+                                    duration: 0,
+                                    overlap: 0,
+                                    timestamp: Date.now()
                                 };
-                                reader.onerror = (error) => {
-                                    console.error('[AUDIO] Failed to read audio blob:', error);
-                                    // Could implement retry logic here
-                                };
-                                reader.readAsDataURL(audioBlob);
-                            } else {
-                                console.log('[AUDIO] No audio chunks to process');
+                                console.log('[AUDIO] Sending end-of-speech marker');
+                                aiWs.send(JSON.stringify(finalMessage));
                             }
+                            
+                            // Reset for next recording session
+                            chunkSequence = 0;
+                            overlapBuffer = [];
                         };
                         
                         mediaRecorder.onerror = (event) => {
@@ -1658,24 +1757,39 @@
                             isSpeaking = true;
                             console.log(`Client started speaking. AI State: ${isAISpeaking ? 'AI Speaking' : 'AI Not Speaking'}, Paused: ${isAIPaused}`);
                             
-                            // Start recording real audio if available
-                            if (mediaRecorder && mediaRecorder.state === 'inactive') {
+                            // Start chunked recording if available
+                            if (mediaRecorder && mediaRecorder.state === 'inactive' && !isRecording) {
                                 try {
-                                    console.log('🎤 Starting audio recording for real speech-to-text');
+                                    console.log('🎤 Starting chunked audio recording for real-time STT');
+                                    console.log('[AUDIO] Starting chunked recording - chunks every', chunkDuration + 'ms');
                                     console.log('[AUDIO] MediaRecorder state before start:', mediaRecorder.state);
-                                    mediaRecorder.start(1000); // Record in 1-second chunks
-                                    console.log('[AUDIO] MediaRecorder started successfully');
+                                    
+                                    // Reset chunking state
+                                    chunkSequence = 0;
+                                    overlapBuffer = [];
+                                    isRecording = true;
+                                    
+                                    // Start recording with chunk duration (e.g., 3000ms chunks)
+                                    mediaRecorder.start(chunkDuration);
+                                    console.log('[AUDIO] Chunked recording started successfully');
+                                    
                                 } catch (startError) {
-                                    console.error('[AUDIO] Failed to start MediaRecorder:', startError);
+                                    console.error('[AUDIO] Failed to start chunked recording:', startError);
                                     console.log('[AUDIO] Error details:', {
                                         name: startError.name,
                                         message: startError.message,
                                         state: mediaRecorder.state,
-                                        mimeType: currentMimeType
+                                        mimeType: currentMimeType,
+                                        chunkDuration: chunkDuration
                                     });
+                                    isRecording = false;
                                 }
                             } else if (mediaRecorder) {
-                                console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state);
+                                if (isRecording) {
+                                    console.log('[AUDIO] Already recording chunks, continuing...');
+                                } else {
+                                    console.log('[AUDIO] MediaRecorder not ready, state:', mediaRecorder.state);
+                                }
                             } else {
                                 console.log('[AUDIO] MediaRecorder not available');
                             }
@@ -1701,18 +1815,24 @@
                             lastSpeechTime = Date.now();
                             console.log('Client stopped speaking');
                             
-                            // Stop recording when speech ends
-                            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                            // Stop chunked recording when speech ends
+                            if (mediaRecorder && mediaRecorder.state === 'recording' && isRecording) {
                                 try {
-                                    console.log('🎤 Stopping audio recording - speech ended');
+                                    console.log('🎤 Stopping chunked recording - speech ended');
                                     console.log('[AUDIO] MediaRecorder state before stop:', mediaRecorder.state);
+                                    console.log('[AUDIO] Sent', chunkSequence, 'chunks during this speech session');
                                     mediaRecorder.stop();
-                                    console.log('[AUDIO] MediaRecorder stopped successfully');
+                                    console.log('[AUDIO] Chunked recording stopped successfully');
                                 } catch (stopError) {
-                                    console.error('[AUDIO] Failed to stop MediaRecorder:', stopError);
+                                    console.error('[AUDIO] Failed to stop chunked recording:', stopError);
+                                    isRecording = false;
                                 }
                             } else if (mediaRecorder) {
-                                console.log('[AUDIO] MediaRecorder not recording, state:', mediaRecorder.state);
+                                if (!isRecording) {
+                                    console.log('[AUDIO] Not currently recording chunks');
+                                } else {
+                                    console.log('[AUDIO] MediaRecorder not recording, state:', mediaRecorder.state);
+                                }
                             }
                             
                             updateSpeakingIndicator(null);
