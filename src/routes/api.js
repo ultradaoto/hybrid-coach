@@ -68,6 +68,109 @@ router.get('/network-test', (req, res) => {
   });
 });
 
+// Browser compatibility endpoint for audio format detection
+router.get('/system/browser-compatibility', (req, res) => {
+  const userAgent = req.headers['user-agent'] || '';
+  const userAgentLower = userAgent.toLowerCase();
+  
+  // Detect browser type from user agent
+  let browserType = 'unknown';
+  if (userAgentLower.includes('chrome') && !userAgentLower.includes('edg')) {
+    browserType = 'chrome';
+  } else if (userAgentLower.includes('safari') && !userAgentLower.includes('chrome')) {
+    browserType = 'safari';
+  } else if (userAgentLower.includes('firefox')) {
+    browserType = 'firefox';
+  } else if (userAgentLower.includes('edg')) {
+    browserType = 'edge';
+  }
+  
+  // Browser-specific compatibility info as recommended by GPU Claude
+  const browserCompatibility = {
+    chrome: {
+      preferredFormat: "audio/webm;codecs=opus",
+      fallbackFormats: ["audio/webm", "audio/mp4", "audio/wav"],
+      chunking: {
+        recommended: true,
+        chunkSize: 3000,
+        overlap: 200
+      }
+    },
+    safari: {
+      preferredFormat: "audio/mp4",
+      fallbackFormats: ["audio/wav", "audio/mp3"],
+      chunking: {
+        recommended: true,
+        chunkSize: 3000,
+        overlap: 200
+      }
+    },
+    firefox: {
+      preferredFormat: "audio/webm;codecs=opus",
+      fallbackFormats: ["audio/webm", "audio/wav"],
+      chunking: {
+        recommended: true,
+        chunkSize: 3000,
+        overlap: 200
+      }
+    },
+    edge: {
+      preferredFormat: "audio/webm;codecs=opus",
+      fallbackFormats: ["audio/webm", "audio/mp4", "audio/wav"],
+      chunking: {
+        recommended: true,
+        chunkSize: 3000,
+        overlap: 200
+      }
+    },
+    universalFallback: "audio/wav"
+  };
+  
+  // Format testing steps for client-side implementation
+  const formatTestingSteps = [
+    {
+      step: 1,
+      format: "audio/webm;codecs=opus",
+      description: "Test WebM with Opus codec (preferred for Chrome/Firefox/Edge)"
+    },
+    {
+      step: 2,
+      format: "audio/webm",
+      description: "Test WebM without codec specification (fallback)"
+    },
+    {
+      step: 3,
+      format: "audio/mp4",
+      description: "Test MP4 (preferred for Safari)"
+    },
+    {
+      step: 4,
+      format: "audio/wav",
+      description: "Test WAV (universal fallback)"
+    }
+  ];
+  
+  res.json({
+    success: true,
+    timestamp: new Date().toISOString(),
+    detectedBrowser: browserType,
+    userAgent: userAgent,
+    browserCompatibility,
+    formatTestingSteps,
+    recommendations: {
+      primary: browserCompatibility[browserType] || {
+        preferredFormat: browserCompatibility.universalFallback,
+        fallbackFormats: ["audio/wav"],
+        chunking: { recommended: true, chunkSize: 3000, overlap: 200 }
+      },
+      testing: {
+        message: "Test formats in order, use first supported format",
+        fallback: "If all formats fail, use MediaRecorder() with no options"
+      }
+    }
+  });
+});
+
 // Dismiss membership warning endpoint
 router.post('/dismiss-membership-warning', ensureAuthenticated, async (req, res, next) => {
   try {

@@ -846,43 +846,60 @@
         }
 
         // Initialize AI WebSocket for coaching session communication
-        // Detect browser audio capabilities
+        // Detect browser audio capabilities with GPU Claude's recommendations
         function detectAudioCapabilities() {
-            const capabilities = {
-                webm: MediaRecorder.isTypeSupported('audio/webm;codecs=opus'),
-                mp3: MediaRecorder.isTypeSupported('audio/mp3'),
-                wav: MediaRecorder.isTypeSupported('audio/wav'),
-                webmBasic: MediaRecorder.isTypeSupported('audio/webm')
-            };
+            console.log('[AUDIO] Detecting browser capabilities...');
             
-            console.log('[AUDIO] Browser capabilities:', capabilities);
+            // Test formats in order of preference as per GPU recommendations
+            const formatTests = [
+                'audio/webm;codecs=opus',  // Chrome, Firefox, Edge preferred
+                'audio/webm',             // If codec fails
+                'audio/mp4',              // Safari preferred
+                'audio/wav'               // Universal fallback
+            ];
             
-            // Select preferred format
-            let preferredFormat = 'audio/webm'; // fallback
+            const capabilities = {};
             const supportedFormats = [];
             
-            if (capabilities.webm) {
-                preferredFormat = 'audio/webm;codecs=opus';
-                supportedFormats.push('audio/webm;codecs=opus');
+            formatTests.forEach(format => {
+                const isSupported = MediaRecorder.isTypeSupported(format);
+                capabilities[format] = isSupported;
+                if (isSupported) {
+                    supportedFormats.push(format);
+                }
+                console.log(`[AUDIO] ${format}: ${isSupported ? '✅ Supported' : '❌ Not supported'}`);
+            });
+            
+            // Determine browser and preferred format
+            let preferredFormat = 'audio/wav'; // Universal fallback
+            let browserInfo = 'unknown';
+            
+            if (supportedFormats.length > 0) {
+                preferredFormat = supportedFormats[0]; // First supported format is preferred
+                
+                // Browser detection for context
+                const userAgent = navigator.userAgent.toLowerCase();
+                if (userAgent.includes('chrome') && !userAgent.includes('edg')) {
+                    browserInfo = 'chrome';
+                } else if (userAgent.includes('safari') && !userAgent.includes('chrome')) {
+                    browserInfo = 'safari';
+                } else if (userAgent.includes('firefox')) {
+                    browserInfo = 'firefox';
+                } else if (userAgent.includes('edg')) {
+                    browserInfo = 'edge';
+                }
             }
-            if (capabilities.mp3) {
-                supportedFormats.push('audio/mp3');
-                if (!capabilities.webm) preferredFormat = 'audio/mp3';
-            }
-            if (capabilities.wav) {
-                supportedFormats.push('audio/wav');
-                if (!capabilities.webm && !capabilities.mp3) preferredFormat = 'audio/wav';
-            }
-            if (capabilities.webmBasic) {
-                supportedFormats.push('audio/webm');
-                if (supportedFormats.length === 1) preferredFormat = 'audio/webm';
-            }
+            
+            console.log(`[AUDIO] Browser: ${browserInfo}, Preferred format: ${preferredFormat}`);
+            console.log(`[AUDIO] ${supportedFormats.length} formats supported:`, supportedFormats);
             
             return {
                 preferred_format: preferredFormat,
                 supported_formats: supportedFormats,
+                browser_info: browserInfo,
                 chunk_duration: 3000, // 3 seconds default
-                sample_rate: 48000
+                sample_rate: 48000,
+                format_capabilities: capabilities
             };
         }
 
@@ -1521,7 +1538,7 @@
         }
 
         // Audio detection for speaking indicators
-        function setupAudioDetection() {
+        async function setupAudioDetection() {
             console.log('Setting up audio detection...');
             if (localStream) {
                 console.log('✅ Local stream available, initializing audio detection');
@@ -1533,35 +1550,66 @@
                     
                     // Use audio capabilities already detected
                     const audioCapabilities = detectAudioCapabilities();
-                    const selectedMimeType = audioCapabilities.preferred_format;
+                    const supportedFormats = audioCapabilities.supported_formats;
                     
-                    console.log('[AUDIO] Using preferred format:', selectedMimeType);
-                    
-                    // Create MediaRecorder options
-                    let selectedFormat = {};
-                    if (selectedMimeType && selectedMimeType !== 'audio/webm') {
-                        selectedFormat = { mimeType: selectedMimeType };
-                    }
-                    // If no specific format or using basic webm, let browser choose default
+                    console.log('[AUDIO] Attempting format fallback strategy...');
                     
                     // Set up chunked audio recording for real speech-to-text
                     let mediaRecorder = null;
                     let audioChunks = [];
-                    let currentMimeType = selectedMimeType;
+                    let currentMimeType = null;
                     let chunkSequence = 0;
                     let isRecording = false;
                     let chunkDuration = 3000; // 3 seconds per chunk
                     let overlapBuffer = []; // Store last chunk for overlap
                     
-                    try {
-                        mediaRecorder = new MediaRecorder(localStream, selectedFormat);
-                        
-                        // Validate the actual format used by MediaRecorder
-                        console.log('[AUDIO] MediaRecorder created with mimeType:', mediaRecorder.mimeType);
-                        if (mediaRecorder.mimeType !== selectedMimeType) {
-                            console.log('[AUDIO] Browser adjusted format from', selectedMimeType, 'to', mediaRecorder.mimeType);
-                            currentMimeType = mediaRecorder.mimeType;
+                    // Try formats in order until one works
+                    async function initializeMediaRecorder() {
+                        for (let i = 0; i < supportedFormats.length; i++) {
+                            const format = supportedFormats[i];
+                            console.log(`[AUDIO] Attempting format ${i + 1}/${supportedFormats.length}: ${format}`);
+                            
+                            try {
+                                const options = format === 'audio/wav' ? {} : { mimeType: format };
+                                const testRecorder = new MediaRecorder(localStream, options);
+                                
+                                // Test if the recorder actually works
+                                console.log(`[AUDIO] ✅ MediaRecorder created successfully with ${format}`);
+                                console.log(`[AUDIO] Actual mimeType: ${testRecorder.mimeType}`);
+                                
+                                mediaRecorder = testRecorder;
+                                currentMimeType = testRecorder.mimeType;
+                                
+                                // Success! Use this format
+                                console.log(`[AUDIO] 🎯 Selected working format: ${currentMimeType}`);
+                                break;
+                                
+                            } catch (error) {
+                                console.log(`[AUDIO] ❌ Format ${format} failed:`, error.name, error.message);
+                                
+                                // Try next format
+                                continue;
+                            }
                         }
+                        
+                        // Final fallback - try without any format specification
+                        if (!mediaRecorder) {
+                            console.log('[AUDIO] 🔄 Trying fallback: MediaRecorder with no format specification');
+                            try {
+                                mediaRecorder = new MediaRecorder(localStream);
+                                currentMimeType = mediaRecorder.mimeType;
+                                console.log(`[AUDIO] ✅ Fallback successful with format: ${currentMimeType}`);
+                            } catch (error) {
+                                console.error('[AUDIO] ❌ All format attempts failed:', error);
+                                throw error;
+                            }
+                        }
+                        
+                        return mediaRecorder;
+                    }
+                    
+                    try {
+                        await initializeMediaRecorder();
                         
                         function sendAudioChunk(audioBlob, isLastChunk = false, retryAttempt = 0) {
                             // Validate audio chunk
@@ -1891,9 +1939,9 @@
         initializeMedia();
         
         // Set up audio detection after media is ready
-        setTimeout(() => {
+        setTimeout(async () => {
             console.log('Setting up audio detection after delay...');
-            setupAudioDetection();
+            await setupAudioDetection();
         }, 2000);
         
         // Demo mode completely removed - using real speech detection only
