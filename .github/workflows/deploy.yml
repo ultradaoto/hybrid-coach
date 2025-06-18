@@ -29,7 +29,12 @@ jobs:
             sudo mkdir -p $(dirname "$DEPLOY_DIR")
             sudo chown -R $(whoami): $(dirname "$DEPLOY_DIR")
             if [ -d "$DEPLOY_DIR/.git" ]; then
-              cd "$DEPLOY_DIR" && git pull
+              cd "$DEPLOY_DIR"
+              # Stash any local changes before pulling
+              git stash
+              git pull
+              # Clean up any conflicting lock files
+              rm -f package-lock.json
             else
               git clone https://github.com/${{ github.repository }}.git "$DEPLOY_DIR"
               cd "$DEPLOY_DIR"
