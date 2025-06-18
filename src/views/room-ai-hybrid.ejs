@@ -1051,18 +1051,88 @@
                     }
                     break;
                     
+                case 'ai_audio_data':
+                    console.log('[AI-WS] Received AI audio data, size:', data.audioData?.length || 0, 'bytes');
+                    if (data.audioData) {
+                        playRealAIAudio(data.audioData, data.mimeType || 'audio/wav');
+                    }
+                    break;
+                    
                 case 'ai_finished_speaking':
                     console.log('AI finished speaking, ready for next interaction');
                     updateAIStatus('listening');
                     updateSpeakingIndicator(null);
                     isAISpeaking = false;
                     break;
+                    
+                case 'pong':
+                    console.log('[AI-WS] Received pong from GPU - connection alive');
+                    break;
+            }
+        }
+
+        // Play real AI audio from GPU server (ElevenLabs TTS)
+        function playRealAIAudio(base64Audio, mimeType) {
+            try {
+                console.log('[AI-AUDIO] Playing real AI audio, type:', mimeType);
+                
+                // Convert base64 to blob
+                const audioData = atob(base64Audio);
+                const bytes = new Uint8Array(audioData.length);
+                for (let i = 0; i < audioData.length; i++) {
+                    bytes[i] = audioData.charCodeAt(i);
+                }
+                const audioBlob = new Blob([bytes], { type: mimeType });
+                
+                // Create audio element and play
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+                
+                audio.onloadstart = () => {
+                    console.log('[AI-AUDIO] Real AI audio started loading');
+                    updateSpeakingIndicator('ai');
+                    updateAIStatus('speaking');
+                    isAISpeaking = true;
+                };
+                
+                audio.onplay = () => {
+                    console.log('[AI-AUDIO] Real AI audio playback started');
+                };
+                
+                audio.onended = () => {
+                    console.log('[AI-AUDIO] Real AI audio playback ended');
+                    updateSpeakingIndicator(null);
+                    updateAIStatus('listening');
+                    isAISpeaking = false;
+                    URL.revokeObjectURL(audioUrl); // Clean up
+                };
+                
+                audio.onerror = (error) => {
+                    console.error('[AI-AUDIO] Real AI audio playback error:', error);
+                    updateSpeakingIndicator(null);
+                    updateAIStatus('listening');
+                    isAISpeaking = false;
+                    URL.revokeObjectURL(audioUrl); // Clean up
+                };
+                
+                // Play the audio
+                audio.play().catch(error => {
+                    console.error('[AI-AUDIO] Failed to play real AI audio:', error);
+                    // Fallback to text-to-speech if audio fails
+                    updateAIStatus('listening');
+                    isAISpeaking = false;
+                });
+                
+            } catch (error) {
+                console.error('[AI-AUDIO] Error processing real AI audio:', error);
+                updateAIStatus('listening');
+                isAISpeaking = false;
             }
         }
 
         function playAIAudio(text) {
-            // For now, we'll use Web Speech API for demonstration
-            // In production, this would play actual AI-generated audio from the GPU server
+            // Fallback to Web Speech API for text-only responses
+            // Real audio is now handled by playRealAIAudio function
             if ('speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.rate = 0.9;
