@@ -891,6 +891,20 @@
                 };
                 console.log('[AI-WS] Sending to GPU:', JSON.stringify(initMessage));
                 aiWs.send(JSON.stringify(initMessage));
+                
+                // Set up keep-alive ping to prevent connection drops
+                const pingInterval = setInterval(() => {
+                    if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                        aiWs.send(JSON.stringify({
+                            type: 'ping',
+                            sessionId: sessionId,
+                            timestamp: Date.now()
+                        }));
+                        console.log('[AI-WS] Sent keep-alive ping');
+                    } else {
+                        clearInterval(pingInterval);
+                    }
+                }, 30000); // Ping every 30 seconds
             };
             
             aiWs.onmessage = async (event) => {
@@ -934,15 +948,28 @@
                 console.log('[AI-WS] Close code:', event.code);
                 console.log('[AI-WS] Was clean close:', event.wasClean);
                 console.log('[AI-WS] ReadyState at close:', aiWs ? aiWs.readyState : 'null');
-                updateStatus('AI disconnected - running in demo mode', 'warning');
                 
-                // Don't immediately set to null for debugging
-                setTimeout(() => {
-                    console.log('[AI-WS] Setting aiWs to null after close');
-                    aiWs = null;
-                }, 1000);
-                
-                enableDemoMode();
+                // Attempt automatic reconnection after unexpected disconnection
+                if (event.code === 1006 || event.code === 1001) {
+                    console.log('[AI-WS] Unexpected disconnection detected, attempting reconnection in 3 seconds...');
+                    updateStatus('AI reconnecting...', 'warning');
+                    
+                    setTimeout(() => {
+                        console.log('[AI-WS] Attempting to reconnect to AI system');
+                        aiWs = null;
+                        initAIConnection(); // Reconnect
+                    }, 3000);
+                } else {
+                    updateStatus('AI disconnected - running in demo mode', 'warning');
+                    
+                    // Don't immediately set to null for debugging
+                    setTimeout(() => {
+                        console.log('[AI-WS] Setting aiWs to null after close');
+                        aiWs = null;
+                    }, 1000);
+                    
+                    enableDemoMode();
+                }
             };
         }
         
@@ -1215,6 +1242,54 @@
                     const microphone = audioContext.createMediaStreamSource(localStream);
                     const dataArray = new Uint8Array(analyser.frequencyBinCount);
                     
+                    // Set up audio recording for real speech-to-text
+                    let mediaRecorder = null;
+                    let audioChunks = [];
+                    
+                    try {
+                        mediaRecorder = new MediaRecorder(localStream, {
+                            mimeType: 'audio/webm;codecs=opus'
+                        });
+                        
+                        mediaRecorder.ondataavailable = (event) => {
+                            if (event.data.size > 0) {
+                                audioChunks.push(event.data);
+                            }
+                        };
+                        
+                        mediaRecorder.onstop = async () => {
+                            if (audioChunks.length > 0) {
+                                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                                audioChunks = []; // Reset for next recording
+                                
+                                // Convert to base64 for transmission
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    const base64Audio = reader.result.split(',')[1]; // Remove data:audio/webm;base64, prefix
+                                    
+                                    // Send real audio data to GPU
+                                    if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                        const audioMessage = {
+                                            type: 'client_audio_data',
+                                            sessionId: sessionId,
+                                            audioData: base64Audio,
+                                            mimeType: 'audio/webm;codecs=opus',
+                                            timestamp: Date.now()
+                                        };
+                                        console.log('[AI-WS] Sending real audio data to GPU, size:', audioBlob.size, 'bytes');
+                                        aiWs.send(JSON.stringify(audioMessage));
+                                    }
+                                };
+                                reader.readAsDataURL(audioBlob);
+                            }
+                        };
+                        
+                        console.log('🎤 MediaRecorder initialized for real audio capture');
+                    } catch (error) {
+                        console.error('MediaRecorder not supported or failed:', error);
+                        mediaRecorder = null;
+                    }
+                    
                     microphone.connect(analyser);
                     analyser.fftSize = 256;
                 
@@ -1242,15 +1317,20 @@
                             isSpeaking = true;
                             console.log(`Client started speaking. AI State: ${isAISpeaking ? 'AI Speaking' : 'AI Not Speaking'}, Paused: ${isAIPaused}`);
                             
-                            // Notify AI system of client speaking
+                            // Start recording real audio if available
+                            if (mediaRecorder && mediaRecorder.state === 'inactive') {
+                                console.log('🎤 Starting audio recording for real speech-to-text');
+                                mediaRecorder.start(1000); // Record in 1-second chunks
+                            }
+                            
+                            // Also send speaking detected for immediate feedback
                             if (aiWs && aiWs.readyState === WebSocket.OPEN) {
                                 const speakingMessage = {
                                     type: 'client_speaking_detected',
                                     sessionId: sessionId,
                                     volume: average
                                 };
-                                console.log('[AI-WS] Sending to GPU:', JSON.stringify(speakingMessage));
-                                console.log('[AI-WS] WebSocket readyState:', aiWs.readyState);
+                                console.log('[AI-WS] Sending speaking detection to GPU');
                                 aiWs.send(JSON.stringify(speakingMessage));
                             } else {
                                 console.log('[AI-WS] Cannot send - WebSocket not ready. State:', aiWs ? aiWs.readyState : 'null');
@@ -1263,6 +1343,13 @@
                             isSpeaking = false;
                             lastSpeechTime = Date.now();
                             console.log('Client stopped speaking');
+                            
+                            // Stop recording when speech ends
+                            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                                console.log('🎤 Stopping audio recording - speech ended');
+                                mediaRecorder.stop();
+                            }
+                            
                             updateSpeakingIndicator(null);
                         }, SILENCE_THRESHOLD);
                     }
