@@ -654,6 +654,8 @@
         let currentSpeaker = null;
         let debugMode = false; // Debug mode toggle
         let chunkRetryAttempts = new Map(); // Track retry attempts for chunks
+        let chunkRetryTimeouts = new Map(); // Track retry timeouts for chunks
+        let acknowledgedChunks = new Set(); // Track successfully processed chunks
         
         // UI Elements
         const localVideo = document.getElementById('localVideo');
@@ -1305,6 +1307,18 @@
                     }
                     if (data.chunk_sequence !== undefined) {
                         console.log('[AI-WS] Processed chunk sequence:', data.chunk_sequence);
+                        
+                        // Mark chunk as successfully processed and cancel any retries
+                        acknowledgedChunks.add(data.chunk_sequence);
+                        
+                        const retryTimeout = chunkRetryTimeouts.get(data.chunk_sequence);
+                        if (retryTimeout) {
+                            clearTimeout(retryTimeout);
+                            chunkRetryTimeouts.delete(data.chunk_sequence);
+                            console.log(`[AI-WS] Cancelled retry for transcribed chunk ${data.chunk_sequence}`);
+                        }
+                        
+                        chunkRetryAttempts.delete(data.chunk_sequence);
                     }
                     break;
                     
@@ -1312,6 +1326,22 @@
                     console.log('[AI-WS] GPU confirmed chunk received:', data.chunk_sequence);
                     if (data.processing_status) {
                         console.log('[AI-WS] Chunk processing status:', data.processing_status);
+                    }
+                    
+                    // Mark chunk as acknowledged and cancel any pending retries
+                    if (data.chunk_sequence !== undefined) {
+                        acknowledgedChunks.add(data.chunk_sequence);
+                        
+                        // Cancel retry timeout if exists
+                        const retryTimeout = chunkRetryTimeouts.get(data.chunk_sequence);
+                        if (retryTimeout) {
+                            clearTimeout(retryTimeout);
+                            chunkRetryTimeouts.delete(data.chunk_sequence);
+                            console.log(`[AI-WS] Cancelled retry for acknowledged chunk ${data.chunk_sequence}`);
+                        }
+                        
+                        // Remove from retry attempts tracking
+                        chunkRetryAttempts.delete(data.chunk_sequence);
                     }
                     break;
                     
@@ -1789,6 +1819,12 @@
                         }
                         
                         function sendAudioChunk(audioBlob, isLastChunk = false, retryAttempt = 0) {
+                            // Check if chunk was already acknowledged (in case of race conditions)
+                            if (acknowledgedChunks.has(chunkSequence)) {
+                                console.log(`[AUDIO] Chunk ${chunkSequence} already acknowledged, skipping send`);
+                                return;
+                            }
+                            
                             // Validate audio chunk
                             if (audioBlob.size === 0) {
                                 if (debugMode) console.log('[AUDIO] Empty chunk, skipping');
@@ -1830,23 +1866,28 @@
                                         
                                         // Set up retry timeout (only for non-final chunks)
                                         if (!isLastChunk && retryAttempt === 0) {
+                                            const currentChunkSequence = chunkSequence; // Capture current value
                                             const retryTimeout = setTimeout(() => {
-                                                const attempts = chunkRetryAttempts.get(chunkSequence) || 0;
+                                                // Check if chunk was already acknowledged
+                                                if (acknowledgedChunks.has(currentChunkSequence)) {
+                                                    console.log(`[AUDIO] Chunk ${currentChunkSequence} already acknowledged, skipping retry`);
+                                                    chunkRetryTimeouts.delete(currentChunkSequence);
+                                                    return;
+                                                }
+                                                
+                                                const attempts = chunkRetryAttempts.get(currentChunkSequence) || 0;
                                                 if (attempts < 2) { // Max 2 retries
-                                                    console.log(`[AUDIO] Chunk ${chunkSequence} timeout, retrying...`);
-                                                    chunkRetryAttempts.set(chunkSequence, attempts + 1);
+                                                    console.log(`[AUDIO] Chunk ${currentChunkSequence} timeout, retrying...`);
+                                                    chunkRetryAttempts.set(currentChunkSequence, attempts + 1);
                                                     sendAudioChunk(audioBlob, isLastChunk, attempts + 1);
                                                 } else {
-                                                    console.error(`[AUDIO] Chunk ${chunkSequence} failed after 2 retries`);
-                                                    chunkRetryAttempts.delete(chunkSequence);
+                                                    console.error(`[AUDIO] Chunk ${currentChunkSequence} failed after 2 retries`);
+                                                    chunkRetryAttempts.delete(currentChunkSequence);
                                                 }
                                             }, 5000); // 5 second timeout
                                             
-                                            // Clear retry tracking when chunk is confirmed
-                                            setTimeout(() => {
-                                                clearTimeout(retryTimeout);
-                                                chunkRetryAttempts.delete(chunkSequence);
-                                            }, 10000);
+                                            // Store retry timeout reference
+                                            chunkRetryTimeouts.set(currentChunkSequence, retryTimeout);
                                         }
                                         
                                         chunkSequence++;
