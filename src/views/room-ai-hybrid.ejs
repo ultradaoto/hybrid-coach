@@ -1192,6 +1192,7 @@
         let missedPings = 0;
         let lastPingTime = 0;
         let pingInterval = null;
+        let ttsKeepAliveInterval = null; // Additional keepalive during TTS
         let connectionTimeout = null;
         let reconnectAttempts = 0;
         let maxReconnectAttempts = 5;
@@ -1420,6 +1421,10 @@
                 if (pingInterval) {
                     clearInterval(pingInterval);
                     pingInterval = null;
+                }
+                if (ttsKeepAliveInterval) {
+                    clearInterval(ttsKeepAliveInterval);
+                    ttsKeepAliveInterval = null;
                 }
                 if (connectionTimeout) {
                     clearTimeout(connectionTimeout);
@@ -1669,25 +1674,46 @@
                     break;
                     
                 case 'ai_audio_data':
-                    console.log('[AI-WS] 🔊 RECEIVED AI AUDIO DATA:');
-                    console.log('  - Size:', data.audioData?.length || 0, 'characters (base64)');
-                    console.log('  - MIME Type:', data.mimeType || 'audio/wav');
-                    console.log('  - Source:', data.source || 'unknown');
+                    console.log('[AI-WS] 🔊 RECEIVED ELEVENLABS AUDIO DATA:');
+                    console.log('  - Audio Size:', data.audioData?.length || 0, 'characters (base64)');
+                    console.log('  - MIME Type:', data.mimeType || 'unknown');
+                    console.log('  - Duration:', data.duration || 'unknown', 'ms');
+                    console.log('  - Voice ID:', data.voice_id || 'unknown');
                     console.log('  - Text:', data.text ? `"${data.text.substring(0, 50)}..."` : 'no text provided');
+                    console.log('  - Timestamp:', data.timestamp || 'unknown');
+                    
+                    // Stop TTS keepalive since we got the response
+                    if (ttsKeepAliveInterval) {
+                        clearInterval(ttsKeepAliveInterval);
+                        ttsKeepAliveInterval = null;
+                        console.log('[AI-WS] 🔄 TTS keepalive stopped - ElevenLabs audio received');
+                    }
                     
                     if (data.audioData && data.audioData.length > 0) {
-                        // Show status update that we're about to play AI audio
-                        updateStatus(`Playing AI response: "${(data.text || 'Audio response').substring(0, 30)}..."`, 'success');
+                        // Show status update that AI is about to speak
+                        const displayText = data.text || 'Audio response';
+                        updateStatus(`AI speaking: "${displayText.substring(0, 30)}..."`, 'success');
                         
-                        // Add to transcript if we have the text
+                        // Add to transcript with ElevenLabs attribution
                         if (data.text && userRole === 'coach') {
-                            addTranscriptItem('AI Assistant (TTS)', data.text, 'ai');
+                            addTranscriptItem('AI (ElevenLabs TTS)', data.text, 'ai');
                         }
                         
-                        playRealAIAudio(data.audioData, data.mimeType || 'audio/wav');
+                        // Play the ElevenLabs audio (MP3 format)
+                        console.log('[AI-WS] 🎵 Playing ElevenLabs MP3 audio...');
+                        playRealAIAudio(data.audioData, data.mimeType || 'audio/mpeg');
                     } else {
                         console.log('[AI-WS] ❌ Received ai_audio_data but no audioData provided');
                         updateStatus('Received empty audio data from AI', 'warning');
+                        
+                        // Fallback to showing text if available
+                        if (data.text) {
+                            if (userRole === 'coach') {
+                                addTranscriptItem('AI (Text Fallback)', data.text, 'ai');
+                            }
+                            updateStatus(`AI: "${data.text.substring(0, 50)}..."`, 'info');
+                        }
+                        updateAIStatus('listening');
                     }
                     break;
                     
@@ -1751,6 +1777,21 @@
                     console.log('[AI-WS] 🎙️ AI GENERATING SPEECH:', data.message);
                     updateAIStatus('thinking');
                     updateStatus(data.message || 'Generating AI speech...', 'info');
+                    
+                    // Start more frequent keepalive during TTS generation
+                    if (ttsKeepAliveInterval) {
+                        clearInterval(ttsKeepAliveInterval);
+                    }
+                    ttsKeepAliveInterval = setInterval(() => {
+                        if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                            aiWs.send(JSON.stringify({
+                                type: 'tts_keepalive',
+                                sessionId: sessionId,
+                                timestamp: Date.now()
+                            }));
+                            console.log('[AI-WS] 🔄 TTS keepalive sent');
+                        }
+                    }, 2000); // Every 2 seconds during TTS
                     break;
                     
                 case 'ai_audio_response':
@@ -1760,6 +1801,13 @@
                     console.log('  - Duration:', data.duration || 'unknown', 'ms');
                     console.log('  - Voice ID:', data.voice_id || 'unknown');
                     console.log('  - Text:', data.text ? `"${data.text.substring(0, 50)}..."` : 'no text');
+                    
+                    // Stop TTS keepalive since we got the response
+                    if (ttsKeepAliveInterval) {
+                        clearInterval(ttsKeepAliveInterval);
+                        ttsKeepAliveInterval = null;
+                        console.log('[AI-WS] 🔄 TTS keepalive stopped - audio received');
+                    }
                     
                     if (data.audioData && data.audioData.length > 0) {
                         // Show status that we're playing AI response
@@ -1781,6 +1829,49 @@
                             playAIAudio(data.text);
                         }
                     }
+                    break;
+                    
+                case 'tts_failed':
+                    console.log('[AI-WS] ⚠️ TTS FAILED - falling back to text response');
+                    console.log('  - Error:', data.error || 'unknown');
+                    console.log('  - Text:', data.text ? `"${data.text.substring(0, 50)}..."` : 'no text');
+                    
+                    // Stop TTS keepalive since TTS failed
+                    if (ttsKeepAliveInterval) {
+                        clearInterval(ttsKeepAliveInterval);
+                        ttsKeepAliveInterval = null;
+                        console.log('[AI-WS] 🔄 TTS keepalive stopped - TTS failed');
+                    }
+                    
+                    updateStatus('AI audio failed - using text response', 'warning');
+                    updateAIStatus('listening');
+                    
+                    // Show text response instead
+                    if (data.text) {
+                        if (userRole === 'coach') {
+                            addTranscriptItem('AI (Text)', data.text, 'ai');
+                        }
+                        updateStatus(`AI: "${data.text.substring(0, 50)}..."`, 'info');
+                    }
+                    break;
+                    
+                case 'websocket_disconnected':
+                    console.log('[AI-WS] ⚠️ GPU reports WebSocket disconnected during TTS');
+                    console.log('  - Reason:', data.reason || 'unknown');
+                    console.log('  - Text:', data.text ? `"${data.text.substring(0, 50)}..."` : 'no text');
+                    
+                    updateStatus('Connection lost during AI response - reconnecting...', 'warning');
+                    
+                    // Show text fallback if available
+                    if (data.text) {
+                        if (userRole === 'coach') {
+                            addTranscriptItem('AI (Text Fallback)', data.text, 'ai');
+                        }
+                        updateStatus(`AI: "${data.text.substring(0, 50)}..."`, 'info');
+                    }
+                    
+                    // Force reconnection attempt
+                    attemptReconnection('tts_disconnection');
                     break;
                     
                 case 'ai_error':
@@ -1843,15 +1934,20 @@
                     console.error('[AI-WS] Received error from GPU:', data.error_code, data.message);
                     handleGPUError(data);
                     break;
+                    
+                default:
+                    console.log(`[AI-WS] ⚠️ Unhandled message type: "${data.type}"`, data);
+                    break;
             }
         }
 
         // Play real AI audio from GPU server (ElevenLabs TTS)
         function playRealAIAudio(base64Audio, mimeType) {
             try {
-                console.log('[AI-AUDIO] 🎵 Processing AI audio playback:');
+                console.log('[AI-AUDIO] 🎵 Processing ElevenLabs TTS audio playback:');
                 console.log('  - Base64 length:', base64Audio.length, 'characters');
                 console.log('  - MIME type:', mimeType);
+                console.log('  - Expected format: MP3 from ElevenLabs API');
                 
                 // Validate base64 input
                 if (!base64Audio || base64Audio.length < 100) {
@@ -1874,10 +1970,17 @@
                 
                 // Set up comprehensive audio event handlers
                 audio.onloadstart = () => {
-                    console.log('[AI-AUDIO] ✅ AI audio loading started');
+                    console.log('[AI-AUDIO] ✅ ElevenLabs audio loading started');
                     updateSpeakingIndicator('ai');
                     updateAIStatus('speaking');
                     isAISpeaking = true;
+                    
+                    // Visual feedback that AI is about to speak
+                    if (voiceStatusDisplay) {
+                        voiceStatusDisplay.textContent = 'AI Loading Audio...';
+                        voiceIndicator.className = 'voice-indicator speaking';
+                        voiceIndicator.style.display = 'block';
+                    }
                 };
                 
                 audio.oncanplay = () => {
@@ -1885,30 +1988,60 @@
                 };
                 
                 audio.onplay = () => {
-                    console.log('[AI-AUDIO] ✅ AI audio playback started successfully');
+                    console.log('[AI-AUDIO] ✅ ElevenLabs audio playback started successfully');
+                    
+                    // Update visual indicators that AI is actively speaking
+                    if (voiceStatusDisplay) {
+                        voiceStatusDisplay.textContent = 'AI Speaking...';
+                        voiceIndicator.className = 'voice-indicator speaking';
+                        voiceIndicator.style.display = 'block';
+                    }
                 };
                 
                 audio.onended = () => {
-                    console.log('[AI-AUDIO] ✅ AI audio playback completed');
+                    console.log('[AI-AUDIO] ✅ ElevenLabs audio playback completed');
                     updateSpeakingIndicator(null);
                     updateAIStatus('listening');
                     isAISpeaking = false;
                     URL.revokeObjectURL(audioUrl); // Clean up
+                    
+                    // Reset visual indicators to listening state
+                    if (voiceStatusDisplay) {
+                        voiceStatusDisplay.textContent = 'Listening...';
+                        voiceIndicator.className = 'voice-indicator';
+                        voiceIndicator.style.display = 'none';
+                    }
                 };
                 
                 audio.onerror = (error) => {
-                    console.error('[AI-AUDIO] ❌ AI audio playback error:', error);
+                    console.error('[AI-AUDIO] ❌ ElevenLabs audio playback error:', error);
                     console.error('[AI-AUDIO] Audio element error details:', {
                         error: audio.error,
                         networkState: audio.networkState,
                         readyState: audio.readyState,
-                        src: audioUrl.substring(0, 50) + '...'
+                        src: audioUrl.substring(0, 50) + '...',
+                        mimeType: mimeType,
+                        blobSize: audioBlob.size
                     });
                     updateSpeakingIndicator(null);
                     updateAIStatus('listening');
                     isAISpeaking = false;
                     URL.revokeObjectURL(audioUrl); // Clean up
-                    updateStatus('AI audio playback failed', 'error');
+                    updateStatus('ElevenLabs audio playback failed', 'error');
+                    
+                    // Reset visual indicators
+                    if (voiceStatusDisplay) {
+                        voiceStatusDisplay.textContent = 'Audio Error - Listening...';
+                        voiceIndicator.className = 'voice-indicator noise';
+                        voiceIndicator.style.display = 'block';
+                        
+                        // Reset to normal after 3 seconds
+                        setTimeout(() => {
+                            voiceStatusDisplay.textContent = 'Listening...';
+                            voiceIndicator.className = 'voice-indicator';
+                            voiceIndicator.style.display = 'none';
+                        }, 3000);
+                    }
                 };
                 
                 audio.onpause = () => {
@@ -2244,7 +2377,12 @@
                                     return;
                                 }
                                 
-                                // Skip chunks that are too small (< 1KB)
+                                // Skip chunks that are too small or empty
+                                if (event.data.size === 0) {
+                                    console.log(`[AUDIO] Skipping empty chunk (0 bytes)`);
+                                    return;
+                                }
+                                
                                 if (event.data.size < 1000) {
                                     console.log(`[AUDIO] Skipping tiny chunk, size: ${event.data.size} bytes (< 1KB minimum)`);
                                     return;
@@ -2627,12 +2765,15 @@
                     const passesVoiceRatio = voiceRatio > 0.15;
                     
                     if (isLikelyKeyboard) {
-                        console.log(`⌨️ Keyboard detected: high freq ${(highFreqRatio * 100).toFixed(0)}%, voice ${(voiceRatio * 100).toFixed(0)}%`);
+                        // Only log keyboard detection very rarely to avoid spam (once per ~1000 calls)
+                        if (Math.random() < 0.001) { // 0.1% chance to log
+                            console.log(`⌨️ Keyboard detected: high freq ${(highFreqRatio * 100).toFixed(0)}%, voice ${(voiceRatio * 100).toFixed(0)}%`);
+                        }
                         return false;
                     }
                     
-                    // Debug voice activity check
-                    if (audioLevel > 6) {
+                    // Debug voice activity check (reduced frequency)
+                    if (audioLevel > 6 && Math.random() < 0.05) { // Only 5% of the time to reduce spam
                         console.log(`🎤 Voice activity check:`, {
                             audioLevel: audioLevel.toFixed(1),
                             voiceRatio: voiceRatio.toFixed(3),
@@ -2654,8 +2795,8 @@
                     const voiceCheck = isVoiceActivity(audioLevel, frequencyData);
                     const stateCheck = isAudioEnabled && !isAIPaused && !isAISpeaking;
                     
-                    // Debug logging to see what's failing
-                    if (audioLevel > 5) {
+                    // Debug logging to see what's failing (reduced frequency)
+                    if (audioLevel > 5 && Math.random() < 0.1) { // Only 10% of the time to reduce spam
                         console.log(`🔍 shouldStartRecording check:`, {
                             audioLevel: audioLevel.toFixed(1),
                             threshold: VOICE_START_THRESHOLD,
@@ -2854,7 +2995,7 @@
                         } else {
                             // Start silence timer if not already started
                             if (!silenceTimer) {
-                                console.log(`🔇 Voice dipped below continue threshold (${audioLevel.toFixed(1)} < ${VOICE_CONTINUE_THRESHOLD}) after ${sessionDuration}ms session`);
+                                console.log(`🔇 Voice dipped below continue threshold (${audioLevel.toFixed(1)} < ${VOICE_CONTINUE_THRESHOLD.toFixed(1)}) after ${sessionDuration}ms session`);
                                 silenceTimer = setTimeout(() => {
                                     // End recording session
                                     recordingSessionActive = false;
