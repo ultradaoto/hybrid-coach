@@ -64,6 +64,9 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// 🚀 STREAMING OPTIMIZATION: Serve JavaScript modules from src/services
+app.use('/src/services', express.static(path.join(__dirname, 'services')));
+
 // Add debug middleware for WebSocket requests
 app.use(debugMiddleware);
 
