@@ -854,8 +854,24 @@
             
             try {
                 aiWs = new WebSocket(aiWsUrl);
+                console.log('[AI-WS] WebSocket created, initial readyState:', aiWs.readyState);
+                
+                // Add connection timeout
+                const connectionTimeout = setTimeout(() => {
+                    if (aiWs && aiWs.readyState === WebSocket.CONNECTING) {
+                        console.log('[AI-WS] Connection timeout - still CONNECTING after 10 seconds');
+                        console.log('[AI-WS] Closing connection due to timeout');
+                        aiWs.close();
+                    }
+                }, 10000);
+                
+                // Clear timeout on successful connection
+                aiWs.addEventListener('open', () => {
+                    clearTimeout(connectionTimeout);
+                });
+                
             } catch (error) {
-                console.error('Failed to create WebSocket:', error);
+                console.error('[AI-WS] Failed to create WebSocket:', error);
                 updateStatus('AI connection failed - running in demo mode', 'warning');
                 return;
             }
@@ -891,10 +907,11 @@
             aiWs.onerror = (error) => {
                 console.error('[AI-WS] GPU connection error:', error);
                 console.log('[AI-WS] Error type:', error.type);
-                console.log('[AI-WS] WebSocket readyState at error:', aiWs.readyState);
+                console.log('[AI-WS] WebSocket readyState at error:', aiWs ? aiWs.readyState : 'null');
+                console.log('[AI-WS] Error occurred, but keeping connection for debugging');
                 updateStatus('AI connection error - running in demo mode', 'warning');
-                // Enable demo mode
-                aiWs = null;
+                // Don't immediately set to null for debugging
+                // aiWs = null;
                 enableDemoMode();
             };
             
@@ -902,8 +919,15 @@
                 console.log('[AI-WS] GPU disconnected, reason:', event.reason);
                 console.log('[AI-WS] Close code:', event.code);
                 console.log('[AI-WS] Was clean close:', event.wasClean);
+                console.log('[AI-WS] ReadyState at close:', aiWs ? aiWs.readyState : 'null');
                 updateStatus('AI disconnected - running in demo mode', 'warning');
-                aiWs = null;
+                
+                // Don't immediately set to null for debugging
+                setTimeout(() => {
+                    console.log('[AI-WS] Setting aiWs to null after close');
+                    aiWs = null;
+                }, 1000);
+                
                 enableDemoMode();
             };
         }
@@ -1275,8 +1299,13 @@
         console.log('AI room initialized - ready for real speech interaction');
         console.log('');
         console.log('🔍 DEBUGGING INFO:');
+        console.log('Browser location:', window.location.href);
+        console.log('Protocol:', window.location.protocol);
+        console.log('Host:', window.location.host);
+        console.log('SessionId:', sessionId);
         console.log('Look for these key log messages:');
         console.log('  [AI-WS] Connecting to GPU server via CPU proxy: [URL]');
+        console.log('  [AI-WS] WebSocket created, initial readyState: 0');
         console.log('  [AI-WS] GPU connection status: SUCCESS');
         console.log('  [AI-WS] Sending to GPU: {"type":"client_speaking_detected"...}');
         console.log('  [AI-WS] Received from GPU: {"type":"client_speaking"...}');
