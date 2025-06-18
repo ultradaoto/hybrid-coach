@@ -1701,6 +1701,7 @@
                                     const chunkBlob = new Blob(chunkData, { type: currentMimeType });
                                     
                                     // Send chunk immediately for real-time processing
+                                    console.log(`[AUDIO] 📦 Sending chunk #${chunkSequence} (${event.data.size} bytes)`);
                                     sendAudioChunk(chunkBlob, false);
                                     
                                     // Store last part for next chunk's overlap (simulate 200ms)
@@ -1709,6 +1710,9 @@
                             };
                             
                             mediaRecorder.onstop = () => {
+                                // Store final count BEFORE reset
+                                const sessionChunkCount = chunkSequence;
+                                console.log(`[AUDIO] 📊 Recording session complete - sent ${sessionChunkCount} chunks total`);
                                 console.log('[AUDIO] Recording stopped, sending final chunk if needed');
                                 isRecording = false;
                                 
@@ -1725,7 +1729,7 @@
                                         overlap: 0,
                                         timestamp: Date.now()
                                     };
-                                    console.log('[AUDIO] Sending end-of-speech marker');
+                                    console.log(`[AUDIO] 📤 Sending end-of-speech marker (session had ${sessionChunkCount} chunks)`);
                                     aiWs.send(JSON.stringify(finalMessage));
                                 }
                                 
@@ -1789,6 +1793,7 @@
                                     
                                     try {
                                         aiWs.send(JSON.stringify(chunkMessage));
+                                        console.log(`[AUDIO] ✅ Chunk ${chunkSequence} sent successfully to GPU`);
                                         
                                         // Set up retry timeout (only for non-final chunks)
                                         if (!isLastChunk && retryAttempt === 0) {
@@ -1935,7 +1940,8 @@
                         console.log('🎤 Starting chunked audio recording for real-time STT');
                         console.log('[AUDIO] Starting chunked recording - chunks every', chunkDuration + 'ms');
                         console.log('[AUDIO] MediaRecorder state before start:', mediaRecorder.state);
-                        console.log('[AUDIO] MediaRecorder mimeType:', currentMimeType);
+                        console.log('[AUDIO] MediaRecorder mimeType (var):', currentMimeType);
+                        console.log('[AUDIO] MediaRecorder mimeType (actual):', mediaRecorder.mimeType);
                         
                         // Reset chunking state
                         chunkSequence = 0;
