@@ -817,6 +817,17 @@
         let aiWs = null;
         let isVideoEnabled = true;
         let isAudioEnabled = true;
+        
+        // 🕒 SESSION TIMING: Global session timer for timeString format
+        let sessionStartTime = Date.now();
+        
+        function getSessionTimeString() {
+            const elapsed = Date.now() - sessionStartTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
         let isAIPaused = false;
         let isAISpeaking = false;
         let currentSpeaker = null;
@@ -2608,29 +2619,40 @@
                 case 'coach_transcription':
                     console.log('[AI-WS] 👨‍🏫 COACH TRANSCRIPTION:', data.transcript);
                     console.log('  - Confidence:', data.confidence || 'unknown');
+                    console.log('  - Time String:', data.timeString || 'unknown');
+                    console.log('  - Processing Time:', data.processingTime || 'unknown', 'ms');
                     console.log('  - Intervention Type:', data.metadata?.interventionType || 'unknown');
                     console.log('  - Coach ID:', data.metadata?.coachId || 'unknown');
                     
                     if (data.transcript) {
-                        // Add coach transcription to transcript display (no AI response triggered)
-                        addTranscriptItem('Coach', data.transcript, 'coach');
+                        // 📝 ENHANCED TRANSCRIPT: Add coach transcription with timeString
+                        const timeDisplay = data.timeString || getSessionTimeString();
+                        const speakerLabel = `Coach (${timeDisplay})`;
+                        addTranscriptItem(speakerLabel, data.transcript, 'coach');
                         
                         // Update status to show coach intervention
                         const interventionType = data.metadata?.interventionType || 'guidance';
                         updateStatus(`Coach ${interventionType}: "${data.transcript.substring(0, 30)}..."`, 'info');
                         
-                        // Visual feedback that coach was heard
-                        if (voiceStatusDisplay && userRole === 'coach') {
-                            voiceStatusDisplay.textContent = `Transcribed: "${data.transcript.substring(0, 20)}..."`;
-                            voiceIndicator.className = 'voice-indicator coach';
-                            voiceIndicator.style.display = 'block';
+                        // 👨‍🏫 UPDATE COACH UI: Visual feedback that coach was heard
+                        if (userRole === 'coach') {
+                            updateCoachMicIndicator(false); // Reset speaking indicator
+                            updateCoachStatus(`Transcribed: "${data.transcript.substring(0, 25)}..."`);
                             
-                            // Reset after 3 seconds
-                            setTimeout(() => {
-                                voiceStatusDisplay.textContent = 'Listening...';
-                                voiceIndicator.className = 'voice-indicator';
-                            }, 3000);
+                            if (voiceStatusDisplay) {
+                                voiceStatusDisplay.textContent = `Transcribed: "${data.transcript.substring(0, 20)}..."`;
+                                voiceIndicator.className = 'voice-indicator coach';
+                                voiceIndicator.style.display = 'block';
+                                
+                                // Reset after 3 seconds
+                                setTimeout(() => {
+                                    voiceStatusDisplay.textContent = 'Listening...';
+                                    voiceIndicator.className = 'voice-indicator';
+                                }, 3000);
+                            }
                         }
+                        
+                        console.log('[AI-WS] ✅ Coach transcription processed and displayed');
                     }
                     break;
                     
@@ -2655,6 +2677,25 @@
                         voiceStatusDisplay.textContent = 'Listening...';
                         voiceIndicator.className = 'voice-indicator';
                         voiceIndicator.style.display = 'none';
+                    }
+                    break;
+                    
+                case 'coach_transcription_error':
+                    console.error('[AI-WS] ❌ COACH TRANSCRIPTION ERROR:', data.error);
+                    console.log('  - Session ID:', data.sessionId);
+                    console.log('  - Timestamp:', data.timestamp);
+                    
+                    // 👨‍🏫 UPDATE COACH UI: Show error feedback
+                    if (userRole === 'coach') {
+                        updateCoachStatus('Transcription failed - Please try again');
+                        updateStatus('Coach audio transcription error', 'error');
+                        updateCoachMicIndicator(false); // Reset speaking indicator
+                    }
+                    
+                    // Add error to transcript for coaches
+                    if (userRole === 'coach') {
+                        const timeDisplay = getSessionTimeString();
+                        addTranscriptItem(`System (${timeDisplay})`, `Coach transcription failed: ${data.error}`, 'ai');
                     }
                     break;
                     
@@ -3352,8 +3393,11 @@
         }
 
         // AI Control functions (Coach only)
+        console.log('[COACH_CONTROL] 🔍 Defining pauseAI function');
+        
         function pauseAI() {
             console.log('[COACH_CONTROL] 🎭 Coach requesting AI pause');
+            console.log('[COACH_CONTROL] 🔍 pauseAI function called successfully');
             
             // 🚀 SPEECH COORDINATION: Use speech coordinator for unified pause control
             if (speechCoordinator) {
@@ -3369,16 +3413,20 @@
                 console.log('[COACH_CONTROL] ✅ Legacy AI pause applied');
             }
             
-            // Notify GPU server
+            // 📤 SEND TO GPU: AI pause request (matches GPU expected format)
             if (aiWs && aiWs.readyState === WebSocket.OPEN) {
                 aiWs.send(JSON.stringify({
-                    type: 'pause_ai',
+                    type: 'ai_pause_request',
                     sessionId: sessionId,
-                    coachId: userId
+                    reason: 'coach_intervention',
+                    timestamp: new Date().toISOString()
                 }));
-                console.log('[COACH_CONTROL] 📡 Sent pause command to GPU');
+                console.log('[COACH_CONTROL] 📡 Sent ai_pause_request to GPU');
             }
         }
+        
+        // Make function globally accessible for debugging
+        window.pauseAI = pauseAI;
 
         function resumeAI() {
             console.log('[COACH_CONTROL] 🎭 Coach requesting AI resume');
@@ -3393,16 +3441,19 @@
                 console.log('[COACH_CONTROL] ✅ Legacy AI resume applied');
             }
             
-            // Notify GPU server
+            // 📤 SEND TO GPU: AI resume request (matches GPU expected format)
             if (aiWs && aiWs.readyState === WebSocket.OPEN) {
                 aiWs.send(JSON.stringify({
-                    type: 'resume_ai',
+                    type: 'ai_resume_request',
                     sessionId: sessionId,
-                    coachId: userId
+                    timestamp: new Date().toISOString()
                 }));
-                console.log('[COACH_CONTROL] 📡 Sent resume command to GPU');
+                console.log('[COACH_CONTROL] 📡 Sent ai_resume_request to GPU');
             }
         }
+        
+        // Make function globally accessible for debugging
+        window.resumeAI = resumeAI;
 
         // Initialize media and connections
         async function initializeMedia() {
@@ -3482,11 +3533,42 @@
                 btn.innerHTML = isAudioEnabled ? '🎤 Audio' : '🎤 Muted';
             };
             
-            // Coach controls
+            // Coach controls - Add small delay to ensure DOM elements are loaded
             if (userRole === 'coach') {
-                document.getElementById('pauseAI').onclick = pauseAI;
-                document.getElementById('resumeAI').onclick = resumeAI;
-                document.getElementById('quickPause').onclick = pauseAI;
+                setTimeout(() => {
+                    // Add error handling and null checks for DOM elements
+                    const pauseAIBtn = document.getElementById('pauseAI');
+                    const resumeAIBtn = document.getElementById('resumeAI');
+                    const quickPauseBtn = document.getElementById('quickPause');
+                    
+                    console.log('[COACH_CONTROL] 🔍 Attempting to attach event listeners...');
+                    
+                    if (pauseAIBtn) {
+                        // Try both onclick and addEventListener as fallbacks
+                        pauseAIBtn.onclick = pauseAI;
+                        pauseAIBtn.addEventListener('click', pauseAI);
+                        console.log('[COACH_CONTROL] ✅ Pause AI button event listener attached');
+                        console.log('[COACH_CONTROL] 🔍 pauseAI function type:', typeof pauseAI);
+                    } else {
+                        console.error('[COACH_CONTROL] ❌ pauseAI button not found in DOM');
+                    }
+                    
+                    if (resumeAIBtn) {
+                        resumeAIBtn.onclick = resumeAI;
+                        resumeAIBtn.addEventListener('click', resumeAI);
+                        console.log('[COACH_CONTROL] ✅ Resume AI button event listener attached');
+                    } else {
+                        console.error('[COACH_CONTROL] ❌ resumeAI button not found in DOM');
+                    }
+                    
+                    if (quickPauseBtn) {
+                        quickPauseBtn.onclick = pauseAI;
+                        quickPauseBtn.addEventListener('click', pauseAI);
+                        console.log('[COACH_CONTROL] ✅ Quick Pause button event listener attached');
+                    } else {
+                        console.error('[COACH_CONTROL] ❌ quickPause button not found in DOM');
+                    }
+                }, 100); // 100ms delay to ensure DOM is ready
                 
                 // 🚀 SPEECH COORDINATION: Clear audio queue button
                 document.getElementById('clearQueue').onclick = () => {
@@ -3536,14 +3618,11 @@
                     };
                 }
                 
-                // Initialize session timer
-                let sessionStartTime = Date.now();
+                // Initialize session timer using global session start time
                 let sessionTimerInterval = setInterval(() => {
-                    const elapsed = Date.now() - sessionStartTime;
-                    const minutes = Math.floor(elapsed / 60000);
-                    const seconds = Math.floor((elapsed % 60000) / 1000);
+                    const timeString = getSessionTimeString();
                     if (sessionTimer) {
-                        sessionTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                        sessionTimer.textContent = timeString;
                     }
                 }, 1000);
                 
@@ -4555,11 +4634,26 @@
             }
         });
 
-        // Start the application
-        initializeMedia();
+        // Start the application with DOM ready check
+        function startApplication() {
+            console.log('[INIT] 🚀 Starting application with DOM ready check...');
+            
+            // Ensure DOM elements are available
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => {
+                    console.log('[INIT] ✅ DOM loaded, initializing...');
+                    initializeMedia();
+                    initializeStreamingServices();
+                });
+            } else {
+                console.log('[INIT] ✅ DOM already loaded, initializing...');
+                initializeMedia();
+                initializeStreamingServices();
+            }
+        }
         
-        // Initialize streaming optimization services
-        initializeStreamingServices();
+        // Start with DOM ready protection
+        startApplication();
         
         // Set up audio detection after media is ready
         setTimeout(async () => {

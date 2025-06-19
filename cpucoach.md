@@ -139,6 +139,11 @@ Coach speaks → MediaRecorder → sendCoachAudioChunk() → coach_audio_data �
 - [x] Update transcript display for multi-party
 - [x] Implement intervention type selector
 - [x] Add error handling for coach audio
+- [x] Fix pauseAI function DOM timing issues
+- [x] Align message formats with GPU specification
+- [x] Add session timer with timeString format
+- [x] Add coach_transcription_error handler
+- [x] Update AI pause/resume commands to match GPU spec
 - [ ] Test tri-party session flow
 - [ ] Validate transcript accuracy
 
