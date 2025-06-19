@@ -135,10 +135,10 @@ Coach speaks → MediaRecorder → sendCoachAudioChunk() → coach_audio_data �
 - [x] Add coach message handlers to `handleAIMessage()`
 - [x] Implement audio source detection
 - [x] Enhance `SpeechCoordinator` for coach support
-- [ ] Add coach control panel UI
-- [ ] Update transcript display for multi-party
-- [ ] Implement intervention type selector
-- [ ] Add error handling for coach audio
+- [x] Add coach control panel UI
+- [x] Update transcript display for multi-party
+- [x] Implement intervention type selector
+- [x] Add error handling for coach audio
 - [ ] Test tri-party session flow
 - [ ] Validate transcript accuracy
 

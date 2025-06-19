@@ -467,6 +467,92 @@
             background: rgba(111, 66, 193, 0.2);
         }
 
+        /* 👨‍🏫 Coach intervention panel styles */
+        .coach-intervention-panel {
+            background: #333;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid #444;
+        }
+
+        .coach-intervention-panel h4 {
+            color: #6f42c1;
+            margin: 0 0 0.75rem 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .intervention-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .intervention-type-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .intervention-type-selector label {
+            font-size: 0.8rem;
+            color: #ccc;
+            font-weight: 500;
+        }
+
+        .intervention-select {
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 0.5rem;
+            color: #fff;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .intervention-select:focus {
+            border-color: #6f42c1;
+            box-shadow: 0 0 0 2px rgba(111, 66, 193, 0.2);
+        }
+
+        .coach-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: #2a2a2a;
+            border-radius: 4px;
+            border: 1px solid #444;
+        }
+
+        .coach-mic-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .indicator-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .indicator-dot.speaking {
+            background: #6f42c1;
+            animation: pulse 0.5s infinite;
+        }
+
+        .session-timer {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #17a2b8;
+            font-weight: bold;
+        }
+
         /* Mobile responsiveness */
         @media (max-width: 1024px) {
             .main-container {
@@ -644,6 +730,30 @@
                 </div>
             </div>
 
+            <!-- 👨‍🏫 COACH INTERVENTION CONTROLS -->
+            <div class="coach-intervention-panel">
+                <h4>Coach Intervention</h4>
+                <div class="intervention-controls">
+                    <div class="intervention-type-selector">
+                        <label for="interventionType">Intervention Type:</label>
+                        <select id="interventionType" class="intervention-select">
+                            <option value="guidance">Guidance</option>
+                            <option value="clarification">Clarification</option>
+                            <option value="redirect">Redirect</option>
+                            <option value="pause">Pause Session</option>
+                        </select>
+                    </div>
+                    
+                    <div class="coach-status">
+                        <div class="coach-mic-indicator" id="coachMicIndicator">
+                            <span class="indicator-dot"></span>
+                            <span id="coachMicStatus">Ready to intervene</span>
+                        </div>
+                        <div class="session-timer" id="sessionTimer">00:00</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="transcript-container">
                 <div class="transcript-tabs">
                     <button class="tab active" data-tab="live">Live Transcript</button>
@@ -811,13 +921,52 @@
             const timestamp = new Date().toLocaleTimeString();
             const item = document.createElement('div');
             item.className = `transcript-item ${type}`;
+            
+            // 👨‍🏫 ENHANCED TRANSCRIPT: Add special formatting for coach interventions
+            let speakerIcon = '';
+            if (type === 'coach') {
+                speakerIcon = '👨‍🏫 ';
+            } else if (type === 'ai') {
+                speakerIcon = '🤖 ';
+            } else if (type === 'client') {
+                speakerIcon = '👤 ';
+            }
+            
             item.innerHTML = `
-                <div class="speaker">${speaker} <span class="timestamp">${timestamp}</span></div>
+                <div class="speaker">${speakerIcon}${speaker} <span class="timestamp">${timestamp}</span></div>
                 <div>${text}</div>
             `;
             
             transcriptContent.appendChild(item);
             transcriptContent.scrollTop = transcriptContent.scrollHeight;
+        }
+
+        // 👨‍🏫 COACH UTILITY FUNCTIONS: Helper functions for coach controls
+        function updateCoachStatus(message) {
+            const coachMicStatus = document.getElementById('coachMicStatus');
+            if (coachMicStatus) {
+                coachMicStatus.textContent = message;
+                console.log(`[COACH] Status: ${message}`);
+            }
+        }
+
+        function getCurrentInterventionType() {
+            const interventionSelect = document.getElementById('interventionType');
+            return interventionSelect ? interventionSelect.value : 'guidance';
+        }
+
+        function updateCoachMicIndicator(speaking) {
+            const indicatorDot = document.querySelector('.coach-mic-indicator .indicator-dot');
+            if (indicatorDot) {
+                if (speaking) {
+                    indicatorDot.classList.add('speaking');
+                    updateCoachStatus('Speaking - Transcribing...');
+                } else {
+                    indicatorDot.classList.remove('speaking');
+                    const interventionType = getCurrentInterventionType();
+                    updateCoachStatus(`Ready for ${interventionType}`);
+                }
+            }
         }
 
         function updateAIStatus(status, speaking = false) {
@@ -2496,6 +2645,11 @@
                         speechCoordinator.setCoachSpeaking(false);
                     }
                     
+                    // 👨‍🏫 UPDATE COACH UI: Reset coach mic indicator
+                    if (userRole === 'coach') {
+                        updateCoachMicIndicator(false);
+                    }
+                    
                     // Clear coach speaking indicator
                     if (userRole === 'coach' && voiceStatusDisplay) {
                         voiceStatusDisplay.textContent = 'Listening...';
@@ -3362,6 +3516,40 @@
                     }
                 };
                 
+                // 👨‍🏫 COACH INTERVENTION CONTROLS: Setup event listeners
+                const interventionTypeSelect = document.getElementById('interventionType');
+                const coachMicIndicator = document.getElementById('coachMicIndicator');
+                const coachMicStatus = document.getElementById('coachMicStatus');
+                const sessionTimer = document.getElementById('sessionTimer');
+                
+                if (interventionTypeSelect) {
+                    interventionTypeSelect.onchange = (e) => {
+                        const interventionType = e.target.value;
+                        console.log(`[COACH] 👨‍🏫 Intervention type changed to: ${interventionType}`);
+                        updateCoachStatus(`Ready for ${interventionType}`);
+                        
+                        // Special handling for pause session
+                        if (interventionType === 'pause') {
+                            pauseAI();
+                            updateCoachStatus('Session paused by coach');
+                        }
+                    };
+                }
+                
+                // Initialize session timer
+                let sessionStartTime = Date.now();
+                let sessionTimerInterval = setInterval(() => {
+                    const elapsed = Date.now() - sessionStartTime;
+                    const minutes = Math.floor(elapsed / 60000);
+                    const seconds = Math.floor((elapsed % 60000) / 1000);
+                    if (sessionTimer) {
+                        sessionTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    }
+                }, 1000);
+                
+                // Store timer reference for cleanup
+                window.sessionTimerInterval = sessionTimerInterval;
+                
                 // Tab switching
                 document.querySelectorAll('.tab').forEach(tab => {
                     tab.onclick = () => {
@@ -3528,6 +3716,9 @@
                                     if (speechCoordinator) {
                                         speechCoordinator.setCoachSpeaking(true);
                                     }
+                                    
+                                    // 👨‍🏫 UPDATE COACH UI: Update coach mic indicator
+                                    updateCoachMicIndicator(true);
                                     
                                     sendCoachAudioChunk(chunkBlob, false);
                                 } else {
@@ -3776,31 +3967,69 @@
                                         }
                                         
                                     } catch (sendError) {
-                                        console.error('[COACH_AUDIO] Failed to send coach audio:', sendError);
+                                        console.error('[COACH_AUDIO] ❌ Failed to send coach audio:', sendError);
+                                        
+                                        // 👨‍🏫 UPDATE COACH UI: Show error feedback
+                                        updateCoachStatus(`Error sending audio (attempt ${retryAttempt + 1}/3)`);
+                                        
                                         if (retryAttempt < 2) {
+                                            console.log(`[COACH_AUDIO] 🔄 Retrying coach audio send in ${retryAttempt + 1} seconds...`);
                                             setTimeout(() => {
                                                 sendCoachAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
                                             }, 1000 * (retryAttempt + 1)); // Progressive delay
+                                        } else {
+                                            // All retries failed - notify coach
+                                            console.error('[COACH_AUDIO] ❌ All retries failed for coach audio');
+                                            updateCoachStatus('Audio transmission failed - Please try speaking again');
+                                            updateStatus('Coach audio failed - Please retry intervention', 'error');
+                                            
+                                            // Reset coach mic indicator
+                                            updateCoachMicIndicator(false);
                                         }
                                     }
                                 } else {
-                                    console.log('[COACH_AUDIO] Cannot send chunk - WebSocket not ready, state:', aiWs ? aiWs.readyState : 'null');
+                                    console.log('[COACH_AUDIO] ❌ Cannot send chunk - WebSocket not ready, state:', aiWs ? aiWs.readyState : 'null');
+                                    
+                                    // 👨‍🏫 UPDATE COACH UI: Show connection error
+                                    updateCoachStatus(`Connection lost (attempt ${retryAttempt + 1}/3)`);
                                     
                                     // Retry when WebSocket reconnects
                                     if (retryAttempt < 2) {
+                                        console.log(`[COACH_AUDIO] 🔄 Waiting for WebSocket reconnection...`);
                                         setTimeout(() => {
                                             sendCoachAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
                                         }, 2000);
+                                    } else {
+                                        // Connection failed - notify coach
+                                        console.error('[COACH_AUDIO] ❌ WebSocket connection failed for coach audio');
+                                        updateCoachStatus('Connection failed - Check network');
+                                        updateStatus('GPU connection lost - Coach audio unavailable', 'error');
+                                        
+                                        // Reset coach mic indicator
+                                        updateCoachMicIndicator(false);
                                     }
                                 }
                             };
                             
                             reader.onerror = (error) => {
                                 console.error('[COACH_AUDIO] ❌ FileReader failed to read coach audio chunk:', error);
+                                
+                                // 👨‍🏫 UPDATE COACH UI: Show file processing error
+                                updateCoachStatus(`Processing error (attempt ${retryAttempt + 1}/3)`);
+                                
                                 if (retryAttempt < 2) {
+                                    console.log(`[COACH_AUDIO] 🔄 Retrying FileReader for coach audio...`);
                                     setTimeout(() => {
                                         sendCoachAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
                                     }, 1000);
+                                } else {
+                                    // File processing failed - notify coach
+                                    console.error('[COACH_AUDIO] ❌ FileReader failed for coach audio after retries');
+                                    updateCoachStatus('Audio processing failed - Please try again');
+                                    updateStatus('Coach audio processing error - Check microphone', 'error');
+                                    
+                                    // Reset coach mic indicator
+                                    updateCoachMicIndicator(false);
                                 }
                             };
                             
