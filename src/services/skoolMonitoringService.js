@@ -80,8 +80,8 @@ class SkoolMonitoringService {
         throw new Error(`Failed to navigate to ${community} members list`);
       }
 
-      // Extract member data (limit to 5 for testing both communities)
-      const limit = 5; // Limit both communities for testing
+      // Extract member data (default to 5 for safety, configurable via environment variable)
+      const limit = process.env.SKOOL_MEMBER_LIMIT ? parseInt(process.env.SKOOL_MEMBER_LIMIT) : 5; // Default to 5 members for testing
       const members = await this.browserService.extractMembersList(community, limit);
       logger.info(`Extracted ${members.length} members from ${community}`);
 
@@ -120,8 +120,9 @@ class SkoolMonitoringService {
 
     for (const member of members) {
       try {
-        if (!member.email || !member.email.includes('@')) {
-          logger.warn(`Skipping member with invalid email: ${member.name}`);
+        // 📧 SKIP MEMBERS WITHOUT VALID EMAILS
+        if (!member.email || !member.email.includes('@') || !member.hasValidEmail) {
+          logger.warn(`Skipping member with invalid email: ${member.name} (email: ${member.email || 'none'})`);
           continue;
         }
 
@@ -202,6 +203,24 @@ class SkoolMonitoringService {
       updateData.vagusSubscriptionStatus = memberData.subscriptionStatus;
     }
 
+    // 🖼️ UPDATE PROFILE PHOTO FIELDS
+    if (memberData.profilePhotoUrl) {
+      updateData.skoolProfilePhotoUrl = memberData.profilePhotoUrl;
+    }
+    if (memberData.profilePhotoPath) {
+      updateData.profilePhotoPath = memberData.profilePhotoPath;
+      updateData.lastPhotoSync = new Date();
+    }
+    if (memberData.description) {
+      updateData.skoolBio = memberData.description;
+    }
+    if (memberData.handle) {
+      updateData.skoolProfileUrl = `https://www.skool.com${memberData.handle}`;
+    }
+    if (memberData.joinedDate) {
+      updateData.skoolJoinedDate = memberData.joinedDate;
+    }
+
     // Set membership end date for cancelled subscriptions
     if (memberData.subscriptionStatus === 'cancelled' && memberData.churnDate) {
       updateData.membershipEndDate = memberData.churnDate;
@@ -237,12 +256,11 @@ class SkoolMonitoringService {
     // Generate a unique googleId for Skool-only users
     const skoolGoogleId = `skool_${community}_${memberData.handle.replace(/[@\/\-\?]/g, '_')}`;
     
-    // Extract email - try to get a real email if possible, otherwise use Skool handle
+    // 📧 EMAIL VALIDATION: Only use real emails now
     let email = memberData.email;
-    if (!email || !email.includes('@') || email.includes('@skool.com')) {
-      // If no real email, create a placeholder
-      const cleanHandle = memberData.handle.replace(/[@\/\-\?]/g, '');
-      email = `${cleanHandle}@placeholder.skool`;
+    if (!email || !email.includes('@')) {
+      logger.warn(`Skipping user creation for ${memberData.name} - no valid email found`);
+      throw new Error(`No valid email for member: ${memberData.name}`);
     }
     
     const userData = {
@@ -254,6 +272,24 @@ class SkoolMonitoringService {
       lastSkoolSync: new Date(),
       membershipEndDate: memberData.churnDate || memberData.renewalDate || null
     };
+
+    // 🖼️ ADD PROFILE PHOTO FIELDS
+    if (memberData.profilePhotoUrl) {
+      userData.skoolProfilePhotoUrl = memberData.profilePhotoUrl;
+    }
+    if (memberData.profilePhotoPath) {
+      userData.profilePhotoPath = memberData.profilePhotoPath;
+      userData.lastPhotoSync = new Date();
+    }
+    if (memberData.description) {
+      userData.skoolBio = memberData.description;
+    }
+    if (memberData.handle) {
+      userData.skoolProfileUrl = `https://www.skool.com${memberData.handle}`;
+    }
+    if (memberData.joinedDate) {
+      userData.skoolJoinedDate = memberData.joinedDate;
+    }
 
     // Set community-specific data
     if (community === 'ultra') {

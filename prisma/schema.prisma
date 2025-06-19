@@ -24,6 +24,13 @@ model User {
   skoolVagusEmail         String?
   ultraSubscriptionStatus String?
   vagusSubscriptionStatus String?
+  // 🖼️ SKOOL PROFILE PHOTO FIELDS
+  skoolProfileUrl         String?
+  skoolProfilePhotoUrl    String?  // Original Skool photo URL
+  profilePhotoPath        String?  // Local storage path
+  skoolBio               String?   // Member's bio/description
+  skoolJoinedDate        DateTime? // When they joined Skool
+  lastPhotoSync          DateTime? // Last photo download
   clientAppointments      Appointment[]             @relation("Client")
   coachAppointments       Appointment[]             @relation("Coach")
   membershipHistory       MembershipStatusHistory[]
@@ -33,25 +40,48 @@ model User {
 }
 
 model Profile {
-  id      String @id @default(cuid())
-  userId  String @unique
-  bioJson Json?
-  user    User   @relation(fields: [userId], references: [id])
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  bioJson      Json?
+  // 🎯 CLIENT CONTEXT FIELDS
+  clientFacts  String[] @default([])
+  challenges   String[] @default([])
+  preferences  Json?
+  lastSummary  String?
+  contextNotes String?
+  user         User     @relation(fields: [userId], references: [id])
 }
 
 model Session {
-  id            String      @id @default(cuid())
-  roomId        String
-  startedAt     DateTime    @default(now())
-  endedAt       DateTime?
-  userId        String
-  summary       String?
-  appointmentId String
-  messages      Message[]
-  appointment   Appointment @relation(fields: [appointmentId], references: [id])
-  user          User        @relation(fields: [userId], references: [id])
+  id              String         @id @default(cuid())
+  roomId          String
+  startedAt       DateTime       @default(now())
+  endedAt         DateTime?
+  userId          String
+  summary         String?
+  appointmentId   String
+  // 🎯 SESSION MANAGEMENT FIELDS
+  durationMinutes Int            @default(20)
+  transcript      String?
+  aiSummary       String?
+  status          String         @default("active")
+  warningsSent    Int            @default(0)
+  rating          SessionRating?
+  messages        Message[]
+  appointment     Appointment    @relation(fields: [appointmentId], references: [id])
+  user            User           @relation(fields: [userId], references: [id])
 
   @@unique([appointmentId, userId], name: "appointment_user")
+}
+
+model SessionRating {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  rating    Int      // 1-5 stars
+  comment   String?  // Optional feedback
+  tipAmount Float?   // $1, $3, or $5
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id])
 }
 
 model Message {

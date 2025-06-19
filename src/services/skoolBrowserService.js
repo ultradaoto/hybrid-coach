@@ -1,5 +1,11 @@
 import { chromium } from 'playwright';
 import winston from 'winston';
+import fs from 'fs/promises';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configure logger
 const logger = winston.createLogger({
@@ -257,6 +263,43 @@ class SkoolBrowserService {
             // Extract bio/description
             const descriptionElement = element.querySelector('.styled__MemberBio-sc-qwyv4g-6, [class*="MemberBio"]');
             
+            // 📧 EXTRACT REAL EMAIL from members list
+            let email = '';
+            
+            // Look for email in various possible locations within the member card
+            const emailSelectors = [
+              // Common email patterns in Skool member lists
+              'span:contains("@")',
+              '[class*="email"]',
+              '[class*="Email"]', 
+              'div:contains("@")',
+              // Member info items that might contain emails
+              '[class*="MemberInfoItem"] span',
+              '[class*="memberInfo"] span',
+              // Text content that looks like an email
+              'span, div, p'
+            ];
+            
+            // Search through all text content for email patterns
+            const allTextElements = element.querySelectorAll('span, div, p');
+            for (const textEl of allTextElements) {
+              const text = textEl.textContent?.trim() || '';
+              
+              // Email regex pattern
+              const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+              if (emailMatch) {
+                email = emailMatch[0];
+                break; // Use first valid email found
+              }
+            }
+            
+            // 🖼️ EXTRACT PROFILE PHOTO
+            let profilePhotoUrl = '';
+            const photoElement = element.querySelector('img[class*="avatar"], img[class*="Avatar"], img[class*="profile"], img[src*="avatar"]');
+            if (photoElement) {
+              profilePhotoUrl = photoElement.src || photoElement.getAttribute('src') || '';
+            }
+            
             // Extract subscription info from the member info area
             const memberInfoItems = element.querySelectorAll('[class*="MemberInfoItem"] span');
             let price = '';
@@ -280,6 +323,8 @@ class SkoolBrowserService {
               username: usernameElement ? usernameElement.textContent.trim() : '',
               handle: usernameElement ? usernameElement.getAttribute('href') : '',
               description: descriptionElement ? descriptionElement.textContent.trim() : '',
+              email: email, // Real email extracted from DOM
+              profilePhotoUrl: profilePhotoUrl, // Profile photo URL
               price,
               renewalInfo,
               joinedInfo,
@@ -309,6 +354,14 @@ class SkoolBrowserService {
             }
           }
           
+          // 📧 VALIDATION: Ensure we have a valid email
+          let validEmail = member.email || '';
+          if (!validEmail || !validEmail.includes('@')) {
+            logger.warn(`No valid email found for member: ${member.name} in ${community}`);
+            // For members without emails, we'll skip them or mark for manual review
+            validEmail = ''; // Don't create placeholder emails
+          }
+          
           // Create member details with available info
           return {
             ...member,
@@ -316,8 +369,9 @@ class SkoolBrowserService {
             subscriptionStatus,
             joinedDate,
             lastChecked: new Date(),
-            // Parse email from handle if possible (though this might not always work)
-            email: member.handle ? member.handle.replace('/@', '').replace(/\?.*/, '') + '@skool.com' : ''
+            email: validEmail, // Use real extracted email only
+            hasValidEmail: !!validEmail && validEmail.includes('@'),
+            hasProfilePhoto: !!member.profilePhotoUrl
           };
         });
         
@@ -329,12 +383,29 @@ class SkoolBrowserService {
           return b.joinedDate - a.joinedDate; // Most recent first
         });
         
-        // Add members up to the limit
-        for (const memberDetails of processedMembers) {
-          if (members.length >= targetLimit) break;
+        // Process each member individually with enhanced email extraction
+        for (let i = 0; i < Math.min(processedMembers.length, targetLimit - members.length); i++) {
+          const memberDetails = processedMembers[i];
           
-          members.push(memberDetails);
-          logger.info(`Processed member ${members.length}/${targetLimit}: ${memberDetails.name} (joined: ${memberDetails.joinedDate ? memberDetails.joinedDate.toDateString() : 'unknown'})`);
+          logger.info(`Processing member ${members.length + 1}/${targetLimit}: ${memberDetails.name}...`);
+          
+          // 📧 ENHANCED EMAIL EXTRACTION: Click Membership button for each member
+          const memberWithEnhancedEmail = await this.extractMembershipDetails(memberDetails, i, community);
+          
+          // 🖼️ DOWNLOAD PROFILE PHOTO if available
+          const memberWithPhoto = await this.processMemberWithPhoto(memberWithEnhancedEmail, community);
+          
+          members.push(memberWithPhoto);
+          
+          // Enhanced logging with email and photo status
+          const emailStatus = memberWithPhoto.hasValidEmail ? '✅' : '❌';
+          const photoStatus = memberWithPhoto.photoDownloaded ? '🖼️' : '🚫';
+          const joinedStr = memberWithPhoto.joinedDate ? memberWithPhoto.joinedDate.toDateString() : 'unknown';
+          
+          logger.info(`✅ Processed member ${members.length}/${targetLimit}: ${memberWithPhoto.name} | Email: ${emailStatus} ${memberWithPhoto.email || 'none'} | Photo: ${photoStatus} | Joined: ${joinedStr}`);
+          
+          // Small delay between member processing to avoid overwhelming the UI
+          await this.page.waitForTimeout(1000);
         }
 
         // Check if we've reached our limit or if there are more pages
@@ -484,6 +555,220 @@ class SkoolBrowserService {
     } catch (error) {
       logger.warn(`Failed to go to next page: ${error.message}`);
       return false;
+    }
+  }
+
+  /**
+   * Extract detailed membership information by clicking Membership button
+   * @param {Object} member - Basic member data
+   * @param {number} memberIndex - Index of member in the list
+   * @param {string} community - Community name
+   * @returns {Object} - Enhanced member data with email from modal
+   */
+  async extractMembershipDetails(member, memberIndex, community) {
+    try {
+      logger.info(`📧 Extracting email for ${member.name} via Membership modal...`);
+      
+      // Find all member cards on the current page
+      const memberCards = await this.page.$$('.styled__MemberItemWrapper-sc-qwyv4g-0, [class*="MemberItemWrapper"]');
+      
+      if (memberIndex >= memberCards.length) {
+        logger.warn(`Member index ${memberIndex} out of range for ${member.name}`);
+        return { ...member, modalEmailExtracted: false };
+      }
+      
+      const memberCard = memberCards[memberIndex];
+      
+      // Look for the Membership button within this specific member card
+      const membershipButton = await memberCard.$('button:has-text("Membership"), button[class*="ButtonWrapper"]:has-text("Membership")');
+      
+      if (!membershipButton) {
+        logger.warn(`No Membership button found for ${member.name}`);
+        return { ...member, modalEmailExtracted: false };
+      }
+      
+      // Click the Membership button to open modal
+      await membershipButton.click();
+      logger.info(`🔘 Clicked Membership button for ${member.name}`);
+      
+      // Wait for modal to appear
+      await this.page.waitForTimeout(2000);
+      
+      // Wait for the modal to be visible
+      try {
+        await this.page.waitForSelector('.styled__TabModalDesktop-sc-1p35nnr-1, [class*="TabModalDesktop"]', { 
+          timeout: 5000 
+        });
+      } catch (modalError) {
+        logger.warn(`Modal did not appear for ${member.name}: ${modalError.message}`);
+        return { ...member, modalEmailExtracted: false };
+      }
+      
+      // Extract email from the modal
+      const modalEmail = await this.page.evaluate(() => {
+        // Look for the membership info with Email label
+        const emailInfoElements = document.querySelectorAll('.styled__MembershipInfo-sc-gmyn28-1, [class*="MembershipInfo"]');
+        
+        for (const element of emailInfoElements) {
+          const label = element.querySelector('label');
+          const span = element.querySelector('span');
+          
+          if (label && span && label.textContent.trim().toLowerCase().includes('email')) {
+            const email = span.textContent.trim();
+            // Validate email format
+            if (email && email.includes('@')) {
+              return email;
+            }
+          }
+        }
+        
+        return null;
+      });
+      
+      // Extract additional details from modal if available
+      const modalDetails = await this.page.evaluate(() => {
+        const details = {};
+        
+        // Look for subscription info items
+        const subscriptionItems = document.querySelectorAll('.styled__SubscriptionInfoItem-sc-gmyn28-7, [class*="SubscriptionInfoItem"]');
+        
+        subscriptionItems.forEach(item => {
+          const text = item.textContent.trim();
+          if (text.includes('Joined')) {
+            details.joinedInfo = text;
+          } else if (text.includes('$') || text.toLowerCase().includes('free')) {
+            details.subscriptionType = text;
+          }
+        });
+        
+        // Look for role info
+        const roleElement = document.querySelector('[class*="MembershipInfo"] span:contains("Member"), [class*="MembershipInfo"] span:contains("Admin")');
+        if (roleElement) {
+          details.role = roleElement.textContent.trim();
+        }
+        
+        return details;
+      });
+      
+      // Close modal by pressing Escape
+      await this.page.keyboard.press('Escape');
+      await this.page.waitForTimeout(1000); // Wait for modal to close
+      
+      logger.info(`📧 Email extraction for ${member.name}: ${modalEmail ? '✅ ' + modalEmail : '❌ not found'}`);
+      
+      // Return enhanced member data
+      return {
+        ...member,
+        email: modalEmail || member.email || '', // Use modal email if found, fallback to original
+        hasValidEmail: !!(modalEmail && modalEmail.includes('@')),
+        modalEmailExtracted: !!modalEmail,
+        modalDetails: modalDetails,
+        extractionMethod: modalEmail ? 'membership_modal' : 'members_list'
+      };
+      
+    } catch (error) {
+      logger.error(`Failed to extract membership details for ${member.name}: ${error.message}`);
+      
+      // Try to close any open modal
+      try {
+        await this.page.keyboard.press('Escape');
+        await this.page.waitForTimeout(500);
+      } catch (escapeError) {
+        // Ignore escape errors
+      }
+      
+      return {
+        ...member,
+        modalEmailExtracted: false,
+        extractionError: error.message
+      };
+    }
+  }
+
+  /**
+   * Download and store profile photo from Skool
+   * @param {string} photoUrl - URL of the profile photo
+   * @param {string} memberHandle - Member's unique handle for naming
+   * @param {string} community - Community name (ultra/vagus)
+   * @returns {string|null} - Local file path or null if failed
+   */
+  async downloadProfilePhoto(photoUrl, memberHandle, community) {
+    try {
+      if (!photoUrl || !photoUrl.startsWith('http')) {
+        logger.warn(`Invalid photo URL: ${photoUrl}`);
+        return null;
+      }
+
+      // Create directory structure if it doesn't exist
+      const photoDir = path.join(__dirname, '../../public/profile-photos/skool', community);
+      await fs.mkdir(photoDir, { recursive: true });
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const cleanHandle = memberHandle.replace(/[/@\-\?]/g, '_').slice(0, 20); // Sanitize and limit length
+      const filename = `user_${cleanHandle}_${timestamp}.jpg`;
+      const filepath = path.join(photoDir, filename);
+
+      // Download photo using the page context (to maintain session)
+      const response = await this.page.goto(photoUrl, { waitUntil: 'domcontentloaded' });
+      
+      if (!response || !response.ok()) {
+        throw new Error(`Failed to fetch photo: ${response?.status()}`);
+      }
+
+      const buffer = await response.body();
+      
+      // Save to disk
+      await fs.writeFile(filepath, buffer);
+      
+      // Return relative path for database storage
+      const relativePath = `/profile-photos/skool/${community}/${filename}`;
+      logger.info(`Photo downloaded: ${photoUrl} -> ${relativePath}`);
+      
+      return relativePath;
+      
+    } catch (error) {
+      logger.error(`Failed to download profile photo from ${photoUrl}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Process member and download their profile photo
+   * @param {Object} member - Member data object
+   * @param {string} community - Community name
+   * @returns {Object} - Updated member data with photo path
+   */
+  async processMemberWithPhoto(member, community) {
+    try {
+      let profilePhotoPath = null;
+      
+      if (member.profilePhotoUrl && member.handle) {
+        profilePhotoPath = await this.downloadProfilePhoto(
+          member.profilePhotoUrl, 
+          member.handle,
+          community
+        );
+        
+        // Add small delay to avoid overwhelming the server
+        await this.page.waitForTimeout(500);
+      }
+
+      return {
+        ...member,
+        profilePhotoPath,
+        photoDownloaded: !!profilePhotoPath,
+        photoDownloadedAt: profilePhotoPath ? new Date() : null
+      };
+      
+    } catch (error) {
+      logger.error(`Failed to process member photo for ${member.name}: ${error.message}`);
+      return {
+        ...member,
+        profilePhotoPath: null,
+        photoDownloaded: false,
+        photoDownloadedAt: null
+      };
     }
   }
 

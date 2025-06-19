@@ -67,6 +67,9 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // 🚀 STREAMING OPTIMIZATION: Serve JavaScript modules from src/services
 app.use('/src/services', express.static(path.join(__dirname, 'services')));
 
+// 🖼️ SKOOL PROFILE PHOTOS: Serve profile photos from Skool integration
+app.use('/profile-photos', express.static(path.join(__dirname, '..', 'public', 'profile-photos')));
+
 // Add debug middleware for WebSocket requests
 app.use(debugMiddleware);
 
@@ -109,6 +112,7 @@ import scheduleRouter from './routes/schedule.js';
 import roomRouter from './routes/room.js';
 import apiRouter from './routes/api.js';
 import aiRouter from './routes/ai.js';
+import sessionRouter from './routes/session.js';
 
 app.use('/', baseRouter);
 app.use('/healthz', healthRouter);
@@ -118,6 +122,7 @@ app.use('/coach', coachRouter);
 app.use('/client', clientRouter);
 app.use('/schedule', scheduleRouter);
 app.use('/room', roomRouter);
+app.use('/session', sessionRouter);
 app.use('/api', apiRouter);
 app.use('/api/ai', aiRouter);
 

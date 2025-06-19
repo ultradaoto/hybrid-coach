@@ -77,12 +77,62 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
       update: {},
     });
 
+    // 4. 🎯 CLIENT CONTEXT: Load client profile and coach information
+    let clientProfile = null;
+    let coachProfile = null;
+    
+    try {
+      // Get client and coach from appointment
+      const appointmentWithUsers = await prisma.appointment.findUnique({
+        where: { id: appointment.id },
+        include: {
+          client: {
+            include: { profile: true }
+          },
+          coach: {
+            include: { profile: true }
+          }
+        }
+      });
+      
+      if (appointmentWithUsers) {
+        // For AI context, we need the CLIENT's profile (regardless of who's viewing)
+        const client = appointmentWithUsers.client;
+        const coach = appointmentWithUsers.coach;
+        
+        // Load or create client profile
+        clientProfile = await prisma.profile.upsert({
+          where: { userId: client.id },
+          create: {
+            userId: client.id,
+            clientFacts: [],
+            challenges: [],
+            preferences: null,
+            lastSummary: null,
+            contextNotes: null
+          },
+          update: {} // Don't overwrite existing data
+        });
+        
+        // Load coach profile too
+        coachProfile = coach.profile;
+        
+        console.log(`[ROOM] 🎯 Loaded client context for ${client.displayName}: ${clientProfile.clientFacts.length} facts, ${clientProfile.challenges.length} challenges`);
+      }
+    } catch (profileError) {
+      console.error('[ROOM] ❌ Error loading client profile:', profileError);
+      // Continue without profile - don't break the session
+    }
+
     res.render('room-ai-hybrid', {
       title: 'AI Hybrid Coaching Call',
       roomId,
       user: req.user,
       jwt: token,
       sessionId: session.id,
+      clientProfile: clientProfile, // Pass client context to frontend
+      coachProfile: coachProfile,
+      appointment: appointment
     });
   } catch (err) {
     next(err);

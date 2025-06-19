@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rate Your Session - Hybrid Coach</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .rating-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .session-info {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .session-info h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .session-details {
+            color: #666;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .coach-info {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .coach-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .coach-details h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .coach-details p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .rating-section {
+            margin: 40px 0;
+        }
+
+        .rating-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+
+        .star-rating {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .star {
+            font-size: 40px;
+            color: #ddd;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .star:hover,
+        .star.active {
+            color: #ffd700;
+            transform: scale(1.1);
+        }
+
+        .star.active {
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .rating-text {
+            margin-top: 15px;
+            font-size: 18px;
+            font-weight: 500;
+            color: #333;
+            min-height: 25px;
+        }
+
+        .comment-section {
+            margin: 30px 0;
+        }
+
+        .comment-section label {
+            display: block;
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+
+        .comment-section textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 100px;
+            transition: border-color 0.2s;
+        }
+
+        .comment-section textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .tip-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .tip-section h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .tip-options {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tip-option {
+            padding: 12px 24px;
+            border: 2px solid #ddd;
+            border-radius: 25px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            min-width: 80px;
+        }
+
+        .tip-option:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .tip-option.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .tip-option.no-tip {
+            color: #666;
+        }
+
+        .tip-option.no-tip.selected {
+            background: #666;
+            border-color: #666;
+        }
+
+        .submit-section {
+            margin-top: 40px;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 10px;
+        }
+
+        .btn:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .skip-link {
+            display: block;
+            margin-top: 20px;
+            color: #666;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .skip-link:hover {
+            color: #333;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .rating-container {
+                padding: 30px 20px;
+                margin: 10px;
+            }
+
+            .star {
+                font-size: 35px;
+            }
+
+            .tip-options {
+                gap: 10px;
+            }
+
+            .tip-option {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="rating-container">
+        <!-- Session Information -->
+        <div class="session-info">
+            <h1>How was your session?</h1>
+            <div class="session-details">
+                Session completed on <%= new Date(session.endedAt || session.startedAt).toLocaleDateString() %>
+                <br>Duration: <%= durationMinutes %> minutes
+            </div>
+        </div>
+
+        <!-- Coach Information -->
+        <div class="coach-info">
+            <div class="coach-avatar">
+                <%= coach.displayName.charAt(0).toUpperCase() %>
+            </div>
+            <div class="coach-details">
+                <h3>Your Coach: <%= coach.displayName %></h3>
+                <p>Professional Life Coach</p>
+            </div>
+        </div>
+
+        <!-- Rating Form -->
+        <form id="ratingForm" action="/session/<%= session.id %>/rate" method="POST">
+            <!-- Star Rating -->
+            <div class="rating-section">
+                <h2>Rate your experience</h2>
+                <div class="star-rating">
+                    <span class="star" data-rating="1">⭐</span>
+                    <span class="star" data-rating="2">⭐</span>
+                    <span class="star" data-rating="3">⭐</span>
+                    <span class="star" data-rating="4">⭐</span>
+                    <span class="star" data-rating="5">⭐</span>
+                </div>
+                <div class="rating-text" id="ratingText">Click a star to rate</div>
+                <input type="hidden" name="rating" id="ratingInput" required>
+            </div>
+
+            <!-- Comment Section -->
+            <div class="comment-section">
+                <label for="comment">Share your thoughts (optional)</label>
+                <textarea 
+                    name="comment" 
+                    id="comment" 
+                    placeholder="What did you like about this session? Any feedback for your coach?"
+                    maxlength="500"
+                ></textarea>
+            </div>
+
+            <!-- Tip Section -->
+            <div class="tip-section">
+                <h3>💰 Show your appreciation (optional)</h3>
+                <div class="tip-options">
+                    <div class="tip-option no-tip selected" data-tip="0">No tip</div>
+                    <div class="tip-option" data-tip="1">$1</div>
+                    <div class="tip-option" data-tip="3">$3</div>
+                    <div class="tip-option" data-tip="5">$5</div>
+                </div>
+                <input type="hidden" name="tipAmount" id="tipInput" value="0">
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="submit-section">
+                <button type="submit" class="btn" id="submitBtn" disabled>
+                    Submit Rating
+                </button>
+                <br>
+                <a href="/session/<%= session.id %>/skip-rating" class="skip-link">
+                    Skip rating and continue to dashboard
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Rating functionality
+        const stars = document.querySelectorAll('.star');
+        const ratingInput = document.getElementById('ratingInput');
+        const ratingText = document.getElementById('ratingText');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        const ratingTexts = {
+            1: '⭐ Poor - Not satisfied',
+            2: '⭐⭐ Fair - Below expectations',
+            3: '⭐⭐⭐ Good - Met expectations',
+            4: '⭐⭐⭐⭐ Great - Exceeded expectations',
+            5: '⭐⭐⭐⭐⭐ Excellent - Outstanding experience!'
+        };
+        
+        stars.forEach(star => {
+            star.addEventListener('click', () => {
+                const rating = parseInt(star.dataset.rating);
+                setRating(rating);
+            });
+            
+            star.addEventListener('mouseenter', () => {
+                const rating = parseInt(star.dataset.rating);
+                highlightStars(rating);
+            });
+        });
+        
+        document.querySelector('.star-rating').addEventListener('mouseleave', () => {
+            const currentRating = parseInt(ratingInput.value) || 0;
+            highlightStars(currentRating);
+        });
+        
+        function setRating(rating) {
+            ratingInput.value = rating;
+            ratingText.textContent = ratingTexts[rating] || 'Click a star to rate';
+            highlightStars(rating);
+            submitBtn.disabled = false;
+        }
+        
+        function highlightStars(rating) {
+            stars.forEach((star, index) => {
+                star.classList.toggle('active', index < rating);
+            });
+        }
+        
+        // Tip functionality
+        const tipOptions = document.querySelectorAll('.tip-option');
+        const tipInput = document.getElementById('tipInput');
+        
+        tipOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                tipOptions.forEach(opt => opt.classList.remove('selected'));
+                option.classList.add('selected');
+                tipInput.value = option.dataset.tip;
+            });
+        });
+        
+        // Form submission
+        document.getElementById('ratingForm').addEventListener('submit', (e) => {
+            if (!ratingInput.value) {
+                e.preventDefault();
+                alert('Please select a star rating before submitting.');
+                return;
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+        });
+        
+        // Auto-focus on form load
+        setTimeout(() => {
+            ratingText.textContent = 'Click a star to rate your experience';
+        }, 500);
+    </script>
+</body>
+</html>

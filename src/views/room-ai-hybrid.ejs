@@ -462,6 +462,11 @@
             background: rgba(220, 53, 69, 0.2);
         }
 
+        .voice-indicator.coach {
+            border-left-color: #6f42c1;
+            background: rgba(111, 66, 193, 0.2);
+        }
+
         /* Mobile responsiveness */
         @media (max-width: 1024px) {
             .main-container {
@@ -689,6 +694,11 @@
         const userRole = "<%= user.role %>";
         const userName = "<%= user.displayName || user.email %>";
         const userId = "<%= user.id %>";
+        
+        // 🎯 CLIENT CONTEXT: Load profile data for AI personalization
+        const clientProfile = <%- JSON.stringify(clientProfile || {}) %>;
+        const coachProfile = <%- JSON.stringify(coachProfile || {}) %>;
+        const appointment = <%- JSON.stringify(appointment || {}) %>;
         
         // State management
         let localStream = null;
@@ -1113,12 +1123,13 @@
                 this.humanSpeaking = false;
                 this.aiSpeaking = false;
                 this.aiPaused = false;
+                this.coachSpeaking = false; // 👨‍🏫 NEW: Track coach speaking state
                 this.audioQueue = [];
                 this.currentAudioSource = null;
                 this.queuedSince = null;
                 this.speechConflictCount = 0;
                 
-                console.log('[SPEECH_COORD] 🎭 Speech Coordinator initialized');
+                console.log('[SPEECH_COORD] 🎭 Speech Coordinator initialized with coach support');
             }
             
             // Check if human is currently speaking
@@ -1216,10 +1227,52 @@
             
             // Get reason why AI can't speak
             getBlockingReason() {
+                if (this.coachSpeaking) return 'coach speaking';
                 if (this.isHumanSpeaking()) return 'human speaking';
                 if (this.aiPaused) return 'AI paused by coach';
                 if (this.aiSpeaking) return 'AI already speaking';
                 return 'unknown reason';
+            }
+            
+            // 👨‍🏫 COACH FUNCTIONALITY: Methods for tri-party coaching support
+            
+            // Check if coach is currently speaking
+            isCoachSpeaking() {
+                return this.coachSpeaking || false;
+            }
+            
+            // Set coach speaking state 
+            setCoachSpeaking(speaking) {
+                const wasCoachSpeaking = this.coachSpeaking;
+                this.coachSpeaking = speaking;
+                
+                if (speaking && !wasCoachSpeaking) {
+                    console.log('[SPEECH_COORD] 👨‍🏫 Coach started speaking - coach audio will be transcribed only');
+                    this.handleCoachStartedSpeaking();
+                } else if (!speaking && wasCoachSpeaking) {
+                    console.log('[SPEECH_COORD] 👨‍🏫 Coach stopped speaking - AI remains in listening state');
+                    this.handleCoachStoppedSpeaking();
+                }
+            }
+            
+            // Handle coach started speaking
+            handleCoachStartedSpeaking() {
+                // Coach audio is transcribed but does NOT trigger AI responses
+                // AI can continue processing client audio in parallel
+                console.log('[SPEECH_COORD] 👨‍🏫 Coach intervention started - maintaining AI listening state');
+            }
+            
+            // Handle coach stopped speaking
+            handleCoachStoppedSpeaking() {
+                // Coach finished speaking - AI stays ready for client interaction
+                console.log('[SPEECH_COORD] 👨‍🏫 Coach intervention complete - AI ready for client');
+                // No need to resume audio queue since coach doesn't interrupt AI flow
+            }
+            
+            // Enhanced canAISpeak to consider coach audio (coach doesn't block AI)
+            canAIRespondToClient() {
+                // AI can respond to client even if coach is speaking (tri-party design)
+                return !this.isHumanSpeaking() && !this.aiPaused && !this.aiSpeaking;
             }
             
             // Handle human started speaking
@@ -1346,6 +1399,18 @@
         let speechCoordinator = null;
         let streamingEnabled = false;
         let maxParallelSentences = 3;
+        
+        // 🎯 SESSION MANAGEMENT: Timer and context variables
+        let sessionTimer = null;
+        let sessionStartTime = Date.now();
+        let sessionDurationMinutes = 20; // Default session length
+        let timeWarningsSent = 0;
+        let isSessionEnding = false;
+        let sessionMetrics = {
+            startTime: sessionStartTime,
+            warningsSent: 0,
+            endedGracefully: false
+        };
         
         // Enhanced MediaRecorder testing with better fallbacks
         async function detectAudioCapabilities() {
@@ -1566,6 +1631,293 @@
             return cachedAudioCapabilities;
         }
 
+        // 🎯 SESSION MANAGEMENT: Client context and timer functions
+        
+        /**
+         * Send client context to GPU for AI personalization
+         */
+        function sendClientContextToGPU() {
+            if (!aiWs || aiWs.readyState !== WebSocket.OPEN) {
+                console.log('[SESSION_MGR] ⚠️ Cannot send client context - AI WebSocket not ready');
+                return;
+            }
+            
+            // Prepare client context for AI
+            const contextMessage = {
+                type: 'client_context',
+                sessionId: sessionId,
+                clientProfile: {
+                    facts: clientProfile.clientFacts || [],
+                    challenges: clientProfile.challenges || [],
+                    lastSummary: clientProfile.lastSummary || null,
+                    preferences: clientProfile.preferences || null,
+                    contextNotes: clientProfile.contextNotes || null
+                },
+                sessionInfo: {
+                    isFirstSession: !clientProfile.lastSummary,
+                    durationMinutes: sessionDurationMinutes,
+                    clientName: userName,
+                    coachName: appointment.coach?.displayName || 'Unknown Coach'
+                },
+                timestamp: Date.now()
+            };
+            
+            try {
+                aiWs.send(JSON.stringify(contextMessage));
+                console.log('[SESSION_MGR] 🎯 Client context sent to GPU:', {
+                    facts: contextMessage.clientProfile.facts.length,
+                    challenges: contextMessage.clientProfile.challenges.length,
+                    hasLastSummary: !!contextMessage.clientProfile.lastSummary
+                });
+            } catch (error) {
+                console.error('[SESSION_MGR] ❌ Failed to send client context:', error);
+            }
+        }
+        
+        /**
+         * Start session timer for automatic time management
+         */
+        function startSessionTimer() {
+            const warningTimes = [
+                { at: 18 * 60 * 1000, type: '2min', remaining: 2 },
+                { at: 19 * 60 * 1000, type: '1min', remaining: 1 },
+                { at: 19.5 * 60 * 1000, type: '30sec', remaining: 0.5 }
+            ];
+            
+            const sessionDuration = sessionDurationMinutes * 60 * 1000;
+            
+            console.log(`[SESSION_MGR] ⏰ Starting ${sessionDurationMinutes}-minute session timer`);
+            
+            // Check for warnings every 5 seconds
+            sessionTimer = setInterval(() => {
+                const elapsed = Date.now() - sessionStartTime;
+                
+                // Check if any warnings need to be sent
+                for (const warning of warningTimes) {
+                    if (elapsed >= warning.at && sessionMetrics.warningsSent < warningTimes.length) {
+                        sendTimeWarning(warning);
+                        sessionMetrics.warningsSent++;
+                        timeWarningsSent++;
+                        break;
+                    }
+                }
+                
+                // Check if session time is up
+                if (elapsed >= sessionDuration && !isSessionEnding) {
+                    initiateSessionEnd();
+                }
+                
+                // Update timer display for coach
+                updateTimerDisplay(elapsed, sessionDuration);
+                
+            }, 5000); // Check every 5 seconds
+        }
+        
+        /**
+         * Send time warning to GPU
+         */
+        function sendTimeWarning(warning) {
+            if (!aiWs || aiWs.readyState !== WebSocket.OPEN) {
+                console.log('[SESSION_MGR] ⚠️ Cannot send time warning - AI WebSocket not ready');
+                return;
+            }
+            
+            const warningMessage = {
+                type: 'time_warning',
+                sessionId: sessionId,
+                minutesRemaining: warning.remaining,
+                warningType: warning.type,
+                totalElapsed: Date.now() - sessionStartTime,
+                timestamp: Date.now()
+            };
+            
+            try {
+                aiWs.send(JSON.stringify(warningMessage));
+                console.log(`[SESSION_MGR] ⚠️ Sent ${warning.type} warning to GPU (${warning.remaining} min remaining)`);
+                
+                // Update coach UI
+                if (userRole === 'coach') {
+                    updateStatus(`⏰ ${warning.remaining} minute${warning.remaining !== 1 ? 's' : ''} remaining`, 'warning');
+                }
+            } catch (error) {
+                console.error('[SESSION_MGR] ❌ Failed to send time warning:', error);
+            }
+        }
+        
+        /**
+         * Initiate end-of-session sequence
+         */
+        function initiateSessionEnd() {
+            if (isSessionEnding) return; // Already ending
+            
+            console.log('[SESSION_MGR] 🏁 Initiating session end sequence');
+            isSessionEnding = true;
+            sessionMetrics.endedGracefully = true;
+            
+            // Stop session timer
+            if (sessionTimer) {
+                clearInterval(sessionTimer);
+                sessionTimer = null;
+            }
+            
+            // Send session ending message to GPU
+            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                try {
+                    const endMessage = {
+                        type: 'session_ending',
+                        sessionId: sessionId,
+                        finalWarning: true,
+                        actualDuration: Date.now() - sessionStartTime,
+                        timestamp: Date.now()
+                    };
+                    
+                    aiWs.send(JSON.stringify(endMessage));
+                    console.log('[SESSION_MGR] 📡 Session ending message sent to GPU');
+                } catch (error) {
+                    console.error('[SESSION_MGR] ❌ Failed to send session ending message:', error);
+                }
+            }
+            
+            // Show ending message to users
+            updateStatus('⏰ Session time complete - AI is wrapping up', 'info');
+            
+            // Set timeout for forced end if GPU doesn't respond
+            setTimeout(() => {
+                if (isSessionEnding) {
+                    forceSessionEnd('timeout');
+                }
+            }, 30000); // 30 second timeout
+        }
+        
+        /**
+         * Force session end and redirect to rating
+         */
+        function forceSessionEnd(reason = 'manual') {
+            console.log(`[SESSION_MGR] 🔚 Force ending session: ${reason}`);
+            
+            // Stop all timers
+            if (sessionTimer) {
+                clearInterval(sessionTimer);
+                sessionTimer = null;
+            }
+            
+            // Show countdown and redirect
+            showCountdownAndRedirect();
+        }
+        
+        /**
+         * Update timer display for coach
+         */
+        function updateTimerDisplay(elapsed, total) {
+            if (userRole !== 'coach') return;
+            
+            const remaining = Math.max(0, total - elapsed);
+            const remainingMinutes = Math.floor(remaining / 60000);
+            const remainingSeconds = Math.floor((remaining % 60000) / 1000);
+            
+            const timerElement = document.getElementById('session-timer');
+            if (timerElement) {
+                const timeStr = `${remainingMinutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+                timerElement.textContent = timeStr;
+                
+                // Color coding based on remaining time
+                if (remaining < 60000) { // Less than 1 minute
+                    timerElement.style.color = '#dc3545';
+                } else if (remaining < 120000) { // Less than 2 minutes
+                    timerElement.style.color = '#ffc107';
+                } else {
+                    timerElement.style.color = '#28a745';
+                }
+            }
+        }
+        
+        /**
+         * Show 5-second countdown and redirect to rating page
+         */
+        function showCountdownAndRedirect() {
+            console.log('[SESSION_MGR] 🕰️ Starting countdown to rating page');
+            
+            // Create countdown overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.9);
+                color: white;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            `;
+            
+            const message = document.createElement('div');
+            message.style.cssText = `
+                font-size: 28px;
+                text-align: center;
+                margin-bottom: 40px;
+                max-width: 600px;
+                line-height: 1.4;
+            `;
+            message.innerHTML = `
+                <h2 style="margin-bottom: 20px;">Thank you for your session! 🌟</h2>
+                <p>Redirecting to feedback page in...</p>
+            `;
+            
+            const countdown = document.createElement('div');
+            countdown.style.cssText = `
+                font-size: 72px;
+                font-weight: bold;
+                color: #667eea;
+                margin: 20px 0;
+            `;
+            
+            const skipButton = document.createElement('button');
+            skipButton.textContent = 'Rate Now →';
+            skipButton.style.cssText = `
+                background: #667eea;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                border-radius: 25px;
+                font-size: 18px;
+                cursor: pointer;
+                margin-top: 30px;
+                transition: all 0.2s;
+            `;
+            skipButton.onmouseover = () => skipButton.style.background = '#5a67d8';
+            skipButton.onmouseout = () => skipButton.style.background = '#667eea';
+            skipButton.onclick = () => {
+                window.location.href = `/session/${sessionId}/rate`;
+            };
+            
+            overlay.appendChild(message);
+            overlay.appendChild(countdown);
+            overlay.appendChild(skipButton);
+            document.body.appendChild(overlay);
+            
+            // Countdown from 5 to 1
+            let count = 5;
+            countdown.textContent = count;
+            
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdown.textContent = count;
+                } else {
+                    clearInterval(countdownInterval);
+                    countdown.textContent = '🎉';
+                    setTimeout(() => {
+                        window.location.href = `/session/${sessionId}/rate`;
+                    }, 500);
+                }
+            }, 1000);
+        }
+
         // Global connection management variables
         let connectionState = 'disconnected';
         let missedPings = 0;
@@ -1735,6 +2087,12 @@
                     console.log('[AI-WS] Sending to GPU:', JSON.stringify(initMessage));
                     console.log('[AI-WS] Audio capabilities:', audioCapabilities);
                     aiWs.send(JSON.stringify(initMessage));
+
+                    // 🎯 SESSION CONTEXT: Send client context after initialization
+                    setTimeout(() => {
+                        sendClientContextToGPU();
+                        startSessionTimer();
+                    }, 1000);
                 } catch (audioError) {
                     console.error('[AI-WS] Audio capabilities detection failed:', audioError.message);
                     
@@ -1769,6 +2127,12 @@
                     
                     // Update status to inform user
                     updateStatus('Audio recording disabled - text responses only', 'warning');
+
+                    // 🎯 SESSION CONTEXT: Send client context after initialization (even without audio)
+                    setTimeout(() => {
+                        sendClientContextToGPU();
+                        startSessionTimer();
+                    }, 1000);
                 }
                 
                 // Start ping interval
@@ -2089,6 +2453,54 @@
                     updateSpeakingIndicator('remote');
                     if (userRole === 'coach' && data.transcript) {
                         addTranscriptItem('Coach', data.transcript, 'coach');
+                    }
+                    break;
+                    
+                case 'coach_transcription':
+                    console.log('[AI-WS] 👨‍🏫 COACH TRANSCRIPTION:', data.transcript);
+                    console.log('  - Confidence:', data.confidence || 'unknown');
+                    console.log('  - Intervention Type:', data.metadata?.interventionType || 'unknown');
+                    console.log('  - Coach ID:', data.metadata?.coachId || 'unknown');
+                    
+                    if (data.transcript) {
+                        // Add coach transcription to transcript display (no AI response triggered)
+                        addTranscriptItem('Coach', data.transcript, 'coach');
+                        
+                        // Update status to show coach intervention
+                        const interventionType = data.metadata?.interventionType || 'guidance';
+                        updateStatus(`Coach ${interventionType}: "${data.transcript.substring(0, 30)}..."`, 'info');
+                        
+                        // Visual feedback that coach was heard
+                        if (voiceStatusDisplay && userRole === 'coach') {
+                            voiceStatusDisplay.textContent = `Transcribed: "${data.transcript.substring(0, 20)}..."`;
+                            voiceIndicator.className = 'voice-indicator coach';
+                            voiceIndicator.style.display = 'block';
+                            
+                            // Reset after 3 seconds
+                            setTimeout(() => {
+                                voiceStatusDisplay.textContent = 'Listening...';
+                                voiceIndicator.className = 'voice-indicator';
+                            }, 3000);
+                        }
+                    }
+                    break;
+                    
+                case 'coach_finished_speaking':
+                    console.log('[AI-WS] 👨‍🏫 Coach finished speaking - AI remains in listening state');
+                    // AI stays in listening mode, no response triggered by coach audio
+                    updateAIStatus('listening');
+                    updateSpeakingIndicator(null);
+                    
+                    // 🚀 SPEECH COORDINATION: Notify speech coordinator that coach stopped speaking
+                    if (speechCoordinator) {
+                        speechCoordinator.setCoachSpeaking(false);
+                    }
+                    
+                    // Clear coach speaking indicator
+                    if (userRole === 'coach' && voiceStatusDisplay) {
+                        voiceStatusDisplay.textContent = 'Listening...';
+                        voiceIndicator.className = 'voice-indicator';
+                        voiceIndicator.style.display = 'none';
                     }
                     break;
                     
@@ -2509,6 +2921,85 @@
                     }
                     isAISpeaking = false;
                     updateAIStatus('listening');
+                    break;
+
+                // 🎯 SESSION MANAGEMENT: Message handlers for client context and session timing
+                case 'session_summary':
+                    console.log('[SESSION_MGR] 📝 Received session summary from GPU:', {
+                        transcript_length: data.transcript?.length || 0,
+                        summary_length: data.summary?.length || 0
+                    });
+                    
+                    try {
+                        // Store session summary and transcript in database via API
+                        const response = await fetch(`/api/sessions/${sessionId}/summary`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${jwt}`
+                            },
+                            body: JSON.stringify({
+                                transcript: data.transcript,
+                                summary: data.summary,
+                                contextUpdates: data.contextUpdates
+                            })
+                        });
+                        
+                        if (response.ok) {
+                            console.log('[SESSION_MGR] ✅ Session summary stored successfully');
+                            sessionMetrics.summaryReceived = true;
+                            
+                            // Update status with session completion
+                            updateStatus('Session complete - Thank you!', 'success');
+                            
+                            // Force session end now that we have the summary
+                            forceSessionEnd('summary_received');
+                        } else {
+                            console.error('[SESSION_MGR] ❌ Failed to store session summary:', response.status);
+                        }
+                    } catch (error) {
+                        console.error('[SESSION_MGR] ❌ Error storing session summary:', error);
+                        // Still force end even if storage fails
+                        forceSessionEnd('summary_error');
+                    }
+                    break;
+
+                case 'context_update':
+                    console.log('[SESSION_MGR] 🔄 Received context update from GPU:', data.updates);
+                    
+                    // Store context updates in database
+                    try {
+                        await fetch(`/api/sessions/${sessionId}/context`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${jwt}`
+                            },
+                            body: JSON.stringify(data.updates)
+                        });
+                        console.log('[SESSION_MGR] ✅ Context updates stored');
+                    } catch (error) {
+                        console.error('[SESSION_MGR] ❌ Failed to store context updates:', error);
+                    }
+                    break;
+
+                case 'session_complete':
+                    console.log('[SESSION_MGR] 🎉 GPU confirmed graceful session completion');
+                    sessionMetrics.endedGracefully = true;
+                    
+                    // If we haven't received summary yet, wait a bit more
+                    if (!sessionMetrics.summaryReceived) {
+                        console.log('[SESSION_MGR] ⏳ Waiting for session summary...');
+                        setTimeout(() => {
+                            if (!sessionMetrics.summaryReceived) {
+                                console.log('[SESSION_MGR] ⚠️ Summary timeout - forcing end');
+                                forceSessionEnd('summary_timeout');
+                            }
+                        }, 10000); // Wait 10 seconds for summary
+                    } else {
+                        // Summary already received, can end immediately
+                        forceSessionEnd('complete_with_summary');
+                    }
                     break;
                     
                 default:
@@ -3027,7 +3518,22 @@
                                 
                                 // Send chunk immediately for real-time processing
                                 console.log(`[AUDIO] 📦 Sending chunk #${chunkSequence} (${chunkBlob.size} bytes)`);
-                                sendAudioChunk(chunkBlob, false);
+                                
+                                // 🎯 ROUTE AUDIO: Send to appropriate pipeline based on user role
+                                const audioSource = determineAudioSource();
+                                if (audioSource === 'coach') {
+                                    console.log(`[AUDIO] 👨‍🏫 Routing to coach audio pipeline (transcription only)`);
+                                    
+                                    // 🚀 SPEECH COORDINATION: Notify speech coordinator about coach speaking
+                                    if (speechCoordinator) {
+                                        speechCoordinator.setCoachSpeaking(true);
+                                    }
+                                    
+                                    sendCoachAudioChunk(chunkBlob, false);
+                                } else {
+                                    console.log(`[AUDIO] 👤 Routing to client audio pipeline (full AI processing)`);
+                                    sendAudioChunk(chunkBlob, false);
+                                }
                                 
                                 // Store last part for next chunk's overlap (simulate 200ms)
                                 overlapBuffer = [event.data];
@@ -3209,6 +3715,108 @@
                             
                             console.log(`[AUDIO] 🔄 Starting FileReader for blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
                             reader.readAsDataURL(audioBlob);
+                        }
+
+                        // 👨‍🏫 COACH AUDIO: Send coach audio chunk for transcription only (no AI response)
+                        function sendCoachAudioChunk(audioBlob, isLastChunk = false, retryAttempt = 0) {
+                            console.log(`[COACH_AUDIO] 👨‍🏫 Sending coach audio chunk, size: ${audioBlob.size} bytes`);
+                            
+                            // Validate audio chunk size
+                            if (audioBlob.size === 0) {
+                                console.log('[COACH_AUDIO] Empty chunk detected, skipping send');
+                                return;
+                            }
+                            
+                            if (audioBlob.size < 1000) { // Must be at least 1KB
+                                console.log(`[COACH_AUDIO] Chunk too small (${audioBlob.size} bytes), skipping - no meaningful audio`);
+                                return;
+                            }
+                            
+                            if (audioBlob.size > 5 * 1024 * 1024) { // 5MB limit per chunk
+                                console.error('[COACH_AUDIO] Chunk too large:', audioBlob.size, 'bytes');
+                                return;
+                            }
+                            
+                            // Convert to base64 for transmission
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                const base64Audio = reader.result.split(',')[1];
+                                
+                                // Final validation - check base64 data is meaningful
+                                if (!base64Audio || base64Audio.length < 100) {
+                                    console.error(`[COACH_AUDIO] Base64 data too short (${base64Audio ? base64Audio.length : 0} chars), skipping - likely empty audio`);
+                                    return;
+                                }
+                                
+                                if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                                    const coachMessage = {
+                                        type: 'coach_audio_data',
+                                        sessionId: sessionId,
+                                        audioData: base64Audio,
+                                        mimeType: currentMimeType,
+                                        timestamp: new Date().toISOString(),
+                                        speaker: 'coach',
+                                        metadata: {
+                                            aiWasPaused: isAIPaused,
+                                            interventionType: getCurrentInterventionType(),
+                                            coachId: userId,
+                                            sessionPhase: 'active'
+                                        }
+                                    };
+                                    
+                                    console.log(`[COACH_AUDIO] 📤 Sending coach audio to GPU for transcription only`);
+                                    
+                                    try {
+                                        aiWs.send(JSON.stringify(coachMessage));
+                                        console.log(`[COACH_AUDIO] ✅ Coach audio sent successfully to GPU`);
+                                        
+                                        // Update speech coordinator
+                                        if (speechCoordinator) {
+                                            speechCoordinator.handleCoachStartedSpeaking();
+                                        }
+                                        
+                                    } catch (sendError) {
+                                        console.error('[COACH_AUDIO] Failed to send coach audio:', sendError);
+                                        if (retryAttempt < 2) {
+                                            setTimeout(() => {
+                                                sendCoachAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
+                                            }, 1000 * (retryAttempt + 1)); // Progressive delay
+                                        }
+                                    }
+                                } else {
+                                    console.log('[COACH_AUDIO] Cannot send chunk - WebSocket not ready, state:', aiWs ? aiWs.readyState : 'null');
+                                    
+                                    // Retry when WebSocket reconnects
+                                    if (retryAttempt < 2) {
+                                        setTimeout(() => {
+                                            sendCoachAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
+                                        }, 2000);
+                                    }
+                                }
+                            };
+                            
+                            reader.onerror = (error) => {
+                                console.error('[COACH_AUDIO] ❌ FileReader failed to read coach audio chunk:', error);
+                                if (retryAttempt < 2) {
+                                    setTimeout(() => {
+                                        sendCoachAudioChunk(audioBlob, isLastChunk, retryAttempt + 1);
+                                    }, 1000);
+                                }
+                            };
+                            
+                            console.log(`[COACH_AUDIO] 🔄 Starting FileReader for coach audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+                            reader.readAsDataURL(audioBlob);
+                        }
+
+                        // 🎯 AUDIO SOURCE DETECTION: Determine if audio should be sent as client or coach
+                        function determineAudioSource() {
+                            return userRole === 'coach' ? 'coach' : 'client';
+                        }
+
+                        // 📝 GET CURRENT INTERVENTION TYPE: Helper function for coach metadata
+                        function getCurrentInterventionType() {
+                            const interventionSelect = document.getElementById('interventionType');
+                            return interventionSelect ? interventionSelect.value : 'guidance';
                         }
                         
                         // Setup initial event handlers

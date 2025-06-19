@@ -11,6 +11,7 @@ import { router as wsRelayRouter } from './api/ws-relay.js';
 import { router as wsTestRouter } from './api/websocket-test.js';
 import { router as protooTestRouter } from './api/protoo-test.js';
 import { router as directWsTestRouter } from './api/direct-ws-test.js';
+import { prisma } from '../lib/prisma.js';
 
 const router = Router();
 
@@ -187,6 +188,121 @@ router.post('/dismiss-membership-warning', ensureAuthenticated, async (req, res,
     res.json({ success: true });
   } catch (err) {
     next(err);
+  }
+});
+
+// 🎯 SESSION MANAGEMENT: API endpoints for storing session summaries and context updates
+router.post('/sessions/:sessionId/summary', jwtAuth, async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const { transcript, summary, contextUpdates } = req.body;
+    
+    console.log('[API] 📝 Storing session summary:', {
+      sessionId,
+      transcript_length: transcript?.length || 0,
+      summary_length: summary?.length || 0,
+      has_context_updates: !!contextUpdates
+    });
+    
+    // Update session with transcript and summary
+    const session = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        transcript: transcript,
+        aiSummary: summary,
+        endedAt: new Date(),
+        status: 'completed'
+      },
+      include: {
+        user: { include: { profile: true } },
+        appointment: { include: { client: { include: { profile: true } } } }
+      }
+    });
+    
+    // Update client profile with new summary (for the CLIENT, not the current user)
+    if (session.appointment?.client?.profile) {
+      const clientId = session.appointment.client.id;
+      
+      await prisma.profile.update({
+        where: { userId: clientId },
+        data: {
+          lastSummary: summary,
+          // Add any context updates from the AI
+          ...(contextUpdates?.facts && { 
+            clientFacts: { push: contextUpdates.facts } 
+          }),
+          ...(contextUpdates?.challenges && { 
+            challenges: { push: contextUpdates.challenges } 
+          })
+        }
+      });
+      
+      console.log('[API] ✅ Updated client profile with session insights');
+    }
+    
+    res.json({ 
+      success: true, 
+      sessionUpdated: true,
+      profileUpdated: !!session.appointment?.client?.profile 
+    });
+    
+  } catch (error) {
+    console.error('[API] ❌ Error storing session summary:', error);
+    res.status(500).json({ error: 'Failed to store session summary' });
+    next(error);
+  }
+});
+
+router.post('/sessions/:sessionId/context', jwtAuth, async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const updates = req.body;
+    
+    console.log('[API] 🔄 Storing context updates for session:', sessionId, updates);
+    
+    // Get the session to find the client
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        appointment: { include: { client: { include: { profile: true } } } }
+      }
+    });
+    
+    if (!session?.appointment?.client) {
+      return res.status(404).json({ error: 'Session or client not found' });
+    }
+    
+    const clientId = session.appointment.client.id;
+    
+    // Update client profile with new context insights
+    const updateData = {};
+    if (updates.facts && updates.facts.length > 0) {
+      updateData.clientFacts = { push: updates.facts };
+    }
+    if (updates.challenges && updates.challenges.length > 0) {
+      updateData.challenges = { push: updates.challenges };
+    }
+    if (updates.preferences) {
+      updateData.preferences = updates.preferences;
+    }
+    if (updates.contextNotes) {
+      updateData.contextNotes = updates.contextNotes;
+    }
+    
+    if (Object.keys(updateData).length > 0) {
+      await prisma.profile.update({
+        where: { userId: clientId },
+        data: updateData
+      });
+      console.log('[API] ✅ Context updates applied to client profile');
+    }
+    
+    res.json({ success: true, updatesApplied: Object.keys(updateData).length });
+    
+  } catch (error) {
+    console.error('[API] ❌ Error storing context updates:', error);
+    res.status(500).json({ error: 'Failed to store context updates' });
+    next(error);
   }
 });
 
