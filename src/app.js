@@ -13,8 +13,9 @@ import { Server as SocketIOServer } from 'socket.io';
 import { initWebSocketRelay } from './routes/api/ws-relay.js';
 import { initTestWebSocket } from './routes/api/websocket-test.js';
 import { debugMiddleware } from './middlewares/debugMiddleware.js';
-import { initSimpleWebSocket } from './routes/websocket-simple.js';
+import { initEnhancedWebSocket } from './routes/websocket-simple-enhanced.js';
 import { setupAISessionWebSocket } from './routes/ai-session-ws.js';
+import { sessionSummaryHandler } from './services/SessionSummaryHandler.js';
 import skoolSyncDaemon from './daemons/skoolSyncDaemon.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -218,7 +219,10 @@ const startServer = async (attemptPort) => {
     // Initialize test WebSocket server  
     // initTestWebSocket(httpServer);
     
-    // Initialize AI Session WebSocket for hybrid coaching - ONLY WebSocket server needed
+    // Initialize Enhanced WebSocket for tri-party video calls (Coach ↔ Client ↔ AI Orb)
+    initEnhancedWebSocket(httpServer);
+    
+    // Initialize AI Session WebSocket for hybrid coaching
     setupAISessionWebSocket(httpServer);
 
     httpServer.listen(attemptPort, HOST, () => {

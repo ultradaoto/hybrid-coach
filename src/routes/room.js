@@ -5,6 +5,7 @@ import { issueToken } from '../middlewares/jwtAuth.js';
 import { prisma } from '../lib/prisma.js';
 import { generateJwtWithExpiry } from '../utils/jwtUtils.js';
 import { getOrCreateSessionId } from '../utils/sessionUtils.js';
+import { orbManager } from '../services/OrbManager.js';
 
 const router = Router();
 
@@ -129,16 +130,52 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
       // Continue without profile - don't break the session
     }
 
-    res.render('room-ai-hybrid', {
-      title: 'AI Hybrid Coaching Call',
+    // 5. 🤖 AI ORB MANAGEMENT: Spawn AI orb when COACH joins
+    try {
+      // Track participant joining
+      orbManager.trackParticipantJoin(roomId, req.user.id, req.user.role);
+
+      // Only spawn AI orb when a COACH joins the room
+      if (req.user.role === 'coach' && !orbManager.hasOrbForRoom(roomId)) {
+        console.log(`[ROOM] 👨‍🏫 Coach joined room ${roomId}, spawning AI Orb for supervised session`);
+        
+        await orbManager.spawnOrb(roomId, sessionId, appointment);
+        
+        // Wait briefly for orb to initialize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        console.log(`[ROOM] ✅ AI Orb spawned and ready for coach supervision`);
+      } else if (req.user.role === 'coach' && orbManager.hasOrbForRoom(roomId)) {
+        console.log(`[ROOM] 🔄 Coach rejoined room ${roomId}, orb already exists`);
+      } else if (req.user.role === 'client' && !orbManager.hasOrbForRoom(roomId)) {
+        console.log(`[ROOM] 👤 Client joined room ${roomId}, waiting for coach to start AI session`);
+      } else {
+        console.log(`[ROOM] 👤 Client joined room ${roomId}, AI orb already active with coach supervision`);
+      }
+    } catch (orbError) {
+      console.error('[ROOM] ❌ Failed to spawn AI Orb:', orbError);
+      // Continue without AI if spawn fails - don't break the session
+    }
+
+    // 6. 🎭 ROLE-SPECIFIC RENDERING: Serve appropriate view
+    const viewData = {
+      title: req.user.role === 'coach' ? 'Coach Dashboard - AI Hybrid Coaching' : 'Coaching Session',
       roomId,
       user: req.user,
       jwt: token,
-      sessionId: sessionId, // Use the shared session ID
-      clientProfile: clientProfile, // Pass client context to frontend
+      sessionId: sessionId,
+      clientProfile: clientProfile,
       coachProfile: coachProfile,
-      appointment: appointment
-    });
+      appointment: appointment,
+      orbStatus: orbManager.getOrbStatus(roomId)
+    };
+
+    // Render role-specific view
+    if (req.user.role === 'coach') {
+      res.render('room-coach', viewData);
+    } else {
+      res.render('room-client', viewData);
+    }
   } catch (err) {
     next(err);
   }

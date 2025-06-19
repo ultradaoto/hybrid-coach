@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> - <%= roomId.substring(0, 8) %>...</title>
+    
+    <%- include('partials/room-base-styles') %>
+    
+    <style>
+        /* Coach-specific styles */
+        .ai-panel {
+            flex: 1;
+            background: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #404040;
+            min-width: 400px;
+        }
+
+        .ai-panel-header {
+            background: #2a2a2a;
+            padding: 1rem;
+            border-bottom: 1px solid #404040;
+        }
+
+        .ai-panel-header h3 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .ai-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn.ai-control {
+            font-size: 12px;
+            padding: 8px 12px;
+        }
+
+        .btn.ai-control.blue {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn.ai-control.red {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn.ai-control.yellow {
+            background: #ffc107;
+            color: #000;
+            cursor: not-allowed;
+        }
+
+        .transcript-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .transcript-header {
+            padding: 1rem;
+            background: #2a2a2a;
+            border-bottom: 1px solid #404040;
+        }
+
+        .transcript-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .transcript-item {
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
+
+        .transcript-item.client {
+            border-left-color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .transcript-item.ai {
+            border-left-color: #17a2b8;
+            background: rgba(23, 162, 184, 0.1);
+        }
+
+        .transcript-item.coach {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.1);
+        }
+
+        .transcript-speaker {
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .session-timer {
+            background: #2a2a2a;
+            padding: 1rem;
+            text-align: center;
+            border-top: 1px solid #404040;
+        }
+
+        .timer-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #17a2b8;
+        }
+
+        .orb-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .orb-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .orb-indicator.spawning {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        .orb-indicator.error {
+            background: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Left Panel - Video Area -->
+        <div class="video-panel">
+            <div class="video-header">
+                <div class="room-info">
+                    <h2>Coach Dashboard</h2>
+                    <div class="subtitle">Room: <%= roomId.substring(0, 8) %>... | Session: <%= sessionId.substring(0, 8) %>...</div>
+                </div>
+                <div class="ai-status">
+                    <div class="ai-indicator" id="aiIndicator"></div>
+                    <span id="aiStatusText">AI Ready</span>
+                </div>
+            </div>
+
+            <div class="video-grid" id="videoGrid">
+                <!-- Local video (Coach) -->
+                <div class="video-wrapper">
+                    <video id="localVideo" autoplay playsinline muted></video>
+                    <div class="video-label">You (Coach)</div>
+                </div>
+
+                <!-- Remote video (Client) -->
+                <div class="video-wrapper">
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <div class="video-label" id="remoteLabel">Waiting for client...</div>
+                </div>
+
+                <!-- AI Avatar -->
+                <div class="video-wrapper">
+                    <div class="ai-avatar-wrapper">
+                        <div class="ai-avatar" id="aiAvatar">
+                            <div class="ai-sphere"></div>
+                        </div>
+                    </div>
+                    <div class="video-label">AI Coach</div>
+                </div>
+            </div>
+
+            <div class="controls-panel">
+                <button id="toggleVideo" class="btn">📹 Video</button>
+                <button id="toggleAudio" class="btn">🎤 Audio</button>
+                <button id="shareScreen" class="btn">🖥️ Screen</button>
+                <a href="/dashboard" class="btn" style="background: #6c757d;">🏠 Exit</a>
+            </div>
+        </div>
+
+        <!-- Right Panel - Coach Controls -->
+        <div class="ai-panel">
+            <div class="ai-panel-header">
+                <h3>🤖 AI Coach Controls</h3>
+                
+                <div class="orb-status">
+                    <div class="orb-indicator" id="orbIndicator"></div>
+                    <span id="orbStatusText">Initializing...</span>
+                </div>
+
+                <div class="ai-controls">
+                    <button id="quickPause" class="btn ai-control blue">Quick Pause</button>
+                    <button id="endSession" class="btn ai-control" style="background: #dc3545;">End Session</button>
+                </div>
+            </div>
+
+            <div class="transcript-panel">
+                <div class="transcript-header">
+                    <h4>💬 Live Transcript</h4>
+                    <small style="opacity: 0.7;">Real-time conversation monitoring</small>
+                </div>
+                
+                <div class="transcript-content" id="transcriptContent">
+                    <div class="transcript-item ai">
+                        <div class="transcript-speaker">AI Coach</div>
+                        <div>Session initialized. Waiting for participants to join...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="session-timer">
+                <div class="timer-display" id="sessionTimer">00:00</div>
+                <small>Session Duration</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status notifications -->
+    <div id="status" class="status" style="display: none;"></div>
+
+    <!-- Include TriPartyWebRTC -->
+    <script type="module" src="/js/tri-party-webrtc.js"></script>
+    
+    <script type="module">
+        import { TriPartyWebRTC } from '/js/tri-party-webrtc.js';
+
+        // Coach configuration
+        const config = {
+            roomId: '<%= roomId %>',
+            userId: '<%= user.id %>',
+            userName: '<%= user.displayName || user.email %>',
+            userRole: 'coach',
+            participantType: 'human',
+            onLocalStream: (stream) => {
+                document.getElementById('localVideo').srcObject = stream;
+            },
+            onRemoteStream: (userId, stream, peerInfo) => {
+                if (peerInfo.participantType === 'ai') {
+                    // AI streams go to the avatar area (handled differently)
+                    console.log('AI stream received, updating avatar');
+                } else {
+                    // Client stream goes to remote video
+                    document.getElementById('remoteVideo').srcObject = stream;
+                    document.getElementById('remoteLabel').textContent = `${peerInfo.userName} (Client)`;
+                }
+            },
+            onUserJoined: (userInfo) => {
+                updateStatus(`${userInfo.userName} joined as ${userInfo.userRole}`, 'success');
+                if (userInfo.participantType === 'ai') {
+                    updateOrbStatus('ready');
+                }
+            },
+            onUserLeft: (userId) => {
+                updateStatus('Participant left', 'info');
+            },
+            onConnectionState: (state) => {
+                console.log('Connection state:', state);
+            },
+            onError: (type, error) => {
+                updateStatus(`Error (${type}): ${error.message}`, 'error');
+            },
+            onAIStatus: (data) => {
+                updateAIStatus(data.status);
+            }
+        };
+
+        // Initialize WebRTC
+        const webrtc = new TriPartyWebRTC(config);
+        webrtc.initialize();
+
+        // UI Functions
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateAIStatus(status) {
+            const indicator = document.getElementById('aiIndicator');
+            const text = document.getElementById('aiStatusText');
+            const avatar = document.getElementById('aiAvatar');
+            
+            indicator.className = `ai-indicator ${status}`;
+            avatar.className = `ai-avatar ${status}`;
+            
+            switch(status) {
+                case 'speaking':
+                    text.textContent = 'AI Speaking';
+                    break;
+                case 'listening':
+                    text.textContent = 'AI Listening';
+                    break;
+                case 'thinking':
+                    text.textContent = 'AI Thinking';
+                    break;
+                case 'paused':
+                    text.textContent = 'AI Paused';
+                    break;
+                default:
+                    text.textContent = 'AI Ready';
+            }
+        }
+
+        function updateOrbStatus(status) {
+            const indicator = document.getElementById('orbIndicator');
+            const text = document.getElementById('orbStatusText');
+            
+            switch(status) {
+                case 'ready':
+                    indicator.className = 'orb-indicator';
+                    text.textContent = 'AI Orb Connected';
+                    break;
+                case 'spawning':
+                    indicator.className = 'orb-indicator spawning';
+                    text.textContent = 'Spawning AI Orb...';
+                    break;
+                case 'error':
+                    indicator.className = 'orb-indicator error';
+                    text.textContent = 'AI Orb Error';
+                    break;
+                default:
+                    text.textContent = 'Initializing...';
+            }
+        }
+
+        function addTranscriptItem(speaker, text, type = 'client') {
+            const transcriptContent = document.getElementById('transcriptContent');
+            const item = document.createElement('div');
+            item.className = `transcript-item ${type}`;
+            
+            const speakerEl = document.createElement('div');
+            speakerEl.className = 'transcript-speaker';
+            speakerEl.textContent = speaker;
+            
+            const textEl = document.createElement('div');
+            textEl.textContent = text;
+            
+            item.appendChild(speakerEl);
+            item.appendChild(textEl);
+            transcriptContent.appendChild(item);
+            
+            // Auto-scroll to bottom
+            transcriptContent.scrollTop = transcriptContent.scrollHeight;
+        }
+
+        // Coach Controls
+        document.getElementById('quickPause').addEventListener('click', () => {
+            const btn = document.getElementById('quickPause');
+            const isCurrentlyActive = btn.className.includes('blue');
+            
+            if (isCurrentlyActive) {
+                // Pause AI
+                btn.className = 'btn ai-control red';
+                btn.textContent = 'Resume AI';
+                // Send pause command via WebSocket
+                webrtc.sendWebSocketMessage({
+                    type: 'ai_control',
+                    action: 'pause'
+                });
+            } else {
+                // Resume AI
+                btn.className = 'btn ai-control blue';
+                btn.textContent = 'Quick Pause';
+                // Send resume command via WebSocket
+                webrtc.sendWebSocketMessage({
+                    type: 'ai_control',
+                    action: 'resume'
+                });
+            }
+        });
+
+        document.getElementById('endSession').addEventListener('click', () => {
+            if (confirm('End this coaching session?')) {
+                webrtc.sendWebSocketMessage({
+                    type: 'ai_control',
+                    action: 'end_session'
+                });
+                
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            }
+        });
+
+        // Session Timer
+        let sessionStartTime = Date.now();
+        setInterval(() => {
+            const elapsed = Date.now() - sessionStartTime;
+            const minutes = Math.floor(elapsed / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            document.getElementById('sessionTimer').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+
+        // Media Controls
+        document.getElementById('toggleVideo').addEventListener('click', () => {
+            const btn = document.getElementById('toggleVideo');
+            const isEnabled = !btn.classList.contains('active');
+            
+            webrtc.toggleVideo(!isEnabled);
+            btn.classList.toggle('active');
+            btn.textContent = isEnabled ? '📹 Video Off' : '📹 Video';
+        });
+
+        document.getElementById('toggleAudio').addEventListener('click', () => {
+            const btn = document.getElementById('toggleAudio');
+            const isEnabled = !btn.classList.contains('active');
+            
+            webrtc.toggleAudio(!isEnabled);
+            btn.classList.toggle('active');
+            btn.textContent = isEnabled ? '🎤 Muted' : '🎤 Audio';
+        });
+
+        // Initialize orb status based on server data
+        <% if (orbStatus) { %>
+            updateOrbStatus('<%= orbStatus.status %>');
+            addTranscriptItem('System', 'AI Orb is active and ready for coaching session', 'ai');
+        <% } else { %>
+            updateOrbStatus('spawning');
+            addTranscriptItem('System', 'Coach joined - AI Orb is being spawned for supervised session...', 'ai');
+            
+            // Show spawning message to coach
+            setTimeout(() => {
+                updateStatus('Spawning AI Orb for supervised coaching session...', 'info');
+            }, 500);
+            
+            // Wait for orb to become ready
+            setTimeout(() => {
+                updateOrbStatus('ready');
+                addTranscriptItem('System', 'AI Orb spawned successfully and joined the session', 'ai');
+                updateStatus('AI Orb ready for coaching session', 'success');
+            }, 3000);
+        <% } %>
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            webrtc.disconnect();
+        });
+    </script>
+</body>
+</html>

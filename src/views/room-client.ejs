@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> - <%= roomId.substring(0, 8) %>...</title>
+    
+    <%- include('partials/room-base-styles') %>
+    
+    <style>
+        /* Client-specific styles - simplified layout */
+        .video-panel {
+            flex: 1; /* Take full width - no side panel */
+        }
+
+        .client-info {
+            background: #2a2a2a;
+            padding: 1rem;
+            text-align: center;
+            border-bottom: 1px solid #404040;
+        }
+
+        .client-info h3 {
+            color: #17a2b8;
+            margin-bottom: 0.5rem;
+        }
+
+        .session-status {
+            background: #1e1e1e;
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .connection-quality {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .quality-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .quality-indicator.poor {
+            background: #dc3545;
+        }
+
+        .quality-indicator.fair {
+            background: #ffc107;
+        }
+
+        /* Larger video display for client */
+        .video-wrapper video {
+            width: 400px;
+            height: 300px;
+        }
+
+        .ai-avatar-wrapper {
+            width: 400px;
+            height: 300px;
+        }
+
+        .ai-avatar {
+            width: 150px;
+            height: 150px;
+        }
+
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            .video-wrapper video {
+                width: 90vw;
+                max-width: 350px;
+                height: auto;
+            }
+            
+            .ai-avatar-wrapper {
+                width: 90vw;
+                max-width: 350px;
+                height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="video-panel">
+            <div class="video-header">
+                <div class="room-info">
+                    <h2>Your Coaching Session</h2>
+                    <div class="subtitle">Session: <%= sessionId.substring(0, 8) %>...</div>
+                </div>
+                <div class="ai-status">
+                    <div class="ai-indicator" id="aiIndicator"></div>
+                    <span id="aiStatusText">AI Coach Ready</span>
+                </div>
+            </div>
+
+            <div class="client-info">
+                <h3>Welcome to your coaching session!</h3>
+                <p id="sessionDescription">Your coach and AI assistant are here to help you achieve your goals.</p>
+                
+                <div class="session-status">
+                    <div class="connection-quality">
+                        <span>Connection:</span>
+                        <div class="quality-indicator" id="connectionQuality"></div>
+                        <span id="connectionStatus">Connecting...</span>
+                    </div>
+                    
+                    <div id="aiSessionStatus" style="margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; font-size: 0.9rem;">
+                        <% if (!orbStatus) { %>
+                            <div style="background: #fff3cd; color: #856404;">
+                                ⏳ Waiting for your coach to join and activate the AI session...
+                            </div>
+                        <% } else { %>
+                            <div style="background: #d4edda; color: #155724;">
+                                ✅ AI session is active with coach supervision
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+
+            <div class="video-grid" id="videoGrid">
+                <!-- Local video (Client) -->
+                <div class="video-wrapper">
+                    <video id="localVideo" autoplay playsinline muted></video>
+                    <div class="video-label">You</div>
+                </div>
+
+                <!-- Remote video (Coach) -->
+                <div class="video-wrapper">
+                    <video id="remoteVideo" autoplay playsinline></video>
+                    <div class="video-label" id="remoteLabel">Waiting for coach...</div>
+                </div>
+
+                <!-- AI Avatar -->
+                <div class="video-wrapper">
+                    <div class="ai-avatar-wrapper">
+                        <div class="ai-avatar" id="aiAvatar">
+                            <div class="ai-sphere"></div>
+                        </div>
+                    </div>
+                    <div class="video-label">AI Coach</div>
+                </div>
+            </div>
+
+            <div class="controls-panel">
+                <button id="toggleVideo" class="btn">📹 Video</button>
+                <button id="toggleAudio" class="btn">🎤 Audio</button>
+                <button id="raiseHand" class="btn" style="background: #ffc107;">✋ Raise Hand</button>
+                <a href="/dashboard" class="btn" style="background: #6c757d;">🏠 Exit</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status notifications -->
+    <div id="status" class="status" style="display: none;"></div>
+
+    <!-- Include TriPartyWebRTC -->
+    <script type="module" src="/js/tri-party-webrtc.js"></script>
+    
+    <script type="module">
+        import { TriPartyWebRTC } from '/js/tri-party-webrtc.js';
+
+        // Client configuration
+        const config = {
+            roomId: '<%= roomId %>',
+            userId: '<%= user.id %>',
+            userName: '<%= user.displayName || user.email %>',
+            userRole: 'client',
+            participantType: 'human',
+            onLocalStream: (stream) => {
+                document.getElementById('localVideo').srcObject = stream;
+                updateConnectionStatus('Connected', 'good');
+            },
+            onRemoteStream: (userId, stream, peerInfo) => {
+                if (peerInfo.participantType === 'ai') {
+                    // AI streams enhance the avatar
+                    console.log('AI stream received, enhancing avatar');
+                    updateAIStatus('ready');
+                } else {
+                    // Coach stream goes to remote video
+                    document.getElementById('remoteVideo').srcObject = stream;
+                    document.getElementById('remoteLabel').textContent = `${peerInfo.userName} (Coach)`;
+                }
+            },
+            onUserJoined: (userInfo) => {
+                updateStatus(`${userInfo.userName} joined the session`, 'success');
+                if (userInfo.userRole === 'coach') {
+                    updateConnectionStatus('Coach connected', 'good');
+                    updateSessionDescription('Your coach has joined! AI session will be activated.');
+                }
+                if (userInfo.participantType === 'ai') {
+                    updateAIStatus('ready');
+                    updateAISessionStatus(true);
+                    updateSessionDescription('Your coach and AI assistant are here to help you achieve your goals.');
+                }
+            },
+            onUserLeft: (userId) => {
+                updateStatus('Participant left the session', 'info');
+            },
+            onConnectionState: (state) => {
+                if (state === 'connected') {
+                    updateConnectionStatus('Connected', 'good');
+                } else if (state === 'disconnected') {
+                    updateConnectionStatus('Disconnected', 'poor');
+                }
+            },
+            onError: (type, error) => {
+                updateStatus(`Connection issue: ${error.message}`, 'error');
+                updateConnectionStatus('Connection issues', 'poor');
+            },
+            onAIStatus: (data) => {
+                updateAIStatus(data.status);
+            }
+        };
+
+        // Initialize WebRTC
+        const webrtc = new TriPartyWebRTC(config);
+        webrtc.initialize();
+
+        // UI Functions
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateAIStatus(status) {
+            const indicator = document.getElementById('aiIndicator');
+            const text = document.getElementById('aiStatusText');
+            const avatar = document.getElementById('aiAvatar');
+            
+            indicator.className = `ai-indicator ${status}`;
+            avatar.className = `ai-avatar ${status}`;
+            
+            switch(status) {
+                case 'speaking':
+                    text.textContent = 'AI is speaking';
+                    break;
+                case 'listening':
+                    text.textContent = 'AI is listening';
+                    break;
+                case 'thinking':
+                    text.textContent = 'AI is thinking';
+                    break;
+                case 'paused':
+                    text.textContent = 'AI is paused';
+                    break;
+                default:
+                    text.textContent = 'AI Coach Ready';
+            }
+        }
+
+        function updateConnectionStatus(status, quality) {
+            const qualityEl = document.getElementById('connectionQuality');
+            const statusEl = document.getElementById('connectionStatus');
+            
+            qualityEl.className = `quality-indicator ${quality}`;
+            statusEl.textContent = status;
+        }
+
+        function updateSessionDescription(text) {
+            const descEl = document.getElementById('sessionDescription');
+            if (descEl) {
+                descEl.textContent = text;
+            }
+        }
+
+        function updateAISessionStatus(isActive) {
+            const statusEl = document.getElementById('aiSessionStatus');
+            if (statusEl) {
+                if (isActive) {
+                    statusEl.innerHTML = `
+                        <div style="background: #d4edda; color: #155724;">
+                            ✅ AI session is active with coach supervision
+                        </div>
+                    `;
+                } else {
+                    statusEl.innerHTML = `
+                        <div style="background: #fff3cd; color: #856404;">
+                            ⏳ Waiting for your coach to join and activate the AI session...
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Media Controls
+        document.getElementById('toggleVideo').addEventListener('click', () => {
+            const btn = document.getElementById('toggleVideo');
+            const isEnabled = !btn.classList.contains('active');
+            
+            webrtc.toggleVideo(!isEnabled);
+            btn.classList.toggle('active');
+            btn.textContent = isEnabled ? '📹 Video Off' : '📹 Video';
+        });
+
+        document.getElementById('toggleAudio').addEventListener('click', () => {
+            const btn = document.getElementById('toggleAudio');
+            const isEnabled = !btn.classList.contains('active');
+            
+            webrtc.toggleAudio(!isEnabled);
+            btn.classList.toggle('active');
+            btn.textContent = isEnabled ? '🎤 Muted' : '🎤 Audio';
+        });
+
+        // Raise Hand feature
+        let handRaised = false;
+        document.getElementById('raiseHand').addEventListener('click', () => {
+            const btn = document.getElementById('raiseHand');
+            handRaised = !handRaised;
+            
+            btn.classList.toggle('active');
+            btn.textContent = handRaised ? '✋ Hand Raised' : '✋ Raise Hand';
+            
+            // Send hand raise status to coach
+            webrtc.sendWebSocketMessage({
+                type: 'client_signal',
+                action: 'hand_raised',
+                value: handRaised
+            });
+            
+            updateStatus(handRaised ? 'Hand raised - coach will be notified' : 'Hand lowered', 'info');
+        });
+
+        // Initialize connection status
+        updateConnectionStatus('Initializing...', 'fair');
+
+        // Auto-hide status messages after session start
+        setTimeout(() => {
+            const statusElements = document.querySelectorAll('.session-status');
+            statusElements.forEach(el => {
+                el.style.transition = 'opacity 0.5s';
+                el.style.opacity = '0.7';
+            });
+        }, 10000);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            webrtc.disconnect();
+        });
+
+        // Client-specific welcome message
+        setTimeout(() => {
+            updateStatus('Welcome! Your coach and AI assistant will join shortly.', 'info');
+        }, 1000);
+    </script>
+</body>
+</html>
