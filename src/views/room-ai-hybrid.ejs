@@ -293,6 +293,41 @@
             color: #000;
         }
 
+        /* 🎛️ ENHANCED QUICK PAUSE BUTTON STATES */
+        .btn.ai-control.blue {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn.ai-control.blue:hover {
+            background: #0056b3;
+        }
+
+        .btn.ai-control.red {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn.ai-control.red:hover {
+            background: #a71e2a;
+        }
+
+        .btn.ai-control.yellow {
+            background: #ffc107;
+            color: #000;
+            cursor: not-allowed;
+        }
+
+        .btn.ai-control:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn.ai-control:disabled:hover {
+            transform: none;
+        }
+
         /* Right panel - AI Controls & Transcript (Coach only) */
         .ai-panel {
             flex: 1;
@@ -2622,6 +2657,11 @@
                             toggleBtn.innerHTML = '▶️ Resume AI';
                         }
                     }
+                    
+                    // Update Quick Pause button to paused state (red)
+                    updateQuickPauseButton('paused');
+                    updateStatus('AI paused - Coach can now speak', 'success');
+                    enableCoachAudio();
                     break;
                     
                 case 'ai_resumed':
@@ -2636,6 +2676,11 @@
                             toggleBtn.innerHTML = '⏸️ Pause AI';
                         }
                     }
+                    
+                    // Update Quick Pause button to active state (blue)
+                    updateQuickPauseButton('active');
+                    updateStatus('AI resumed - Listening for client', 'success');
+                    disableCoachAudio();
                     break;
                     
                 case 'coach_speaking':
@@ -3259,15 +3304,155 @@
                     }
                     break;
                     
+                case 'transcription_result':
+                    // NEW: Client transcripts for coach view (coordinated with GPU Claude)
+                    console.log('[AI-WS] 👤 Client transcription:', data.transcript);
+                    console.log('[AI-WS] Speaker:', data.speaker, 'Confidence:', data.confidence);
+                    
+                    if (userRole === 'coach' && data.transcript && data.speaker === 'client') {
+                        addTranscriptItem('Client', data.transcript, 'client');
+                    }
+                    break;
+                    
+                case 'ai_pause_phrase':
+                    // NEW: Natural pause phrase before AI pauses (coordinated with GPU Claude)
+                    console.log('[AI-WS] 💬 AI pause phrase:', data.text);
+                    
+                    if (data.audio_data) {
+                        playRealAIAudio(data.audio_data, 'audio/mpeg');
+                    }
+                    
+                    // Update button to show transition state
+                    updateQuickPauseButton('pausing');
+                    updateStatus('AI is pausing...', 'info');
+                    break;
+                    
+                case 'ai_resume_phrase':
+                    // NEW: Natural resume phrase before AI resumes (coordinated with GPU Claude)
+                    console.log('[AI-WS] 💬 AI resume phrase:', data.text);
+                    
+                    if (data.audio_data) {
+                        playRealAIAudio(data.audio_data, 'audio/mpeg');
+                    }
+                    
+                    // Update button to show transition state
+                    updateQuickPauseButton('resuming');
+                    updateStatus('AI is resuming...', 'info');
+                    break;
+                    
                 default:
                     console.log(`[AI-WS] ⚠️ Unhandled message type: "${data.type}"`, data);
                     break;
             }
         }
 
+        // 🎛️ COACH CONTROL FUNCTIONS: Quick Pause button and audio coordination
+        
+        /**
+         * Update Quick Pause button visual state and behavior
+         * @param {string} state - 'active', 'pausing', 'paused', 'resuming'
+         */
+        function updateQuickPauseButton(state) {
+            const quickPauseBtn = document.getElementById('quickPause');
+            if (!quickPauseBtn) {
+                console.log('[COACH_CONTROL] ⚠️ Quick Pause button not found');
+                return;
+            }
+            
+            console.log(`[COACH_CONTROL] 🔄 Updating Quick Pause button to state: ${state}`);
+            
+            switch(state) {
+                case 'active':
+                    quickPauseBtn.className = 'btn ai-control blue';
+                    quickPauseBtn.innerHTML = 'Quick Pause';
+                    quickPauseBtn.disabled = false;
+                    break;
+                case 'pausing':
+                    quickPauseBtn.className = 'btn ai-control yellow';
+                    quickPauseBtn.innerHTML = 'Pausing...';
+                    quickPauseBtn.disabled = true;
+                    break;
+                case 'paused':
+                    quickPauseBtn.className = 'btn ai-control red';
+                    quickPauseBtn.innerHTML = 'Un-Pause AI';
+                    quickPauseBtn.disabled = false;
+                    break;
+                case 'resuming':
+                    quickPauseBtn.className = 'btn ai-control yellow';
+                    quickPauseBtn.innerHTML = 'Resuming...';
+                    quickPauseBtn.disabled = true;
+                    break;
+                default:
+                    console.error('[COACH_CONTROL] ❌ Unknown button state:', state);
+            }
+        }
+        
+        /**
+         * Enable coach audio input (when AI is paused)
+         */
+        function enableCoachAudio() {
+            console.log('[COACH_CONTROL] 🎤 Enabling coach audio input');
+            
+            // Update coach mic indicator
+            const coachMicIndicator = document.getElementById('coachMicIndicator');
+            if (coachMicIndicator) {
+                coachMicIndicator.style.opacity = '1.0';
+                const statusSpan = coachMicIndicator.querySelector('#coachMicStatus');
+                if (statusSpan) {
+                    statusSpan.textContent = 'Ready to intervene (AI paused)';
+                }
+            }
+            
+            // Enable coach audio detection if available
+            if (speechCoordinator) {
+                speechCoordinator.setAIPaused(true);
+                console.log('[COACH_CONTROL] 🎭 Speech coordinator updated - coach can speak');
+            }
+        }
+        
+        /**
+         * Disable coach audio input (when AI is active)
+         */
+        function disableCoachAudio() {
+            console.log('[COACH_CONTROL] 🔇 Disabling coach audio input');
+            
+            // Update coach mic indicator
+            const coachMicIndicator = document.getElementById('coachMicIndicator');
+            if (coachMicIndicator) {
+                coachMicIndicator.style.opacity = '0.3';
+                const statusSpan = coachMicIndicator.querySelector('#coachMicStatus');
+                if (statusSpan) {
+                    statusSpan.textContent = 'AI active - Please use Quick Pause';
+                }
+            }
+            
+            // Disable coach audio detection
+            if (speechCoordinator) {
+                speechCoordinator.setAIPaused(false);
+                console.log('[COACH_CONTROL] 🎭 Speech coordinator updated - coach audio blocked');
+            }
+        }
+
+        // Global variable to track current AI audio for interruption
+        let currentAIAudio = null;
+
         // Play real AI audio from GPU server (ElevenLabs TTS)
         function playRealAIAudio(base64Audio, mimeType) {
             try {
+                // 🚨 CRITICAL: Stop any currently playing AI audio to prevent concurrent audio
+                if (currentAIAudio) {
+                    console.log('[AI-AUDIO] ⏹️ Stopping previous AI audio to prevent concurrent playback');
+                    currentAIAudio.pause();
+                    currentAIAudio.currentTime = 0;
+                    
+                    // Clean up the previous audio URL
+                    if (currentAIAudio.src) {
+                        URL.revokeObjectURL(currentAIAudio.src);
+                    }
+                    
+                    currentAIAudio = null;
+                }
+                
                 console.log('[AI-AUDIO] 🎵 Processing ElevenLabs TTS audio playback:');
                 console.log('  - Base64 length:', base64Audio.length, 'characters');
                 console.log('  - MIME type:', mimeType);
@@ -3291,6 +3476,9 @@
                 // Create audio element and play
                 const audioUrl = URL.createObjectURL(audioBlob);
                 const audio = new Audio(audioUrl);
+                
+                // 🚨 CRITICAL: Track this audio for interruption system
+                currentAIAudio = audio;
                 
                 // Set up comprehensive audio event handlers
                 audio.onloadstart = () => {
@@ -3329,6 +3517,9 @@
                     isAISpeaking = false;
                     URL.revokeObjectURL(audioUrl); // Clean up
                     
+                    // 🚨 CRITICAL: Clear current audio tracking
+                    currentAIAudio = null;
+                    
                     // Reset visual indicators to listening state
                     if (voiceStatusDisplay) {
                         voiceStatusDisplay.textContent = 'Listening...';
@@ -3352,6 +3543,9 @@
                     isAISpeaking = false;
                     URL.revokeObjectURL(audioUrl); // Clean up
                     updateStatus('ElevenLabs audio playback failed', 'error');
+                    
+                    // 🚨 CRITICAL: Clear current audio tracking on error
+                    currentAIAudio = null;
                     
                     // Reset visual indicators
                     if (voiceStatusDisplay) {
@@ -4957,6 +5151,25 @@
             }
         });
 
+        // Initialize coach control elements and states
+        function initializeCoachControls() {
+            console.log('[COACH_CONTROL] 🎛️ Initializing coach controls...');
+            
+            // Initialize Quick Pause button to active state (blue)
+            updateQuickPauseButton('active');
+            
+            // Initialize coach audio as disabled (AI starts active)
+            disableCoachAudio();
+            
+            // Initialize speech coordinator AI state
+            if (speechCoordinator) {
+                speechCoordinator.setAIPaused(false);
+                console.log('[COACH_CONTROL] 🎭 Speech coordinator initialized - AI active');
+            }
+            
+            console.log('[COACH_CONTROL] ✅ Coach controls initialized successfully');
+        }
+
         // Start the application with DOM ready check
         function startApplication() {
             console.log('[INIT] 🚀 Starting application with DOM ready check...');
@@ -4967,11 +5180,13 @@
                     console.log('[INIT] ✅ DOM loaded, initializing...');
                     initializeMedia();
                     initializeStreamingServices();
+                    initializeCoachControls();
                 });
             } else {
                 console.log('[INIT] ✅ DOM already loaded, initializing...');
                 initializeMedia();
                 initializeStreamingServices();
+                initializeCoachControls();
             }
         }
         
