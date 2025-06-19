@@ -709,8 +709,7 @@
                 <button id="shareScreen" class="btn">🖥️ Share Screen</button>
                 
                 <% if (user.role === 'coach') { %>
-                    <button id="pauseAI" class="btn ai-control">⏸️ Pause AI</button>
-                    <button id="resumeAI" class="btn ai-control" style="display: none;">▶️ Resume AI</button>
+                    <button id="toggleAI" class="btn ai-control" data-state="running">⏸️ Pause AI</button>
                 <% } %>
                 
                 <a href="/dashboard" class="btn" style="text-decoration: none;">🚪 Exit</a>
@@ -927,7 +926,22 @@
         }
 
         function addTranscriptItem(speaker, text, type = 'client') {
-            if (userRole !== 'coach') return; // Only show transcript to coaches
+            if (userRole !== 'coach') {
+                console.log('[TRANSCRIPT] ⚠️ Transcript display restricted to coaches only. Current user role:', userRole);
+                return; // Only show transcript to coaches
+            }
+            
+            if (!transcriptContent) {
+                console.error('[TRANSCRIPT] ❌ transcriptContent element not found in DOM');
+                return;
+            }
+            
+            if (!text || text.trim() === '') {
+                console.log('[TRANSCRIPT] ⚠️ Skipping empty transcript item for', speaker, type);
+                return;
+            }
+            
+            console.log('[TRANSCRIPT] ✅ Adding transcript item:', { speaker, type, textLength: text.length });
             
             const timestamp = new Date().toLocaleTimeString();
             const item = document.createElement('div');
@@ -950,6 +964,8 @@
             
             transcriptContent.appendChild(item);
             transcriptContent.scrollTop = transcriptContent.scrollHeight;
+            
+            console.log('[TRANSCRIPT] ✅ Transcript item added successfully. Total items:', transcriptContent.children.length);
         }
 
         // 👨‍🏫 COACH UTILITY FUNCTIONS: Helper functions for coach controls
@@ -2720,9 +2736,12 @@
                         const displayText = data.text || 'Audio response';
                         updateStatus(`AI speaking: "${displayText.substring(0, 30)}..."`, 'success');
                         
-                        // Add to transcript with ElevenLabs attribution
-                        if (data.text && userRole === 'coach') {
+                        // TRANSCRIPT FIX: Add to transcript with ElevenLabs attribution
+                        if (data.text) {
+                            console.log('[AI-WS] 📝 Adding ElevenLabs TTS response to transcript:', data.text);
                             addTranscriptItem('AI (ElevenLabs TTS)', data.text, 'ai');
+                        } else {
+                            console.log('[AI-WS] ⚠️ ElevenLabs TTS response missing text field:', data);
                         }
                         
                         // Play the ElevenLabs audio (MP3 format)
@@ -3523,8 +3542,25 @@
                     }));
                 };
                 
-                ws.onmessage = (event) => {
-                    handleVideoMessage(JSON.parse(event.data));
+                ws.onmessage = async (event) => {
+                    try {
+                        let data;
+                        
+                        // Handle both text and blob messages
+                        if (event.data instanceof Blob) {
+                            console.log('[VIDEO] 📦 Received Blob data, converting to text...');
+                            const text = await event.data.text();
+                            data = JSON.parse(text);
+                        } else {
+                            data = JSON.parse(event.data);
+                        }
+                        
+                        handleVideoMessage(data);
+                    } catch (error) {
+                        console.error('[VIDEO] ❌ Error parsing video message:', error);
+                        console.error('[VIDEO] ❌ Raw event data type:', typeof event.data);
+                        console.error('[VIDEO] ❌ Raw event data:', event.data);
+                    }
                 };
                 
                 ws.onclose = () => {
@@ -3739,28 +3775,34 @@
             if (userRole === 'coach') {
                 setTimeout(() => {
                     // Add error handling and null checks for DOM elements
-                    const pauseAIBtn = document.getElementById('pauseAI');
-                    const resumeAIBtn = document.getElementById('resumeAI');
+                    const toggleAIBtn = document.getElementById('toggleAI');
                     const quickPauseBtn = document.getElementById('quickPause');
                     
                     console.log('[COACH_CONTROL] 🔍 Attempting to attach event listeners...');
                     
-                    if (pauseAIBtn) {
-                        // Try both onclick and addEventListener as fallbacks
-                        pauseAIBtn.onclick = pauseAI;
-                        pauseAIBtn.addEventListener('click', pauseAI);
-                        console.log('[COACH_CONTROL] ✅ Pause AI button event listener attached');
+                    if (toggleAIBtn) {
+                        toggleAIBtn.addEventListener('click', () => {
+                            const currentState = toggleAIBtn.getAttribute('data-state');
+                            
+                            if (currentState === 'running') {
+                                // AI is running, so pause it
+                                pauseAI();
+                                toggleAIBtn.setAttribute('data-state', 'paused');
+                                toggleAIBtn.innerHTML = '▶️ Resume AI';
+                                console.log('[COACH_CONTROL] 🔄 Toggle: Paused AI');
+                            } else {
+                                // AI is paused, so resume it
+                                resumeAI();
+                                toggleAIBtn.setAttribute('data-state', 'running');
+                                toggleAIBtn.innerHTML = '⏸️ Pause AI';
+                                console.log('[COACH_CONTROL] 🔄 Toggle: Resumed AI');
+                            }
+                        });
+                        console.log('[COACH_CONTROL] ✅ Toggle AI button event listener attached');
                         console.log('[COACH_CONTROL] 🔍 pauseAI function type:', typeof pauseAI);
+                        console.log('[COACH_CONTROL] 🔍 resumeAI function type:', typeof resumeAI);
                     } else {
-                        console.error('[COACH_CONTROL] ❌ pauseAI button not found in DOM');
-                    }
-                    
-                    if (resumeAIBtn) {
-                        resumeAIBtn.onclick = resumeAI;
-                        resumeAIBtn.addEventListener('click', resumeAI);
-                        console.log('[COACH_CONTROL] ✅ Resume AI button event listener attached');
-                    } else {
-                        console.error('[COACH_CONTROL] ❌ resumeAI button not found in DOM');
+                        console.error('[COACH_CONTROL] ❌ toggleAI button not found in DOM');
                     }
                     
                     if (quickPauseBtn) {

@@ -93,7 +93,7 @@ export function initSimpleWebSocket(httpServer) {
             room.forEach(user => {
               if (user.ws !== ws && user.ws.readyState === ws.OPEN) {
                 console.log(`[SimpleWS] Sending ${data.type} to ${user.userName}`);
-                user.ws.send(message);
+                user.ws.send(message.toString());
                 relayCount++;
               }
             });
