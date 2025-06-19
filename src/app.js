@@ -210,8 +210,8 @@ const startServer = async (attemptPort) => {
     // Initialize Protoo signaling for MediaSoup
     // await initProtooSignaling(httpServer);
     
-    // Initialize simple WebSocket for fallback video chat
-    initSimpleWebSocket(httpServer);
+    // Initialize simple WebSocket for fallback video chat (replaced by enhanced WebSocket)
+    // initSimpleWebSocket(httpServer);
     
     // Initialize WebSocket relay for environments where WebRTC is blocked
     // initWebSocketRelay(httpServer);

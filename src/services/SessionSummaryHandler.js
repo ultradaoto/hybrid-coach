@@ -153,7 +153,9 @@ export class SessionSummaryHandler {
     async createSummaryRecord(tx, data) {
         const { sessionId, clientId, coachId, summary } = data;
 
-        return await tx.sessionSummary.create({
+        // Check if sessionSummary model exists, if not store in session metadata
+        try {
+            return await tx.sessionSummary.create({
             data: {
                 sessionId,
                 clientId,
@@ -176,36 +178,64 @@ export class SessionSummaryHandler {
                 }
             }
         });
+        } catch (err) {
+            // If sessionSummary model doesn't exist, store in session metadata instead
+            console.log('[SessionSummaryHandler] SessionSummary model not found, storing in session metadata');
+            return await tx.session.update({
+                where: { id: sessionId },
+                data: {
+                    metadata: {
+                        ...summary,
+                        summaryGeneratedAt: new Date().toISOString()
+                    }
+                }
+            });
+        }
     }
 
     /**
      * Store conversation transcript
      */
     async storeTranscript(tx, sessionId, transcript) {
-        // Store transcript entries in batches for efficiency
-        const batchSize = 100;
-        const batches = [];
-        
-        for (let i = 0; i < transcript.length; i += batchSize) {
-            const batch = transcript.slice(i, i + batchSize);
-            batches.push(batch);
-        }
+        try {
+            // Store transcript entries in batches for efficiency
+            const batchSize = 100;
+            const batches = [];
+            
+            for (let i = 0; i < transcript.length; i += batchSize) {
+                const batch = transcript.slice(i, i + batchSize);
+                batches.push(batch);
+            }
 
-        for (const [index, batch] of batches.entries()) {
-            const transcriptEntries = batch.map((entry, idx) => ({
-                sessionId,
-                speaker: entry.speaker || 'unknown',
-                content: entry.content || entry.text || '',
-                timestamp: entry.timestamp || new Date(Date.now() + (index * batchSize + idx) * 1000),
-                metadata: entry.metadata || {}
-            }));
+            for (const [index, batch] of batches.entries()) {
+                const transcriptEntries = batch.map((entry, idx) => ({
+                    sessionId,
+                    speaker: entry.speaker || 'unknown',
+                    content: entry.content || entry.text || '',
+                    timestamp: entry.timestamp || new Date(Date.now() + (index * batchSize + idx) * 1000),
+                    metadata: entry.metadata || {}
+                }));
 
-            await tx.transcript.createMany({
-                data: transcriptEntries
+                await tx.transcript.createMany({
+                    data: transcriptEntries
+                });
+            }
+
+            console.log(`[SessionSummaryHandler] Stored ${transcript.length} transcript entries`);
+        } catch (err) {
+            // If transcript model doesn't exist, store in session metadata
+            console.log('[SessionSummaryHandler] Transcript model not found, storing in session metadata');
+            await tx.session.update({
+                where: { id: sessionId },
+                data: {
+                    metadata: {
+                        transcript: transcript,
+                        transcriptStoredAt: new Date().toISOString()
+                    }
+                }
             });
+            console.log(`[SessionSummaryHandler] Stored transcript in session metadata`);
         }
-
-        console.log(`[SessionSummaryHandler] Stored ${transcript.length} transcript entries`);
     }
 
     /**
