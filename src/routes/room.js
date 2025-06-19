@@ -66,10 +66,15 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
       }
     }
 
-    // 3. Upsert user-specific session linked to appointment
+    // 3. Get or create SHARED session for the room (not user-specific)
+    // This ensures both coach and client use the same sessionId for AI coordination
+    const sessionId = await getOrCreateSessionId(roomId);
+    
+    // Also create user-specific session record for tracking (but don't use its ID)
     const session = await prisma.session.upsert({
       where: { appointment_user: { appointmentId: appointment.id, userId: req.user.id } },
       create: {
+        id: sessionId, // Use the shared session ID
         roomId,
         appointmentId: appointment.id,
         userId: req.user.id,
@@ -129,7 +134,7 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
       roomId,
       user: req.user,
       jwt: token,
-      sessionId: session.id,
+      sessionId: sessionId, // Use the shared session ID
       clientProfile: clientProfile, // Pass client context to frontend
       coachProfile: coachProfile,
       appointment: appointment

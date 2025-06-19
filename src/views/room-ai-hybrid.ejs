@@ -3216,6 +3216,36 @@
                     }
                     break;
                     
+                case 'connected':
+                    console.log('[AI-WS] ✅ GPU session connection confirmed:', data.message);
+                    console.log('[AI-WS] Session ID:', data.sessionId);
+                    console.log('[AI-WS] Session state:', data.state);
+                    console.log('[AI-WS] Audio capabilities:', data.audioCapabilities);
+                    
+                    // Update UI to show AI is ready
+                    updateAIStatus('listening');
+                    updateStatus('AI Assistant connected and ready', 'success');
+                    
+                    // Add system message to transcript
+                    if (userRole === 'coach') {
+                        addTranscriptItem('System', 'AI Assistant connected and ready for session', 'ai');
+                    }
+                    break;
+                    
+                case 'client_context_received':
+                    console.log('[AI-WS] ✅ GPU confirmed client context loaded:', data.status);
+                    console.log('[AI-WS] Profile fields loaded:', data.profileFields);
+                    
+                    // Update UI to show context is loaded
+                    updateStatus('Client profile loaded for AI', 'success');
+                    
+                    // Add system message to transcript
+                    if (userRole === 'coach') {
+                        const profileInfo = data.profileFields ? data.profileFields.join(', ') : 'basic profile';
+                        addTranscriptItem('System', `Client context loaded (${profileInfo})`, 'ai');
+                    }
+                    break;
+                    
                 default:
                     console.log(`[AI-WS] ⚠️ Unhandled message type: "${data.type}"`, data);
                     break;
@@ -3607,12 +3637,12 @@
                     }
                     break;
                     
-                case 'webrtc-offer':
+                case 'offer':
                     console.log('[VIDEO] 📞 Received WebRTC offer');
                     handleWebRTCOffer(data.offer, data.from);
                     break;
                     
-                case 'webrtc-answer':
+                case 'answer':
                     console.log('[VIDEO] ✅ Received WebRTC answer');
                     handleWebRTCAnswer(data.answer);
                     break;
@@ -3694,7 +3724,7 @@
                 
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({
-                        type: 'webrtc-answer',
+                        type: 'answer',
                         answer: answer,
                         to: from
                     }));
@@ -3737,7 +3767,7 @@
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     console.log('[VIDEO] 📞 Sending WebRTC offer');
                     ws.send(JSON.stringify({
-                        type: 'webrtc-offer',
+                        type: 'offer',
                         offer: offer
                     }));
                 }
