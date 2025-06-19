@@ -3497,15 +3497,217 @@
         }
 
         function initializeWebRTCConnection() {
-            // WebRTC connection logic (simplified for this example)
-            // This would integrate with your existing WebRTC implementation
+            console.log('[VIDEO] 🎥 Initializing video WebSocket connection...');
+            
+            // 🎥 VIDEO WEBSOCKET: Initialize video WebSocket (separate from AI WebSocket)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws-simple/${roomId}`;
+            
+            console.log('[VIDEO] 📡 Connecting to video WebSocket:', wsUrl);
             updateStatus('Connecting to video call...', 'info');
             
-            // Simulate connection for demo
-            setTimeout(() => {
-                updateStatus('Video call connected', 'success');
-                remoteLabel.textContent = userRole === 'coach' ? 'Client Connected' : 'Coach Connected';
-            }, 2000);
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = () => {
+                    console.log('[VIDEO] ✅ Video WebSocket connected');
+                    updateStatus('Video WebSocket connected', 'success');
+                    
+                    // Send join message
+                    ws.send(JSON.stringify({
+                        type: 'join',
+                        roomId: roomId,
+                        userId: userId,
+                        userRole: userRole,
+                        userName: userName
+                    }));
+                };
+                
+                ws.onmessage = (event) => {
+                    handleVideoMessage(JSON.parse(event.data));
+                };
+                
+                ws.onclose = () => {
+                    console.log('[VIDEO] ❌ Video WebSocket disconnected');
+                    updateStatus('Video connection lost', 'error');
+                };
+                
+                ws.onerror = (error) => {
+                    console.error('[VIDEO] ❌ Video WebSocket error:', error);
+                    updateStatus('Video connection error', 'error');
+                };
+                
+            } catch (error) {
+                console.error('[VIDEO] ❌ Failed to create video WebSocket:', error);
+                updateStatus('Video connection failed', 'error');
+            }
+        }
+
+        // 🎥 VIDEO MESSAGE HANDLER: Handle video WebSocket messages (separate from AI)
+        function handleVideoMessage(data) {
+            console.log('[VIDEO] 📨 Received video message:', data.type);
+            
+            switch (data.type) {
+                case 'user-joined':
+                    console.log('[VIDEO] 👥 User joined:', data.userId, data.userRole);
+                    updateStatus(`${data.userRole} joined the session`, 'success');
+                    remoteLabel.textContent = userRole === 'coach' ? 'Client Connected' : 'Coach Connected';
+                    
+                    // Initiate video call if we're the coach (to avoid both sides initiating)
+                    if (userRole === 'coach') {
+                        setTimeout(() => {
+                            console.log('[VIDEO] 🎬 Coach initiating video call...');
+                            initiateVideoCall();
+                        }, 1000);
+                    }
+                    break;
+                    
+                case 'user-left':
+                    console.log('[VIDEO] 👋 User left:', data.userId);
+                    updateStatus(`${data.userRole} left the session`, 'info');
+                    remoteLabel.textContent = userRole === 'coach' ? 'Waiting for client...' : 'Waiting for coach...';
+                    if (remoteVideo.srcObject) {
+                        remoteVideo.srcObject = null;
+                    }
+                    break;
+                    
+                case 'webrtc-offer':
+                    console.log('[VIDEO] 📞 Received WebRTC offer');
+                    handleWebRTCOffer(data.offer, data.from);
+                    break;
+                    
+                case 'webrtc-answer':
+                    console.log('[VIDEO] ✅ Received WebRTC answer');
+                    handleWebRTCAnswer(data.answer);
+                    break;
+                    
+                case 'ice-candidate':
+                    console.log('[VIDEO] 🧊 Received ICE candidate');
+                    handleICECandidate(data.candidate);
+                    break;
+                    
+                case 'room-status':
+                    console.log('[VIDEO] 📊 Room status:', data.users?.length || 0, 'users');
+                    break;
+                    
+                default:
+                    console.log('[VIDEO] ⚠️ Unknown video message type:', data.type);
+            }
+        }
+
+        // 🎥 WEBRTC FUNCTIONS: Handle peer-to-peer video connection
+        async function initializePeerConnection() {
+            console.log('[VIDEO] 🔗 Initializing RTCPeerConnection...');
+            
+            // TURN servers configuration for NAT traversal
+            const configuration = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    // Add Twilio TURN servers if available
+                    // { urls: 'turn:your-turn-server.com', username: 'user', credential: 'pass' }
+                ]
+            };
+            
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            // Add local stream to peer connection
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
+            
+            // Handle remote stream
+            peerConnection.ontrack = (event) => {
+                console.log('[VIDEO] 📺 Received remote stream');
+                remoteVideo.srcObject = event.streams[0];
+            };
+            
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate && ws && ws.readyState === WebSocket.OPEN) {
+                    console.log('[VIDEO] 🧊 Sending ICE candidate');
+                    ws.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            
+            // Connection state monitoring
+            peerConnection.onconnectionstatechange = () => {
+                console.log('[VIDEO] 🔗 Connection state:', peerConnection.connectionState);
+                if (peerConnection.connectionState === 'connected') {
+                    updateStatus('Video call connected', 'success');
+                } else if (peerConnection.connectionState === 'failed') {
+                    updateStatus('Video connection failed', 'error');
+                }
+            };
+        }
+        
+        async function handleWebRTCOffer(offer, from) {
+            try {
+                if (!peerConnection) {
+                    await initializePeerConnection();
+                }
+                
+                await peerConnection.setRemoteDescription(offer);
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'webrtc-answer',
+                        answer: answer,
+                        to: from
+                    }));
+                }
+            } catch (error) {
+                console.error('[VIDEO] ❌ Error handling WebRTC offer:', error);
+            }
+        }
+        
+        async function handleWebRTCAnswer(answer) {
+            try {
+                if (peerConnection) {
+                    await peerConnection.setRemoteDescription(answer);
+                }
+            } catch (error) {
+                console.error('[VIDEO] ❌ Error handling WebRTC answer:', error);
+            }
+        }
+        
+        async function handleICECandidate(candidate) {
+            try {
+                if (peerConnection) {
+                    await peerConnection.addIceCandidate(candidate);
+                }
+            } catch (error) {
+                console.error('[VIDEO] ❌ Error handling ICE candidate:', error);
+            }
+        }
+        
+        // Initiate video call (called when both users are connected)
+        async function initiateVideoCall() {
+            try {
+                if (!peerConnection) {
+                    await initializePeerConnection();
+                }
+                
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    console.log('[VIDEO] 📞 Sending WebRTC offer');
+                    ws.send(JSON.stringify({
+                        type: 'webrtc-offer',
+                        offer: offer
+                    }));
+                }
+            } catch (error) {
+                console.error('[VIDEO] ❌ Error initiating video call:', error);
+            }
         }
 
         function setupControls() {
@@ -4617,6 +4819,7 @@
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
+            // 🎯 AI WEBSOCKET CLEANUP: (existing functionality - untouched)
             if (aiWs) {
                 aiWs.send(JSON.stringify({
                     type: 'end_session',
@@ -4625,10 +4828,22 @@
                 aiWs.close();
             }
             
+            // 🎥 VIDEO WEBSOCKET CLEANUP: (new functionality)
+            if (ws) {
+                ws.send(JSON.stringify({
+                    type: 'leave',
+                    roomId: roomId,
+                    userId: userId
+                }));
+                ws.close();
+            }
+            
+            // 📹 MEDIA CLEANUP: (existing functionality)
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
             }
             
+            // 🔗 PEER CONNECTION CLEANUP: (existing functionality)
             if (peerConnection) {
                 peerConnection.close();
             }

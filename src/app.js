@@ -210,7 +210,7 @@ const startServer = async (attemptPort) => {
     // await initProtooSignaling(httpServer);
     
     // Initialize simple WebSocket for fallback video chat
-    // initSimpleWebSocket(httpServer);
+    initSimpleWebSocket(httpServer);
     
     // Initialize WebSocket relay for environments where WebRTC is blocked
     // initWebSocketRelay(httpServer);
