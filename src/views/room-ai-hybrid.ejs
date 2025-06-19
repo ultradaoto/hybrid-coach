@@ -816,6 +816,7 @@
         let aiWs = null;
         let isVideoEnabled = true;
         let isAudioEnabled = true;
+        let videoHeartbeatInterval = null;
         
         // 🕒 SESSION TIMING: Global session timer for timeString format
         let sessionStartTime = Date.now();
@@ -926,9 +927,13 @@
         }
 
         function addTranscriptItem(speaker, text, type = 'client') {
+            // Allow both coach and client to see transcripts, but only coaches see the transcript panel
+            const transcriptElement = userRole === 'coach' ? transcriptContent : null;
+            
+            // For clients, just log the transcript for debugging (transcript panel not visible)
             if (userRole !== 'coach') {
-                console.log('[TRANSCRIPT] ⚠️ Transcript display restricted to coaches only. Current user role:', userRole);
-                return; // Only show transcript to coaches
+                console.log(`[TRANSCRIPT] 💬 ${speaker}: ${text}`);
+                return;
             }
             
             if (!transcriptContent) {
@@ -1579,7 +1584,7 @@
         // 🎯 SESSION MANAGEMENT: Timer and context variables
         let sessionTimer = null;
         // sessionStartTime already declared above - use existing global variable
-        let sessionDurationMinutes = 20; // Default session length
+        let sessionDurationMinutes = 120; // Extended session length for testing (2 hours)
         let timeWarningsSent = 0;
         let isSessionEnding = false;
         let sessionMetrics = {
@@ -1854,13 +1859,13 @@
          * Start session timer for automatic time management
          */
         function startSessionTimer() {
-            const warningTimes = [
-                { at: 18 * 60 * 1000, type: '2min', remaining: 2 },
-                { at: 19 * 60 * 1000, type: '1min', remaining: 1 },
-                { at: 19.5 * 60 * 1000, type: '30sec', remaining: 0.5 }
-            ];
-            
+            // Dynamic warning times based on session duration
             const sessionDuration = sessionDurationMinutes * 60 * 1000;
+            const warningTimes = [
+                { at: sessionDuration - (2 * 60 * 1000), type: '2min', remaining: 2 },
+                { at: sessionDuration - (1 * 60 * 1000), type: '1min', remaining: 1 },
+                { at: sessionDuration - (30 * 1000), type: '30sec', remaining: 0.5 }
+            ];
             
             console.log(`[SESSION_MGR] ⏰ Starting ${sessionDurationMinutes}-minute session timer`);
             
@@ -2610,8 +2615,12 @@
                     isAIPaused = true;
                     if (userRole === 'coach') {
                         addTranscriptItem('System', 'AI paused - Coach has control', 'coach');
-                        document.getElementById('pauseAI').style.display = 'none';
-                        document.getElementById('resumeAI').style.display = 'inline-flex';
+                        // Update toggle button to show "Resume AI" state
+                        const toggleBtn = document.getElementById('toggleAI');
+                        if (toggleBtn) {
+                            toggleBtn.setAttribute('data-state', 'paused');
+                            toggleBtn.innerHTML = '▶️ Resume AI';
+                        }
                     }
                     break;
                     
@@ -2620,8 +2629,12 @@
                     isAIPaused = false;
                     if (userRole === 'coach') {
                         addTranscriptItem('System', 'AI resumed - Back in control', 'ai');
-                        document.getElementById('pauseAI').style.display = 'inline-flex';
-                        document.getElementById('resumeAI').style.display = 'none';
+                        // Update toggle button to show "Pause AI" state
+                        const toggleBtn = document.getElementById('toggleAI');
+                        if (toggleBtn) {
+                            toggleBtn.setAttribute('data-state', 'running');
+                            toggleBtn.innerHTML = '⏸️ Pause AI';
+                        }
                     }
                     break;
                     
@@ -3570,6 +3583,14 @@
                         userRole: userRole,
                         userName: userName
                     }));
+                    
+                    // Start heartbeat to prevent connection timeout
+                    videoHeartbeatInterval = setInterval(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'ping' }));
+                            console.log('[VIDEO] 💓 Heartbeat ping sent');
+                        }
+                    }, 20000); // Send ping every 20 seconds
                 };
                 
                 ws.onmessage = async (event) => {
@@ -3596,6 +3617,12 @@
                 ws.onclose = () => {
                     console.log('[VIDEO] ❌ Video WebSocket disconnected');
                     updateStatus('Video connection lost', 'error');
+                    
+                    // Clear heartbeat
+                    if (videoHeartbeatInterval) {
+                        clearInterval(videoHeartbeatInterval);
+                        videoHeartbeatInterval = null;
+                    }
                 };
                 
                 ws.onerror = (error) => {
@@ -3654,6 +3681,10 @@
                     
                 case 'room-status':
                     console.log('[VIDEO] 📊 Room status:', data.users?.length || 0, 'users');
+                    break;
+                    
+                case 'pong':
+                    console.log('[VIDEO] 💓 Heartbeat pong received - connection alive');
                     break;
                     
                 default:
@@ -4901,6 +4932,11 @@
             }
             
             // 🎥 VIDEO WEBSOCKET CLEANUP: (new functionality)
+            if (videoHeartbeatInterval) {
+                clearInterval(videoHeartbeatInterval);
+                videoHeartbeatInterval = null;
+            }
+            
             if (ws) {
                 ws.send(JSON.stringify({
                     type: 'leave',
