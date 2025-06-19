@@ -63,7 +63,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // 🚀 STREAMING OPTIMIZATION: Serve JavaScript modules from src/services
 app.use('/src/services', express.static(path.join(__dirname, 'services')));
