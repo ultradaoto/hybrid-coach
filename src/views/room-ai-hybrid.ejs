@@ -3340,6 +3340,20 @@
                     updateStatus('AI is resuming...', 'info');
                     break;
                     
+                case 'ai_pause_error':
+                    // NEW: Handle GPU pause/resume errors (e.g., TTS service issues)
+                    console.error('[AI-WS] ❌ GPU pause error:', data.error);
+                    
+                    // Reset button to active state if pause failed
+                    updateQuickPauseButton('active');
+                    updateStatus(`AI pause failed: ${data.error}`, 'error');
+                    
+                    // Add error to transcript for coach
+                    if (userRole === 'coach') {
+                        addTranscriptItem('System', `AI pause error: ${data.error}`, 'ai');
+                    }
+                    break;
+                    
                 default:
                     console.log(`[AI-WS] ⚠️ Unhandled message type: "${data.type}"`, data);
                     break;
@@ -4061,9 +4075,25 @@
                     }
                     
                     if (quickPauseBtn) {
-                        quickPauseBtn.onclick = pauseAI;
-                        quickPauseBtn.addEventListener('click', pauseAI);
-                        console.log('[COACH_CONTROL] ✅ Quick Pause button event listener attached');
+                        quickPauseBtn.addEventListener('click', () => {
+                            // Check current button state to determine action
+                            const currentClasses = quickPauseBtn.className;
+                            
+                            if (currentClasses.includes('blue') || (!currentClasses.includes('red') && !currentClasses.includes('yellow'))) {
+                                // AI is active, so pause it
+                                console.log('[COACH_CONTROL] 🔄 Quick Pause: Pausing AI...');
+                                updateQuickPauseButton('pausing');
+                                pauseAI();
+                            } else if (currentClasses.includes('red')) {
+                                // AI is paused, so resume it
+                                console.log('[COACH_CONTROL] 🔄 Quick Pause: Resuming AI...');
+                                updateQuickPauseButton('resuming');
+                                resumeAI();
+                            } else {
+                                console.log('[COACH_CONTROL] ⚠️ Quick Pause button in transition state, ignoring click');
+                            }
+                        });
+                        console.log('[COACH_CONTROL] ✅ Quick Pause toggle button event listener attached');
                     } else {
                         console.error('[COACH_CONTROL] ❌ quickPause button not found in DOM');
                     }
