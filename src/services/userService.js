@@ -125,13 +125,18 @@ async function checkSkoolMembership(email) {
 
 function isLegacyUser(email) {
   // Legacy users who are grandfathered in
-  return email === 'ultradaoto@gmail.com' || email === 'percymate2000@gmail.com';
+  return email === 'ultradaoto@gmail.com' || 
+         email === 'percymate2000@gmail.com' ||
+         email === 'evvargreen@hotmail.com'; // Eva Cooley - testing user
 }
 
 function getDefaultRole(email) {
   // Legacy role assignment for existing known coaches
-  if (isLegacyUser(email)) {
+  if (email === 'ultradaoto@gmail.com' || email === 'percymate2000@gmail.com') {
     return 'coach';
+  }
+  if (email === 'evvargreen@hotmail.com') {
+    return 'client'; // Eva Cooley - testing client
   }
   return 'client';
 }

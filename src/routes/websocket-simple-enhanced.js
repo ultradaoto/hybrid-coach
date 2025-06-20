@@ -195,8 +195,8 @@ export function initEnhancedWebSocket(httpServer) {
         // Notify existing participants about new user
         room.forEach(p => {
             if (p.userId !== data.userId && p.ws.readyState === ws.OPEN) {
-                // DEBUGGING: Only create offers for Coach ↔ AI Orb connections
-                const shouldCreateOfferForPair = shouldCreateOfferDebugMode(p, participant);
+                // Determine if this pair should create a WebRTC offer
+                const shouldCreateOfferForPair = shouldCreateOffer(p, participant);
                 
                 p.ws.send(JSON.stringify({
                     type: 'user-joined',
@@ -208,9 +208,7 @@ export function initEnhancedWebSocket(httpServer) {
                 }));
                 
                 if (shouldCreateOfferForPair) {
-                    console.log(`[EnhancedWS] 🤝 DEBUGGING: Creating offer between ${p.userName}(${p.userRole}/${p.participantType}) and ${participant.userName}(${participant.userRole}/${participant.participantType})`);
-                } else {
-                    console.log(`[EnhancedWS] ⏸️  DEBUGGING: Skipping offer between ${p.userName}(${p.userRole}/${p.participantType}) and ${participant.userName}(${participant.userRole}/${participant.participantType})`);
+                    console.log(`[EnhancedWS] 🤝 Creating offer: ${p.userName}(${p.userRole}) → ${participant.userName}(${participant.userRole})`);
                 }
             }
         });
@@ -253,34 +251,6 @@ export function initEnhancedWebSocket(httpServer) {
         return existing.userId < joining.userId;
     }
 
-    /**
-     * DEBUGGING MODE: Only allow Coach ↔ AI Orb connections
-     * Temporarily bypass Client connections to isolate Coach ↔ AI Orb issues
-     */
-    function shouldCreateOfferDebugMode(existing, joining) {
-        // Block any connection involving a client
-        if (existing.userRole === 'client' || joining.userRole === 'client') {
-            console.log(`[EnhancedWS] 🚫 DEBUGGING: Blocking connection with Client participant`);
-            return false;
-        }
-        
-        // Only allow Coach ↔ AI Orb connections
-        const isCoachToAI = (existing.userRole === 'coach' && joining.participantType === 'ai') ||
-                           (existing.participantType === 'ai' && joining.userRole === 'coach');
-        
-        if (!isCoachToAI) {
-            console.log(`[EnhancedWS] 🚫 DEBUGGING: Not a Coach ↔ AI Orb connection, skipping`);
-            return false;
-        }
-        
-        // Use original logic for Coach ↔ AI Orb connections
-        // AI always receives offers (never creates them)
-        if (joining.participantType === 'ai') return true;
-        if (existing.participantType === 'ai') return false;
-        
-        // This shouldn't happen in Coach ↔ AI Orb scenario, but fallback
-        return existing.userId < joining.userId;
-    }
 
     /**
      * Handle WebRTC signaling messages
