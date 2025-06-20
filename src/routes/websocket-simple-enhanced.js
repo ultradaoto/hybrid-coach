@@ -5,7 +5,13 @@ const rooms = new Map(); // roomId -> Map<userId, participant>
 
 /**
  * Enhanced WebSocket server for 3-party mesh network
- * Supports Coach ↔ Client ↔ AI Orb tri-party connections
+ * 
+ * DEBUGGING MODE ACTIVE:
+ * - Currently blocks Client connections to isolate Coach ↔ AI Orb connection issues
+ * - Only allows Coach ↔ AI Orb connections for debugging
+ * - Client connections will be blocked with 'connection-blocked' message
+ * 
+ * Original support: Coach ↔ Client ↔ AI Orb tri-party connections
  */
 export function initEnhancedWebSocket(httpServer) {
     const wss = new WebSocketServer({ noServer: true });
@@ -64,6 +70,10 @@ export function initEnhancedWebSocket(httpServer) {
                 switch (data.type) {
                     case 'join':
                         currentParticipant = handleJoin(ws, room, roomId, data);
+                        // If join was blocked (debugging mode), terminate connection
+                        if (currentParticipant === null) {
+                            return; // Connection already closed in handleJoin
+                        }
                         break;
                         
                     case 'offer':
@@ -146,6 +156,18 @@ export function initEnhancedWebSocket(httpServer) {
     function handleJoin(ws, room, roomId, data) {
         console.log(`[EnhancedWS] 👤 ${data.userRole} ${data.userName} (${data.participantType}) joining room ${roomId}`);
         
+        // DEBUGGING: Temporarily block Client connections to isolate Coach ↔ AI Orb issues
+        if (data.userRole === 'client') {
+            console.log(`[EnhancedWS] 🚫 DEBUGGING MODE: Blocking Client connection from ${data.userName}`);
+            ws.send(JSON.stringify({
+                type: 'connection-blocked',
+                reason: 'debugging_mode',
+                message: 'Client connections temporarily disabled for Coach ↔ AI Orb debugging'
+            }));
+            ws.close(1000, 'Debugging mode: Client connections blocked');
+            return null;
+        }
+        
         // Check if this user is already in the room (reconnection)
         const existingUser = room.get(data.userId);
         if (existingUser) {
@@ -184,14 +206,23 @@ export function initEnhancedWebSocket(httpServer) {
         // Notify existing participants about new user
         room.forEach(p => {
             if (p.userId !== data.userId && p.ws.readyState === ws.OPEN) {
+                // DEBUGGING: Only create offers for Coach ↔ AI Orb connections
+                const shouldCreateOfferForPair = shouldCreateOfferDebugMode(p, participant);
+                
                 p.ws.send(JSON.stringify({
                     type: 'user-joined',
                     userId: data.userId,
                     userName: data.userName,
                     userRole: data.userRole,
                     participantType: data.participantType,
-                    shouldCreateOffer: shouldCreateOffer(p, participant)
+                    shouldCreateOffer: shouldCreateOfferForPair
                 }));
+                
+                if (shouldCreateOfferForPair) {
+                    console.log(`[EnhancedWS] 🤝 DEBUGGING: Creating offer between ${p.userName}(${p.userRole}/${p.participantType}) and ${participant.userName}(${participant.userRole}/${participant.participantType})`);
+                } else {
+                    console.log(`[EnhancedWS] ⏸️  DEBUGGING: Skipping offer between ${p.userName}(${p.userRole}/${p.participantType}) and ${participant.userName}(${participant.userRole}/${participant.participantType})`);
+                }
             }
         });
 
@@ -230,6 +261,35 @@ export function initEnhancedWebSocket(httpServer) {
         if (existing.userRole === 'client' && joining.userRole === 'coach') return false;
         
         // For same roles or edge cases, use ID comparison
+        return existing.userId < joining.userId;
+    }
+
+    /**
+     * DEBUGGING MODE: Only allow Coach ↔ AI Orb connections
+     * Temporarily bypass Client connections to isolate Coach ↔ AI Orb issues
+     */
+    function shouldCreateOfferDebugMode(existing, joining) {
+        // Block any connection involving a client
+        if (existing.userRole === 'client' || joining.userRole === 'client') {
+            console.log(`[EnhancedWS] 🚫 DEBUGGING: Blocking connection with Client participant`);
+            return false;
+        }
+        
+        // Only allow Coach ↔ AI Orb connections
+        const isCoachToAI = (existing.userRole === 'coach' && joining.participantType === 'ai') ||
+                           (existing.participantType === 'ai' && joining.userRole === 'coach');
+        
+        if (!isCoachToAI) {
+            console.log(`[EnhancedWS] 🚫 DEBUGGING: Not a Coach ↔ AI Orb connection, skipping`);
+            return false;
+        }
+        
+        // Use original logic for Coach ↔ AI Orb connections
+        // AI always receives offers (never creates them)
+        if (joining.participantType === 'ai') return true;
+        if (existing.participantType === 'ai') return false;
+        
+        // This shouldn't happen in Coach ↔ AI Orb scenario, but fallback
         return existing.userId < joining.userId;
     }
 
