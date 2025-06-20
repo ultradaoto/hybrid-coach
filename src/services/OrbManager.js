@@ -61,7 +61,39 @@ export class OrbManager extends EventEmitter {
         const gpuManagerUrl = process.env.GPU_MANAGER_URL || 'http://127.0.0.1:8002';
         
         try {
-            // Determine max lifetime based on environment
+            // STEP 1: Check if orb already exists for this session
+            console.log(`[OrbManager] 🔍 Checking if orb exists for session ${sessionId}...`);
+            
+            const existsResponse = await fetch(`${gpuManagerUrl}/orbs/${sessionId}/exists`, {
+                timeout: 5000
+            });
+            
+            if (existsResponse.ok) {
+                const existsData = await existsResponse.json();
+                if (existsData.exists) {
+                    console.log(`[OrbManager] ⚠️ AI Orb already exists for session ${sessionId} (PID: ${existsData.orb.pid})`);
+                    
+                    // Create local tracking object for existing orb
+                    const existingOrb = {
+                        orbId: existsData.orb.sessionId, // Use sessionId as orbId for consistency
+                        pid: existsData.orb.pid,
+                        roomId,
+                        sessionId,
+                        appointment,
+                        startTime: Date.now() - (existsData.orb.uptime || 0),
+                        status: existsData.orb.status || 'running',
+                        lastHeartbeat: Date.now(),
+                        spawnedViaAPI: true,
+                        metrics: existsData.orb.metrics || { cpu: 0, memory: 0, latency: 0 }
+                    };
+                    
+                    this.activeOrbs.set(roomId, existingOrb);
+                    console.log(`[OrbManager] ✅ Using existing AI Orb for room ${roomId} (Session: ${sessionId})`);
+                    return existingOrb;
+                }
+            }
+            
+            // STEP 2: Spawn new orb if none exists
             const isTest = appointment.status === 'test' || process.env.ORB_TEST_MODE === 'true';
             const maxLifetime = isTest ? 30000 : 7200000; // 30s for test, 2h for normal
             
@@ -70,14 +102,12 @@ export class OrbManager extends EventEmitter {
                 sessionId,
                 options: {
                     maxLifetime,
-                    coachId: appointment.coachId,
-                    clientId: appointment.clientId,
-                    cpuHost: process.env.CPU_HOST || 'localhost:3000',
+                    idleTimeout: 300000, // 5 minutes
                     testMode: isTest
                 }
             };
             
-            console.log(`[OrbManager] 🚀 Requesting AI Orb spawn via GPU Manager: ${gpuManagerUrl}/orbs/spawn`);
+            console.log(`[OrbManager] 🚀 Spawning new AI Orb via GPU Manager: ${gpuManagerUrl}/orbs/spawn`);
             
             const response = await fetch(`${gpuManagerUrl}/orbs/spawn`, {
                 method: 'POST',
@@ -85,7 +115,7 @@ export class OrbManager extends EventEmitter {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(spawnPayload),
-                timeout: 10000 // 10 second timeout
+                timeout: 15000 // 15 second timeout for spawning
             });
             
             if (!response.ok) {
@@ -94,37 +124,39 @@ export class OrbManager extends EventEmitter {
             }
             
             const result = await response.json();
+            const action = result.wasExisting ? 'found existing' : 'spawned new';
             
-            // Create local tracking object for the remotely spawned orb
+            // Create local tracking object for the orb
             const orb = {
-                orbId: result.orbId, // GPU manager's orb ID
-                pid: result.pid,
+                orbId: result.orb.sessionId, // Use sessionId as orbId
+                pid: result.orb.pid,
                 roomId,
                 sessionId,
                 appointment,
                 startTime: Date.now(),
-                status: 'spawning',
+                status: result.orb.status || 'spawning',
                 lastHeartbeat: Date.now(),
-                spawnedViaAPI: true, // Flag to indicate this was spawned via API
-                metrics: {
-                    cpu: 0,
-                    memory: 0,
-                    latency: 0
-                }
+                spawnedViaAPI: true,
+                metrics: result.orb.metrics || { cpu: 0, memory: 0, latency: 0 }
             };
             
             this.activeOrbs.set(roomId, orb);
             
-            console.log(`[OrbManager] ✅ AI Orb spawned via GPU Manager for room ${roomId} (Orb ID: ${result.orbId}, PID: ${result.pid})`);
-            this.emit('orb_spawned', { roomId, orbId: result.orbId, pid: result.pid, sessionId });
+            console.log(`[OrbManager] ✅ AI Orb ${action} via GPU Manager for room ${roomId} (Session: ${sessionId}, PID: ${result.orb.pid})`);
+            this.emit('orb_spawned', { roomId, orbId: result.orb.sessionId, pid: result.orb.pid, sessionId });
             
             return orb;
             
         } catch (error) {
-            console.error(`[OrbManager] ❌ Failed to spawn orb via GPU Manager:`, error.message);
+            console.error(`[OrbManager] ❌ Failed to communicate with GPU Manager:`, error.message);
             
-            // Fallback to direct spawning if API fails
-            console.log(`[OrbManager] 🔄 Falling back to direct process spawning...`);
+            // Only fallback if it's a network/connection error, not a business logic error
+            if (error.message.includes('already exists') || error.message.includes('500')) {
+                console.log(`[OrbManager] 🚫 No fallback - this is a GPU Manager business logic issue that needs to be resolved`);
+                throw error; // Don't fallback for these errors
+            }
+            
+            console.log(`[OrbManager] 🔄 Network error - falling back to direct process spawning...`);
             return await this.spawnOrbDirect(roomId, sessionId, appointment);
         }
     }
@@ -246,15 +278,12 @@ export class OrbManager extends EventEmitter {
         try {
             console.log(`[OrbManager] 🔴 Terminating orb via GPU Manager API: ${orbId}`);
             
-            const response = await fetch(`${gpuManagerUrl}/orbs/${orbId}/terminate`, {
-                method: 'POST',
+            // Use DELETE method as per GPU Claude's API design
+            const response = await fetch(`${gpuManagerUrl}/orbs/${orbId}`, {
+                method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    reason,
-                    graceful: true
-                }),
                 timeout: 15000 // 15 second timeout
             });
             
@@ -265,7 +294,7 @@ export class OrbManager extends EventEmitter {
             }
             
             const result = await response.json();
-            console.log(`[OrbManager] ✅ Orb ${orbId} terminated via API: ${result.message}`);
+            console.log(`[OrbManager] ✅ Orb ${orbId} terminated via API: ${result.message || 'Success'}`);
             return true;
             
         } catch (error) {
