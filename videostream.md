@@ -5,7 +5,7 @@ This document describes the ONLY WORKING video streaming architecture for the Hy
 
 **IMPORTANT**: This is a 3-way call application. Socket.IO and other WebRTC implementations DO NOT WORK. Only use Enhanced WebSocket as documented here.
 
-## Working Implementation: Enhanced WebSocket ONLY
+## Working Implementation: Enhanced WebSocket ONLY - trying to get it working.
 
 ### Enhanced WebSocket Details
 - **Endpoint**: `/ws-simple/{roomId}`
