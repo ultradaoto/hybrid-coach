@@ -116,6 +116,7 @@ import roomRouter from './routes/room.js';
 import apiRouter from './routes/api.js';
 import aiRouter from './routes/ai.js';
 import sessionRouter from './routes/session.js';
+import debugRouter from './routes/debug.js';
 
 app.use('/', baseRouter);
 app.use('/healthz', healthRouter);
@@ -128,6 +129,7 @@ app.use('/room', roomRouter);
 app.use('/session', sessionRouter);
 app.use('/api', apiRouter);
 app.use('/api/ai', aiRouter);
+app.use('/debug', debugRouter);
 
 // 404 handler
 app.use((req, res) => {

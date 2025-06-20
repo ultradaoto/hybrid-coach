@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title><%= title %></title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .video-container { 
+            display: flex; 
+            gap: 20px; 
+            margin: 20px 0; 
+            flex-wrap: wrap;
+        }
+        .video-wrapper { 
+            border: 2px solid #ccc; 
+            padding: 15px; 
+            text-align: center; 
+            border-radius: 8px;
+            background: #fafafa;
+            flex: 1;
+            min-width: 300px;
+        }
+        .video-wrapper.speaking { 
+            border-color: #00ff41; 
+            box-shadow: 0 4px 20px rgba(0,255,65,0.4); 
+            animation: speaking-pulse 1s ease-in-out infinite alternate;
+        }
+        @keyframes speaking-pulse {
+            from { box-shadow: 0 4px 20px rgba(0,255,65,0.4); }
+            to { box-shadow: 0 8px 30px rgba(0,255,65,0.7); }
+        }
+        video { 
+            width: 100%; 
+            max-width: 400px;
+            height: 300px; 
+            background: #000; 
+            border-radius: 4px;
+        }
+        .logs { 
+            background: #1a1a1a; 
+            color: #00ff00;
+            padding: 15px; 
+            height: 400px; 
+            overflow-y: scroll; 
+            font-family: 'Courier New', monospace; 
+            font-size: 12px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .status { 
+            padding: 15px; 
+            background: #e3f2fd; 
+            border-left: 4px solid #2196f3; 
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button { 
+            padding: 12px 24px; 
+            background: #2196f3; 
+            color: white; 
+            border: none; 
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #1976d2;
+        }
+        button:disabled { 
+            background: #ccc; 
+            cursor: not-allowed; 
+        }
+        .error { 
+            background: #ffebee; 
+            border-left: 4px solid #f44336; 
+        }
+        .success { 
+            background: #e8f5e8; 
+            border-left: 4px solid #4caf50; 
+        }
+        .warning {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+        }
+        .connection-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .header p {
+            color: #666;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><%= title %></h1>
+            <p>Testing WebRTC connection between Coach and AI Orb</p>
+            <p><strong>User:</strong> <%= user.displayName %> (<%= user.role %>)</p>
+        </div>
+        
+        <div class="status" id="status">
+            <strong>Status:</strong> Initializing debug environment...
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" onclick="startDebugTest()">🚀 Start Debug Test</button>
+            <button id="stopBtn" onclick="stopDebugTest()" disabled>🛑 Stop Test</button>
+            <button onclick="clearLogs()">🧹 Clear Logs</button>
+            <button onclick="getConnectionStats()">📊 Connection Stats</button>
+        </div>
+        
+        <div class="video-container">
+            <div class="video-wrapper">
+                <h3>🎥 Local Video (Coach)</h3>
+                <video id="localVideo" autoplay muted playsinline></video>
+                <div id="localStatus" class="connection-info">Not connected</div>
+            </div>
+            
+            <div class="video-wrapper">
+                <h3>🤖 AI Orb Video</h3>
+                <video id="remoteVideo" autoplay playsinline></video>
+                <div id="remoteStatus" class="connection-info">Waiting for AI Orb...</div>
+            </div>
+        </div>
+        
+        <div class="logs" id="logs">
+            <div style="color: #00ff41;">🔬 Debug Console - Coach ↔ AI Orb Video Testing</div>
+            <div style="color: #00ff41;">═══════════════════════════════════════════════</div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { TriPartyWebRTC } from '/js/tri-party-webrtc.js';
+        
+        let webrtc = null;
+        let logCount = 0;
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString();
+            let color = '#00ff00'; // Green default
+            
+            switch(type) {
+                case 'error': color = '#ff4444'; break;
+                case 'success': color = '#00ff41'; break;
+                case 'warning': color = '#ffaa00'; break;
+                case 'info': color = '#00aaff'; break;
+            }
+            
+            const logLine = `<div style="color: ${color};">[${timestamp}] ${message}</div>`;
+            logs.innerHTML += logLine;
+            logs.scrollTop = logs.scrollHeight;
+            
+            console.log(`[DEBUG] ${message}`);
+            logCount++;
+        }
+        
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.innerHTML = `<strong>Status:</strong> ${message}`;
+            status.className = type === 'error' ? 'status error' : 
+                             type === 'success' ? 'status success' : 
+                             type === 'warning' ? 'status warning' : 'status';
+        }
+        
+        window.startDebugTest = async function() {
+            try {
+                log('🚀 Starting Coach ↔ AI Orb debug test...', 'info');
+                updateStatus('Starting debug test...');
+                
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                
+                // Get room ID from URL params or current page
+                const urlParams = new URLSearchParams(window.location.search);
+                let roomId = urlParams.get('room');
+                
+                if (!roomId) {
+                    // Try to extract from current page URL or create a test room
+                    const currentPath = window.location.pathname;
+                    const roomMatch = currentPath.match(/\/room\/([^\/]+)/);
+                    
+                    if (roomMatch) {
+                        roomId = roomMatch[1];
+                        log(`📍 Using room from current page: ${roomId}`, 'info');
+                    } else {
+                        // Create a new test room
+                        log('📝 Creating new test room...', 'info');
+                        const response = await fetch('/room/create');
+                        if (response.redirected) {
+                            const redirectUrl = new URL(response.url);
+                            roomId = redirectUrl.pathname.split('/').pop();
+                            log(`✅ Test room created: ${roomId}`, 'success');
+                        } else {
+                            throw new Error('Failed to create test room');
+                        }
+                    }
+                }
+                
+                log(`🏠 Using room: ${roomId}`, 'success');
+                log(`👤 User: <%= user.displayName %> (<%= user.role %>)`, 'info');
+                
+                // Initialize WebRTC with comprehensive debug callbacks
+                webrtc = new TriPartyWebRTC({
+                    roomId: roomId,
+                    userId: '<%= user.id %>',
+                    userName: '<%= user.displayName %>',
+                    userRole: '<%= user.role %>',
+                    participantType: 'human',
+                    
+                    onLocalStream: (stream) => {
+                        log('📹 Local video stream ready ✅', 'success');
+                        document.getElementById('localVideo').srcObject = stream;
+                        document.getElementById('localStatus').innerHTML = `
+                            <strong>Connected</strong><br>
+                            Video tracks: ${stream.getVideoTracks().length}<br>
+                            Audio tracks: ${stream.getAudioTracks().length}
+                        `;
+                        updateStatus('Local video ready, waiting for AI Orb...');
+                    },
+                    
+                    onRemoteStream: (peerId, stream, peerInfo) => {
+                        log(`📺 Remote stream from ${peerInfo?.userName || peerId} (${peerInfo?.participantType})`, 'success');
+                        
+                        if (peerInfo?.participantType === 'ai') {
+                            document.getElementById('remoteVideo').srcObject = stream;
+                            document.getElementById('remoteStatus').innerHTML = `
+                                <strong>AI Orb Connected! 🎉</strong><br>
+                                Video tracks: ${stream.getVideoTracks().length}<br>
+                                Audio tracks: ${stream.getAudioTracks().length}<br>
+                                Peer ID: ${peerId}
+                            `;
+                            updateStatus('🎉 AI Orb video connected!', 'success');
+                            log('🎉 SUCCESS: AI Orb video stream is working!', 'success');
+                        }
+                    },
+                    
+                    onUserJoined: (userInfo) => {
+                        log(`👤 User joined: ${userInfo.userName} (${userInfo.userRole}/${userInfo.participantType})`, 'success');
+                        if (userInfo.participantType === 'ai') {
+                            updateStatus('AI Orb joined room, establishing video connection...');
+                            log('🤖 AI Orb detected - WebRTC negotiation starting...', 'info');
+                        }
+                    },
+                    
+                    onUserLeft: (userId) => {
+                        log(`👋 User left: ${userId}`, 'warning');
+                        if (userId.includes('ai-orb')) {
+                            document.getElementById('remoteStatus').innerHTML = 'AI Orb Disconnected';
+                            updateStatus('AI Orb disconnected', 'warning');
+                        }
+                    },
+                    
+                    onConnectionState: (state) => {
+                        log(`🔗 Connection state: ${state}`, 'info');
+                        if (state === 'connected') {
+                            updateStatus('WebSocket connected ✅', 'success');
+                        } else if (state === 'disconnected') {
+                            updateStatus('WebSocket disconnected ❌', 'error');
+                        }
+                    },
+                    
+                    onError: (type, error) => {
+                        log(`❌ ERROR (${type}): ${error}`, 'error');
+                        updateStatus(`Error: ${type} - ${error}`, 'error');
+                        
+                        // Specific error analysis
+                        if (error.includes('MediaStreamTrack')) {
+                            log('🔍 DIAGNOSIS: AI Orb MediaStreamTrack validation failed', 'error');
+                            log('💡 SOLUTION: GPU-side track creation needs fixing', 'warning');
+                        }
+                    },
+                    
+                    onSpeakingChange: (streamId, isSpeaking) => {
+                        // Visual feedback for speaking
+                        const isLocal = streamId === 'local';
+                        const wrapper = isLocal ? 
+                            document.querySelector('.video-wrapper:first-of-type') :
+                            document.querySelector('.video-wrapper:last-of-type');
+                        
+                        if (isSpeaking) {
+                            wrapper?.classList.add('speaking');
+                            log(`🎤 ${isLocal ? 'You are' : 'AI Orb is'} speaking`, 'info');
+                        } else {
+                            wrapper?.classList.remove('speaking');
+                        }
+                    }
+                });
+                
+                // Start the connection
+                log('🔧 Initializing WebRTC manager...', 'info');
+                await webrtc.initialize();
+                log('✅ WebRTC manager initialized successfully', 'success');
+                
+            } catch (error) {
+                log(`❌ FATAL: Failed to start debug test: ${error}`, 'error');
+                updateStatus(`Failed to start: ${error}`, 'error');
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            }
+        }
+        
+        window.stopDebugTest = function() {
+            if (webrtc) {
+                log('🛑 Stopping debug test...', 'warning');
+                webrtc.disconnect();
+                webrtc = null;
+            }
+            
+            // Clear video streams
+            document.getElementById('localVideo').srcObject = null;
+            document.getElementById('remoteVideo').srcObject = null;
+            document.getElementById('localStatus').innerHTML = 'Not connected';
+            document.getElementById('remoteStatus').innerHTML = 'Waiting for AI Orb...';
+            
+            // Reset controls
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            
+            updateStatus('Debug test stopped');
+            log('✅ Debug test stopped', 'success');
+        }
+        
+        window.clearLogs = function() {
+            document.getElementById('logs').innerHTML = `
+                <div style="color: #00ff41;">🔬 Debug Console - Coach ↔ AI Orb Video Testing</div>
+                <div style="color: #00ff41;">═══════════════════════════════════════════════</div>
+            `;
+            logCount = 0;
+            log('🧹 Logs cleared', 'info');
+        }
+        
+        window.getConnectionStats = async function() {
+            if (!webrtc) {
+                log('❌ No active WebRTC connection', 'error');
+                return;
+            }
+            
+            try {
+                const stats = await webrtc.getStats();
+                log('📊 CONNECTION STATISTICS:', 'info');
+                log(`   Connected: ${stats.connected}`, 'info');
+                log(`   Peers: ${stats.peers}`, 'info');
+                log(`   Connections: ${Object.keys(stats.connections).length}`, 'info');
+                
+                Object.entries(stats.connections).forEach(([peerId, conn]) => {
+                    log(`   ${peerId}: ICE=${conn.iceConnectionState}, Signal=${conn.signalingState}`, 'info');
+                });
+            } catch (error) {
+                log(`❌ Failed to get stats: ${error}`, 'error');
+            }
+        }
+        
+        // Auto-start if requested
+        <% if (autostart) { %>
+        setTimeout(() => {
+            log('🔄 Auto-starting debug test...', 'info');
+            startDebugTest();
+        }, 1000);
+        <% } %>
+        
+        // Log initial environment
+        log('🌍 Debug environment initialized', 'success');
+        log(`   Room ID: ${new URLSearchParams(window.location.search).get('room') || 'Will create new'}`, 'info');
+        log(`   User: <%= user.displayName %> (<%= user.role %>)`, 'info');
+        log(`   Auto-start: <%= autostart %>`, 'info');
+    </script>
+</body>
+</html>
