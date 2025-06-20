@@ -156,17 +156,6 @@ export function initEnhancedWebSocket(httpServer) {
     function handleJoin(ws, room, roomId, data) {
         console.log(`[EnhancedWS] 👤 ${data.userRole} ${data.userName} (${data.participantType}) joining room ${roomId}`);
         
-        // DEBUGGING: Temporarily block Client connections to isolate Coach ↔ AI Orb issues
-        if (data.userRole === 'client') {
-            console.log(`[EnhancedWS] 🚫 DEBUGGING MODE: Blocking Client connection from ${data.userName}`);
-            ws.send(JSON.stringify({
-                type: 'connection-blocked',
-                reason: 'debugging_mode',
-                message: 'Client connections temporarily disabled for Coach ↔ AI Orb debugging'
-            }));
-            ws.close(1000, 'Debugging mode: Client connections blocked');
-            return null;
-        }
         
         // Check if this user is already in the room (reconnection)
         const existingUser = room.get(data.userId);
