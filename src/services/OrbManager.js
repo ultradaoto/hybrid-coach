@@ -249,7 +249,13 @@ export class OrbManager extends EventEmitter {
         const orb = this.activeOrbs.get(roomId);
         if (!orb) {
             console.log(`[OrbManager] ⚠️ No orb found for room ${roomId}`);
-            return;
+            return false; // Return false to indicate no action taken
+        }
+
+        // Check if orb is already terminated
+        if (orb.status === 'terminated' || orb.status === 'terminating') {
+            console.log(`[OrbManager] ⚠️ Orb for room ${roomId} already ${orb.status}, skipping termination`);
+            return false; // Return false to indicate no action taken
         }
 
         console.log(`[OrbManager] 🔴 Killing orb for room ${roomId} (PID: ${orb.pid}, Reason: ${reason})`);
@@ -264,9 +270,14 @@ export class OrbManager extends EventEmitter {
             await this.killOrbDirect(orb, reason);
         }
 
+        // Mark as terminated before cleanup
+        orb.status = 'terminated';
+        
         this.activeOrbs.delete(roomId);
         this.clearCleanupTimer(roomId);
         this.emit('orb_terminated', { roomId, pid: orb.pid, reason });
+        
+        return true; // Return true to indicate successful termination
     }
     
     /**

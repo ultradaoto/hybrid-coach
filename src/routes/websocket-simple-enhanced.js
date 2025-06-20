@@ -305,7 +305,20 @@ export function initEnhancedWebSocket(httpServer) {
         const messageType = data.type;
         const targetId = data.toId || data.targetId;
         
-        console.log(`[EnhancedWS] ${messageType} from ${sender.userId} to ${targetId || 'all'}`);
+        // Rate-limited logging for ICE candidates (max 1 per second per connection)
+        if (messageType === 'ice-candidate') {
+            const iceKey = `${sender.userId}->${targetId}`;
+            const now = Date.now();
+            if (!global.lastIceLog) global.lastIceLog = new Map();
+            
+            if (!global.lastIceLog.has(iceKey) || now - global.lastIceLog.get(iceKey) > 1000) {
+                console.log(`[EnhancedWS] ${messageType} from ${sender.userId} to ${targetId || 'all'}`);
+                global.lastIceLog.set(iceKey, now);
+            }
+        } else {
+            // Log all non-ICE messages normally
+            console.log(`[EnhancedWS] ${messageType} from ${sender.userId} to ${targetId || 'all'}`);
+        }
         
         if (targetId) {
             // Targeted signaling for 3-way mesh
