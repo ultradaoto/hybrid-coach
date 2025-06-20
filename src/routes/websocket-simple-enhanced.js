@@ -97,6 +97,15 @@ export function initEnhancedWebSocket(httpServer) {
                         broadcastToOthers(room, currentParticipant, data);
                         break;
                         
+                    case 'orb_heartbeat':
+                        // Handle AI orb heartbeat messages
+                        console.log(`[EnhancedWS] AI orb heartbeat received for room ${roomId}`);
+                        // Forward heartbeat to OrbManager via process message (if available)
+                        if (currentParticipant?.participantType === 'ai') {
+                            // This heartbeat will be handled by OrbManager through the process channel
+                        }
+                        break;
+                        
                     case 'ai-orb-shutdown':
                         // Handle AI orb shutdown notifications
                         console.log(`[EnhancedWS] AI orb shutdown notification for session ${data.sessionId}`);
