@@ -15,37 +15,40 @@
 
         .client-info {
             background: #2a2a2a;
-            padding: 0.5rem;
-            text-align: center;
+            padding: 0.3rem 0.5rem;
             border-bottom: 1px solid #404040;
         }
 
         .client-info h3 {
             color: #17a2b8;
-            margin-bottom: 0.25rem;
-            font-size: 1rem;
+            margin: 0;
+            font-size: 0.9rem;
+            display: inline-block;
         }
 
         .client-info p {
-            margin: 0.25rem 0;
-            font-size: 0.85rem;
-            opacity: 0.9;
+            margin: 0;
+            font-size: 0.75rem;
+            opacity: 0.8;
+            display: inline-block;
+            margin-left: 0.5rem;
         }
 
         .session-status {
             background: #1e1e1e;
-            padding: 0.25rem;
+            padding: 0.2rem 0.4rem;
             border-radius: 4px;
-            margin-top: 0.25rem;
-            font-size: 0.8rem;
+            margin-top: 0.2rem;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
         .connection-quality {
             display: flex;
             align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
+            gap: 0.3rem;
         }
 
         .quality-indicator {
@@ -100,8 +103,8 @@
         <div class="video-panel">
             <div class="video-header">
                 <div class="room-info">
-                    <h2>Your Coaching Session</h2>
-                    <div class="subtitle">Session: <%= sessionId.substring(0, 8) %>...</div>
+                    <h2 style="margin: 0; font-size: 1.1rem; display: inline-block;">Your Coaching Session</h2>
+                    <span class="subtitle" style="margin-left: 1rem; font-size: 0.8rem;">Session: <%= sessionId.substring(0, 8) %>...</span>
                 </div>
                 <div class="ai-status">
                     <div class="ai-indicator" id="aiIndicator"></div>
@@ -120,15 +123,15 @@
                         <span id="connectionStatus">Connecting...</span>
                     </div>
                     
-                    <div id="aiSessionStatus" style="margin-top: 0.5rem; padding: 0.5rem; border-radius: 4px; font-size: 0.9rem;">
+                    <div id="aiSessionStatus" style="font-size: 0.7rem;">
                         <% if (!orbStatus) { %>
-                            <div style="background: #fff3cd; color: #856404;">
-                                ⏳ Waiting for your coach to join and activate the AI session...
-                            </div>
+                            <span style="background: #fff3cd; color: #856404; padding: 0.2rem 0.4rem; border-radius: 3px; white-space: nowrap;">
+                                ⏳ Waiting for coach...
+                            </span>
                         <% } else { %>
-                            <div style="background: #d4edda; color: #155724;">
-                                ✅ AI session is active with coach supervision
-                            </div>
+                            <span style="background: #d4edda; color: #155724; padding: 0.2rem 0.4rem; border-radius: 3px; white-space: nowrap;">
+                                ✅ AI session active
+                            </span>
                         <% } %>
                     </div>
                 </div>
@@ -306,15 +309,15 @@
             if (statusEl) {
                 if (isActive) {
                     statusEl.innerHTML = `
-                        <div style="background: #d4edda; color: #155724;">
-                            ✅ AI session is active with coach supervision
-                        </div>
+                        <span style="background: #d4edda; color: #155724; padding: 0.2rem 0.4rem; border-radius: 3px; white-space: nowrap;">
+                            ✅ AI session active
+                        </span>
                     `;
                 } else {
                     statusEl.innerHTML = `
-                        <div style="background: #fff3cd; color: #856404;">
-                            ⏳ Waiting for your coach to join and activate the AI session...
-                        </div>
+                        <span style="background: #fff3cd; color: #856404; padding: 0.2rem 0.4rem; border-radius: 3px; white-space: nowrap;">
+                            ⏳ Waiting for coach...
+                        </span>
                     `;
                 }
             }
