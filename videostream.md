@@ -265,6 +265,12 @@ On CPU server, look for:
 [EnhancedWS] Room ROOM_ID now has X participants
 ```
 
+✅ **CONFIRMED WORKING**: Enhanced WebSocket connection is working correctly!
+- AI Orb successfully connects to `/ws-simple/{roomId}`
+- Receives `user-joined` messages from Coach/Client
+- Coach/Client can see AI Orb in participant list
+- Speaking indicators work for all participants
+
 ### 3. Common Issues and Solutions
 
 **Issue**: AI Orb not connecting to WebSocket
@@ -273,7 +279,20 @@ On CPU server, look for:
 - **Fix**: Verify `CPU_HOST` environment variable
 - **Test**: Run `node test-enhanced-ws.js` on CPU server
 
-**Issue**: WebRTC media stream creation fails
+**Issue**: WebRTC RTCPeerConnection constructor fails
+- **Symptom**: `TypeError: this.RTCPeerConnection is not a constructor`
+- **Cause**: AI Orb not properly importing/initializing wrtc library in Node.js
+- **Fix**: Properly import and initialize wrtc library
+- **Example**: 
+  ```javascript
+  import wrtc from 'wrtc';
+  this.RTCPeerConnection = wrtc.RTCPeerConnection;
+  this.MediaStream = wrtc.MediaStream;
+  this.MediaStreamTrack = wrtc.MediaStreamTrack;
+  ```
+- **Check**: Ensure all WebRTC APIs are from wrtc library
+
+**Issue**: WebRTC media stream creation fails  
 - **Symptom**: `TypeError: This is not an instance of MediaStreamTrack`
 - **Cause**: AI Orb using wrong MediaStream constructor for Node.js
 - **Fix**: Use wrtc library's MediaStream constructor
@@ -314,13 +333,41 @@ On CPU server, look for:
 5. Verify tri-party mesh connections established
 
 ### 5. Expected Connection Flow
-1. Coach joins → Spawns AI Orb via OrbManager
-2. AI Orb connects to `/ws-simple/{roomId}`
-3. Coach receives `user-joined` for AI Orb
-4. Coach creates offers to AI Orb
-5. AI Orb answers offers
-6. Client joins and repeats process
-7. Result: Coach ↔ Client ↔ AI Orb mesh
+1. ✅ Coach joins → Spawns AI Orb via OrbManager
+2. ✅ AI Orb connects to `/ws-simple/{roomId}`
+3. ✅ Coach receives `user-joined` for AI Orb
+4. ❌ Coach creates offers to AI Orb (BLOCKED by wrtc library issue)
+5. ❌ AI Orb answers offers (BLOCKED by wrtc library issue)
+6. ✅ Client joins and repeats process
+7. ❌ Result: Coach ↔ Client ↔ AI Orb mesh (BLOCKED)
+
+### 6. Current Status Analysis
+
+**✅ WORKING:**
+- Enhanced WebSocket connection (AI Orb ↔ CPU Server)
+- Session management and database integration
+- AI Orb spawning when Coach joins
+- Participant discovery and user-joined messages
+- Speaking indicator visual feedback
+- Coach ↔ Client video connection
+
+**❌ BLOCKED:**
+- AI Orb WebRTC peer connections (`this.RTCPeerConnection is not a constructor`)
+- AI Orb video/audio streaming
+- Tri-party mesh completion
+
+**🔧 NEXT STEP FOR GPU CLAUDE:**
+Fix the wrtc library initialization in the AI Orb's WebRTC manager:
+```javascript
+// At the top of webrtcManager.js
+import wrtc from 'wrtc';
+
+// In the constructor or initialization method
+this.RTCPeerConnection = wrtc.RTCPeerConnection;
+this.MediaStream = wrtc.MediaStream;
+this.RTCSessionDescription = wrtc.RTCSessionDescription;
+this.RTCIceCandidate = wrtc.RTCIceCandidate;
+```
 
 ## What NOT to Use (These DO NOT WORK)
 
