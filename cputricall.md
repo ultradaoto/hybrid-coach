@@ -29,7 +29,7 @@ Latency: <80ms for AI responses
 
 ## 🔧 Core Components
 
-### 1. OrbManager - Process Lifecycle Management
+### 1. OrbManager - Process Lifecycle Management Test
 
 ```javascript
 // src/services/OrbManager.js

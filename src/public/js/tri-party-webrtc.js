@@ -21,6 +21,7 @@ export class TriPartyWebRTC {
         // Audio level detection
         this.audioAnalyzers = new Map(); // peerId -> AudioAnalyzer
         this.speakingTimeouts = new Map(); // peerId -> timeoutId
+        this.participantInfo = new Map(); // peerId -> {userRole, participantType, userName}
         this.audioContext = null;
         
         // Callbacks
@@ -211,6 +212,13 @@ export class TriPartyWebRTC {
         
         console.log(`[TriPartyWebRTC] ${name} (${userRole}) joined, should create offer:`, shouldCreateOffer);
         
+        // Store participant info for speaking attribution
+        this.participantInfo.set(socketId, { 
+            userName: name, 
+            userRole, 
+            participantType 
+        });
+        
         // Call the onUserJoined callback
         this.onUserJoined({ userName: name, userRole, participantType });
         
@@ -319,6 +327,13 @@ export class TriPartyWebRTC {
         
         // Create connections to all existing peers
         for (const peer of data.peers) {
+            // Store participant info for speaking attribution
+            this.participantInfo.set(peer.userId, { 
+                userName: peer.userName, 
+                userRole: peer.userRole, 
+                participantType: peer.participantType 
+            });
+            
             await this.createPeerConnection(peer.userId, peer);
             
             // Check if we should create offer
@@ -334,6 +349,13 @@ export class TriPartyWebRTC {
      */
     async handleUserJoined(data) {
         console.log('[TriPartyWebRTC] User joined:', data);
+        
+        // Store participant info for speaking attribution
+        this.participantInfo.set(data.userId, { 
+            userName: data.userName, 
+            userRole: data.userRole, 
+            participantType: data.participantType 
+        });
         
         this.onUserJoined({
             userId: data.userId,
@@ -568,6 +590,12 @@ export class TriPartyWebRTC {
         // Clear any pending candidates
         this.pendingCandidates.delete(userId);
         
+        // Clean up participant info
+        this.participantInfo.delete(userId);
+        
+        // Clean up audio detection
+        this.cleanupAudioDetection(userId);
+        
         // Notify callback
         this.onUserLeft(userId);
     }
@@ -772,12 +800,15 @@ export class TriPartyWebRTC {
             clearTimeout(existingTimeout);
         }
         
+        // Get participant info for proper attribution
+        const participantInfo = this.participantInfo.get(streamId) || {};
+        
         // Notify that speaking started (if not already speaking)
-        this.onSpeakingChange(streamId, true);
+        this.onSpeakingChange(streamId, true, participantInfo);
         
         // Set timeout to stop speaking indicator after 2 seconds of silence
         const timeout = setTimeout(() => {
-            this.onSpeakingChange(streamId, false);
+            this.onSpeakingChange(streamId, false, participantInfo);
             this.speakingTimeouts.delete(streamId);
         }, 2000);
         

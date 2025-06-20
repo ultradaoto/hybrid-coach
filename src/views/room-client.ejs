@@ -241,8 +241,8 @@
             onAIStatus: (data) => {
                 updateAIStatus(data.status);
             },
-            onSpeakingChange: (streamId, isSpeaking) => {
-                updateSpeakingIndicator(streamId, isSpeaking);
+            onSpeakingChange: (streamId, isSpeaking, participantInfo) => {
+                updateSpeakingIndicator(streamId, isSpeaking, participantInfo);
             }
         };
 
@@ -321,29 +321,21 @@
         }
 
         // Speaking indicator for visual feedback
-        function updateSpeakingIndicator(streamId, isSpeaking) {
-            console.log(`[Speaking] ${streamId} is ${isSpeaking ? 'speaking' : 'silent'}`);
+        function updateSpeakingIndicator(streamId, isSpeaking, participantInfo = {}) {
+            console.log(`[Speaking] ${streamId} (${participantInfo.participantType || 'unknown'}) is ${isSpeaking ? 'speaking' : 'silent'}`);
             
-            // Map stream IDs to video elements
+            // Map stream IDs to video elements based on participant type
             let videoWrapper = null;
             
             if (streamId === 'local') {
                 // Local video (client)
                 videoWrapper = document.getElementById('localVideo')?.parentElement;
-            } else {
-                // Remote streams - find by checking stream objects
-                const remoteVideo = document.getElementById('remoteVideo');
-                const aiVideo = document.getElementById('aiVideo');
-                
-                // Check if this is the coach stream
-                if (remoteVideo && remoteVideo.srcObject) {
-                    videoWrapper = remoteVideo.parentElement;
-                }
-                
-                // Check if this is the AI stream
-                if (aiVideo && aiVideo.srcObject && aiVideo.style.display !== 'none') {
-                    videoWrapper = aiVideo.parentElement;
-                }
+            } else if (participantInfo.participantType === 'ai') {
+                // AI stream
+                videoWrapper = document.getElementById('aiVideo')?.parentElement;
+            } else if (participantInfo.userRole === 'coach') {
+                // Coach stream
+                videoWrapper = document.getElementById('remoteVideo')?.parentElement;
             }
             
             if (videoWrapper) {
