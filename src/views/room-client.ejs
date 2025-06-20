@@ -196,14 +196,20 @@
                     const aiVideo = document.getElementById('aiVideo');
                     const aiPlaceholder = document.getElementById('aiPlaceholder');
                     
-                    aiVideo.srcObject = stream;
-                    aiVideo.style.display = 'block';
-                    aiPlaceholder.style.display = 'none';
-                    updateAIStatus('ready');
+                    // Only set stream if not already set to avoid resetting
+                    if (!aiVideo.srcObject) {
+                        aiVideo.srcObject = stream;
+                        aiVideo.style.display = 'block';
+                        aiPlaceholder.style.display = 'none';
+                        updateAIStatus('ready');
+                        console.log('AI video stream set for client:', stream.getVideoTracks().length, 'video tracks');
+                    }
                 } else {
                     // Coach stream goes to remote video
-                    document.getElementById('remoteVideo').srcObject = stream;
-                    document.getElementById('remoteLabel').textContent = `${peerInfo.userName} (Coach)`;
+                    if (!document.getElementById('remoteVideo').srcObject) {
+                        document.getElementById('remoteVideo').srcObject = stream;
+                        document.getElementById('remoteLabel').textContent = `${peerInfo.userName} (Coach)`;
+                    }
                 }
             },
             onUserJoined: (userInfo) => {
