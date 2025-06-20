@@ -234,6 +234,9 @@
             },
             onAIStatus: (data) => {
                 updateAIStatus(data.status);
+            },
+            onSpeakingChange: (streamId, isSpeaking) => {
+                updateSpeakingIndicator(streamId, isSpeaking);
             }
         };
 
@@ -307,6 +310,41 @@
                             ⏳ Waiting for your coach to join and activate the AI session...
                         </div>
                     `;
+                }
+            }
+        }
+
+        // Speaking indicator for visual feedback
+        function updateSpeakingIndicator(streamId, isSpeaking) {
+            console.log(`[Speaking] ${streamId} is ${isSpeaking ? 'speaking' : 'silent'}`);
+            
+            // Map stream IDs to video elements
+            let videoWrapper = null;
+            
+            if (streamId === 'local') {
+                // Local video (client)
+                videoWrapper = document.getElementById('localVideo')?.parentElement;
+            } else {
+                // Remote streams - find by checking stream objects
+                const remoteVideo = document.getElementById('remoteVideo');
+                const aiVideo = document.getElementById('aiVideo');
+                
+                // Check if this is the coach stream
+                if (remoteVideo && remoteVideo.srcObject) {
+                    videoWrapper = remoteVideo.parentElement;
+                }
+                
+                // Check if this is the AI stream
+                if (aiVideo && aiVideo.srcObject && aiVideo.style.display !== 'none') {
+                    videoWrapper = aiVideo.parentElement;
+                }
+            }
+            
+            if (videoWrapper) {
+                if (isSpeaking) {
+                    videoWrapper.classList.add('speaking');
+                } else {
+                    videoWrapper.classList.remove('speaking');
                 }
             }
         }

@@ -6,6 +6,8 @@ const sessionCache = new Map();
 
 /**
  * Get an existing session ID for a room or create a new one
+ * This function only returns a session ID for coordination purposes.
+ * The actual session records are created by the room route with proper appointment/user relations.
  * @param {string} roomId - The room ID to get/create a session for
  * @returns {Promise<string>} The session ID
  */
@@ -32,18 +34,11 @@ export async function getOrCreateSessionId(roomId) {
       return existingSession.id;
     }
     
-    // Create a new session
+    // Don't create a session record here - just return a UUID for coordination
+    // The actual session record will be created by the room route with proper relations
     const sessionId = uuidv4();
     
-    await prisma.session.create({
-      data: {
-        id: sessionId,
-        roomId: roomId,
-        status: 'active'
-      }
-    });
-    
-    // Cache the result
+    // Cache the ID for consistency
     sessionCache.set(roomId, sessionId);
     return sessionId;
   } catch (err) {

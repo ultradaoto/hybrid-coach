@@ -25,7 +25,7 @@ export function initEnhancedWebSocket(httpServer) {
     });
 
     wss.on('connection', (ws, request, roomId) => {
-        console.log(`[EnhancedWS] New connection for room ${roomId}`);
+        console.log(`[EnhancedWS] 🔗 New connection for room ${roomId} from ${request.socket.remoteAddress}`);
         
         let currentParticipant = null;
         let pingInterval = null;
@@ -144,7 +144,7 @@ export function initEnhancedWebSocket(httpServer) {
      * Handle participant joining room
      */
     function handleJoin(ws, room, roomId, data) {
-        console.log(`[EnhancedWS] ${data.userRole} ${data.userName} joining room ${roomId}`);
+        console.log(`[EnhancedWS] 👤 ${data.userRole} ${data.userName} (${data.participantType}) joining room ${roomId}`);
         
         // Check if this user is already in the room (reconnection)
         const existingUser = room.get(data.userId);
@@ -200,10 +200,20 @@ export function initEnhancedWebSocket(httpServer) {
             orbManager.trackParticipantJoin(roomId, data.userId, data.userRole);
         }
 
-        console.log(`[EnhancedWS] Room ${roomId} now has ${room.size} participants`);
+        console.log(`[EnhancedWS] 📊 Room ${roomId} now has ${room.size} participants`);
         logRoomState(roomId, room);
         
         return participant;
+    }
+
+    /**
+     * Log current room state for debugging
+     */
+    function logRoomState(roomId, room) {
+        const participants = Array.from(room.values()).map(p => 
+            `${p.userName}(${p.userRole}/${p.participantType})`
+        ).join(', ');
+        console.log(`[EnhancedWS] 📋 Room ${roomId} participants: [${participants}]`);
     }
 
     /**

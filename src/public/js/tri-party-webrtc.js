@@ -18,6 +18,11 @@ export class TriPartyWebRTC {
         this.localStream = null;
         this.iceServers = null;
         
+        // Audio level detection
+        this.audioAnalyzers = new Map(); // peerId -> AudioAnalyzer
+        this.speakingTimeouts = new Map(); // peerId -> timeoutId
+        this.audioContext = null;
+        
         // Callbacks
         this.onLocalStream = config.onLocalStream || (() => {});
         this.onRemoteStream = config.onRemoteStream || (() => {});
@@ -26,6 +31,7 @@ export class TriPartyWebRTC {
         this.onConnectionState = config.onConnectionState || (() => {});
         this.onError = config.onError || (() => {});
         this.onAIStatus = config.onAIStatus || (() => {});
+        this.onSpeakingChange = config.onSpeakingChange || (() => {}); // New callback for speaking detection
         
         this.isConnected = false;
         this.reconnectAttempts = 0;
@@ -37,6 +43,9 @@ export class TriPartyWebRTC {
      */
     async initialize() {
         try {
+            // Initialize audio context for level detection
+            this.initializeAudioContext();
+            
             // Get ICE servers first
             await this.fetchIceServers();
             
@@ -71,6 +80,18 @@ export class TriPartyWebRTC {
     }
 
     /**
+     * Initialize audio context for level detection
+     */
+    initializeAudioContext() {
+        try {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('[TriPartyWebRTC] Audio context initialized for level detection');
+        } catch (err) {
+            console.warn('[TriPartyWebRTC] Audio context initialization failed:', err);
+        }
+    }
+
+    /**
      * Setup local media stream
      */
     async setupLocalMedia() {
@@ -90,6 +111,9 @@ export class TriPartyWebRTC {
             
             this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.onLocalStream(this.localStream);
+            
+            // Setup audio level detection for local stream
+            this.setupAudioLevelDetection('local', this.localStream);
             
             console.log('[TriPartyWebRTC] Local media ready');
         } catch (err) {
@@ -364,6 +388,9 @@ export class TriPartyWebRTC {
             if (event.streams && event.streams[0]) {
                 this.remoteStreams.set(peerId, event.streams[0]);
                 this.onRemoteStream(peerId, event.streams[0], peerInfo);
+                
+                // Setup audio level detection for remote stream
+                this.setupAudioLevelDetection(peerId, event.streams[0]);
             }
         };
         
@@ -634,10 +661,24 @@ export class TriPartyWebRTC {
         });
         this.peerConnections.clear();
         
+        // Cleanup audio detection for all streams
+        this.audioAnalyzers.forEach((analyzer, streamId) => {
+            this.cleanupAudioDetection(streamId);
+        });
+        
+        // Cleanup local audio detection
+        this.cleanupAudioDetection('local');
+        
         // Stop local tracks
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => track.stop());
             this.localStream = null;
+        }
+        
+        // Close audio context
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
         }
         
         // Clear streams
@@ -646,6 +687,127 @@ export class TriPartyWebRTC {
         
         this.isConnected = false;
         this.onConnectionState('disconnected');
+    }
+
+    /**
+     * Setup audio level detection for a stream
+     */
+    setupAudioLevelDetection(streamId, stream) {
+        if (!this.audioContext || !stream) return;
+        
+        try {
+            const audioTracks = stream.getAudioTracks();
+            if (audioTracks.length === 0) return;
+            
+            console.log(`[TriPartyWebRTC] Setting up audio level detection for ${streamId}`);
+            
+            // Create audio source from stream
+            const source = this.audioContext.createMediaStreamSource(stream);
+            const analyser = this.audioContext.createAnalyser();
+            
+            analyser.fftSize = 512;
+            analyser.minDecibels = -90;
+            analyser.maxDecibels = -10;
+            analyser.smoothingTimeConstant = 0.85;
+            
+            source.connect(analyser);
+            
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            // Store analyzer for cleanup later
+            this.audioAnalyzers.set(streamId, { analyser, source, dataArray });
+            
+            // Start monitoring audio levels
+            this.monitorAudioLevel(streamId);
+            
+        } catch (err) {
+            console.error(`[TriPartyWebRTC] Failed to setup audio detection for ${streamId}:`, err);
+        }
+    }
+
+    /**
+     * Monitor audio level for speaking detection
+     */
+    monitorAudioLevel(streamId) {
+        const analyzer = this.audioAnalyzers.get(streamId);
+        if (!analyzer) return;
+        
+        const { analyser, dataArray } = analyzer;
+        
+        const checkLevel = () => {
+            if (!this.audioAnalyzers.has(streamId)) return; // Stream was removed
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate average volume
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            const average = sum / dataArray.length;
+            
+            // Threshold for speaking detection (adjust as needed)
+            const speakingThreshold = 15; // Lower = more sensitive
+            const isSpeaking = average > speakingThreshold;
+            
+            if (isSpeaking) {
+                this.handleSpeakingDetected(streamId);
+            }
+            
+            // Continue monitoring
+            requestAnimationFrame(checkLevel);
+        };
+        
+        checkLevel();
+    }
+
+    /**
+     * Handle speaking detection
+     */
+    handleSpeakingDetected(streamId) {
+        // Clear existing timeout for this stream
+        const existingTimeout = this.speakingTimeouts.get(streamId);
+        if (existingTimeout) {
+            clearTimeout(existingTimeout);
+        }
+        
+        // Notify that speaking started (if not already speaking)
+        this.onSpeakingChange(streamId, true);
+        
+        // Set timeout to stop speaking indicator after 2 seconds of silence
+        const timeout = setTimeout(() => {
+            this.onSpeakingChange(streamId, false);
+            this.speakingTimeouts.delete(streamId);
+        }, 2000);
+        
+        this.speakingTimeouts.set(streamId, timeout);
+    }
+
+    /**
+     * Cleanup audio detection for a stream
+     */
+    cleanupAudioDetection(streamId) {
+        // Clear speaking timeout
+        const timeout = this.speakingTimeouts.get(streamId);
+        if (timeout) {
+            clearTimeout(timeout);
+            this.speakingTimeouts.delete(streamId);
+        }
+        
+        // Cleanup analyzer
+        const analyzer = this.audioAnalyzers.get(streamId);
+        if (analyzer) {
+            try {
+                analyzer.source.disconnect();
+            } catch (err) {
+                // Ignore errors during cleanup
+            }
+            this.audioAnalyzers.delete(streamId);
+        }
+        
+        // Ensure speaking indicator is turned off
+        this.onSpeakingChange(streamId, false);
     }
 
     /**

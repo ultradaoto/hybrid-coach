@@ -95,11 +95,30 @@
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        transition: transform 0.3s ease;
+        transition: all 0.3s ease;
+        border: 3px solid transparent;
     }
 
     .video-wrapper:hover {
         transform: scale(1.02);
+    }
+
+    /* Audio level detection - speaking indicator */
+    .video-wrapper.speaking {
+        border-color: #00ff41;
+        box-shadow: 0 4px 20px rgba(0,255,65,0.4), 0 0 0 1px rgba(0,255,65,0.6);
+        animation: speaking-pulse 1s ease-in-out infinite alternate;
+    }
+
+    @keyframes speaking-pulse {
+        0% { 
+            border-color: #00ff41;
+            box-shadow: 0 4px 20px rgba(0,255,65,0.4), 0 0 0 1px rgba(0,255,65,0.6);
+        }
+        100% { 
+            border-color: #00e636;
+            box-shadow: 0 4px 20px rgba(0,230,54,0.6), 0 0 0 2px rgba(0,230,54,0.8);
+        }
     }
 
     .video-wrapper video {
@@ -127,11 +146,30 @@
         border-radius: 12px;
         overflow: hidden;
         box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-        transition: transform 0.3s ease;
+        transition: all 0.3s ease;
+        border: 3px solid transparent;
     }
 
     .ai-video-wrapper:hover {
         transform: scale(1.02);
+    }
+
+    /* AI speaking indicator - blue color to distinguish from humans */
+    .ai-video-wrapper.speaking {
+        border-color: #17a2b8;
+        box-shadow: 0 4px 20px rgba(23,162,184,0.4), 0 0 0 1px rgba(23,162,184,0.6);
+        animation: ai-speaking-pulse 1s ease-in-out infinite alternate;
+    }
+
+    @keyframes ai-speaking-pulse {
+        0% { 
+            border-color: #17a2b8;
+            box-shadow: 0 4px 20px rgba(23,162,184,0.4), 0 0 0 1px rgba(23,162,184,0.6);
+        }
+        100% { 
+            border-color: #138496;
+            box-shadow: 0 4px 20px rgba(19,132,150,0.6), 0 0 0 2px rgba(19,132,150,0.8);
+        }
     }
 
     .ai-video-wrapper video {

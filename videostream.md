@@ -71,6 +71,12 @@ ws.send(JSON.stringify({
 ```
 **Important**: When `shouldCreateOffer` is false, wait for the other party to send an offer.
 
+**WebRTC Offer Logic Explained**:
+- Coach creates offers to both Client and AI Orb
+- Client creates offers to AI Orb (if Coach not present)
+- AI Orb ONLY answers offers (prevents conflicts)
+- This ensures deterministic mesh connection setup
+
 ### 3. WebRTC Signaling
 ```javascript
 // Incoming Offer
@@ -240,6 +246,81 @@ wscat -c ws://localhost:3000/ws-simple/test-room-id
 # Send join message
 {"type":"join","roomId":"test-room-id","userId":"ai-orb-test","userName":"AI Test","userRole":"ai","participantType":"ai"}
 ```
+
+## Debugging AI Orb Connection Issues
+
+### 1. Check if AI Orb is attempting WebSocket connection
+Look for these log messages in AI Orb:
+```
+[AI-Orb] 🔗 Connecting to Enhanced WebSocket: ws://CPU_HOST/ws-simple/ROOM_ID
+[AI-Orb] ✅ Enhanced WebSocket connected
+[AI-Orb] 📤 Sending join message: {"type":"join",...}
+```
+
+### 2. Check Enhanced WebSocket server logs
+On CPU server, look for:
+```
+[EnhancedWS] New connection for room ROOM_ID
+[EnhancedWS] ai AI Assistant joining room ROOM_ID
+[EnhancedWS] Room ROOM_ID now has X participants
+```
+
+### 3. Common Issues and Solutions
+
+**Issue**: AI Orb not connecting to WebSocket
+- **Check**: Is AI Orb using correct CPU_HOST URL?
+- **Check**: Is Enhanced WebSocket server running on CPU?
+- **Fix**: Verify `CPU_HOST` environment variable
+- **Test**: Run `node test-enhanced-ws.js` on CPU server
+
+**Issue**: WebRTC media stream creation fails
+- **Symptom**: `TypeError: This is not an instance of MediaStreamTrack`
+- **Cause**: AI Orb using wrong MediaStream constructor for Node.js
+- **Fix**: Use wrtc library's MediaStream constructor
+- **Example**: `new wrtc.MediaStream([videoTrack, audioTrack])`
+- **Check**: Ensure video/audio tracks are from wrtc library
+
+**Issue**: AI Orb joins but doesn't receive offers
+- **Check**: Are Coach/Client using Enhanced WebSocket endpoint?
+- **Check**: Is `participantType: 'ai'` set correctly?
+- **Fix**: Ensure all participants use `/ws-simple/{roomId}` endpoint
+- **Verify**: Check logs for "shouldCreateOffer: true" from humans to AI
+
+**Issue**: AI Orb connects but no video appears
+- **Check**: Is AI Orb sending proper video MediaStreamTrack?
+- **Check**: Are offer/answer SDP negotiations completing?
+- **Fix**: Monitor WebRTC connection states in logs
+- **Debug**: Check if ICE candidates are being exchanged
+
+**Issue**: Three participants but mesh incomplete
+- **Check**: Are all connections established? Should see 3 total connections:
+  - Coach ↔ Client (1 connection)
+  - Coach ↔ AI Orb (1 connection)  
+  - Client ↔ AI Orb (1 connection)
+- **Fix**: Ensure each participant can create offers to newcomers
+
+**Issue**: Database session creation errors
+- **Symptom**: `Invalid prisma.session.create() invocation: Argument appointment is missing`
+- **Symptom**: `Unique constraint failed on the fields: (id)`
+- **Cause**: Session records require appointmentId and userId fields
+- **Fix**: ✅ FIXED - Session utilities updated to not create invalid records
+- **Note**: Each user gets their own session record, but shares sessionId for AI coordination
+
+### 4. Manual Testing Steps
+1. Start CPU server with Enhanced WebSocket
+2. Have Coach join room (should spawn AI Orb)
+3. Check AI Orb logs for WebSocket connection
+4. Have Client join room
+5. Verify tri-party mesh connections established
+
+### 5. Expected Connection Flow
+1. Coach joins → Spawns AI Orb via OrbManager
+2. AI Orb connects to `/ws-simple/{roomId}`
+3. Coach receives `user-joined` for AI Orb
+4. Coach creates offers to AI Orb
+5. AI Orb answers offers
+6. Client joins and repeats process
+7. Result: Coach ↔ Client ↔ AI Orb mesh
 
 ## What NOT to Use (These DO NOT WORK)
 
