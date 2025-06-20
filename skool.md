@@ -1,7 +1,7 @@
 # Skool.com Integration Documentation
 
 ## 🎯 Overview
-Automated member synchronization system for Ultra Skool and Vagus Skool communities using Playwright browser automation. This system crawls member data, extracts profiles, and maintains role-based access for the myultra.coach platform.
+Automated member synchronization system for Ultra Skool and Vagus Skool communities using Playwright browser automation. This system crawls member data, extracts profiles, and maintains role-based access for the myultra.coach platform. Need to crawl skool Vagus and Ultra, use playwright to design a flow.
 
 ## 📋 Current Capabilities
 
