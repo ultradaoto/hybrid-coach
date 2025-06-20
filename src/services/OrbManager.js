@@ -625,12 +625,12 @@ export class OrbManager extends EventEmitter {
             this.activeOrbs.forEach((orb, roomId) => {
                 const timeSinceHeartbeat = now - orb.lastHeartbeat;
                 
-                if (timeSinceHeartbeat > 60000) { // 1 minute without heartbeat
+                if (timeSinceHeartbeat > 180000) { // 3 minutes without heartbeat (was 1 minute)
                     console.warn(`[OrbManager] ⚠️ Orb unresponsive for room ${roomId} (${timeSinceHeartbeat}ms)`);
                     orb.status = 'unresponsive';
                     
-                    // Kill and potentially restart after 2 minutes
-                    if (timeSinceHeartbeat > 120000) {
+                    // Kill and potentially restart after 5 minutes (was 2 minutes)
+                    if (timeSinceHeartbeat > 300000) {
                         this.killOrbByRoom(roomId, 'unresponsive');
                         
                         // Restart if room has participants
