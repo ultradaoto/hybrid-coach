@@ -127,7 +127,8 @@ function isLegacyUser(email) {
   // Legacy users who are grandfathered in
   return email === 'ultradaoto@gmail.com' || 
          email === 'percymate2000@gmail.com' ||
-         email === 'evvargreen@hotmail.com'; // Eva Cooley - testing user
+         email === 'evvargreen@hotmail.com' || // Eva Cooley - testing user
+         email === 'evvargreen@gmail.com'; // Eva Cooley - testing user (Gmail)
 }
 
 function getDefaultRole(email) {
@@ -135,7 +136,7 @@ function getDefaultRole(email) {
   if (email === 'ultradaoto@gmail.com' || email === 'percymate2000@gmail.com') {
     return 'coach';
   }
-  if (email === 'evvargreen@hotmail.com') {
+  if (email === 'evvargreen@hotmail.com' || email === 'evvargreen@gmail.com') {
     return 'client'; // Eva Cooley - testing client
   }
   return 'client';
