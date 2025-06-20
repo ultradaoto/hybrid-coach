@@ -162,79 +162,37 @@ const startServer = async (attemptPort) => {
     });
     const roomStartTimes = new Map();
 
-    // Determine who should create WebRTC offer to avoid collisions
-    function shouldCreateOffer(existing, joining) {
-      // AI always receives offers (never creates them)
-      if (joining.participantType === 'ai') return true;
-      if (existing.participantType === 'ai') return false;
-      
-      // Coach creates offer to client
-      if (existing.userRole === 'coach' && joining.userRole === 'client') return true;
-      if (existing.userRole === 'client' && joining.userRole === 'coach') return false;
-      
-      // For same roles or edge cases, use socket ID comparison for consistency
-      return existing.socketId < joining.socketId;
-    }
 
-    // WebRTC signaling logic
+    // WebRTC signaling logic for 2-participant rooms (coach-client video)
     io.on('connection', socket => {
       console.log('[SOCK] connected', socket.id);
 
-      socket.on('join-room', ({ roomId, name, userRole, participantType }) => {
-        console.log('[SOCK] join-room', roomId, name, userRole, participantType);
+      socket.on('join-room', ({ roomId, name }) => {
+        console.log('[SOCK] join-room', roomId, name);
         const room = io.sockets.adapter.rooms.get(roomId);
         const numClients = room ? room.size : 0;
-        
-        // Allow up to 3 participants (coach, client, AI orb)
-        if (numClients >= 3) {
+        if (numClients >= 2) {
           socket.emit('room-full');
           return;
         }
-        
         socket.join(roomId);
         socket.data.name = name;
-        socket.data.userRole = userRole;
-        socket.data.participantType = participantType;
 
         // If timer already started send to newcomer
         if (roomStartTimes.has(roomId)) {
           socket.emit('room-start', roomStartTimes.get(roomId));
         }
 
-        // Notify all existing participants about the new joiner
-        if (numClients > 0) {
-          const existingParticipants = [];
-          
-          // Get all existing participants in the room
-          room.forEach(socketId => {
-            const existingSocket = io.sockets.sockets.get(socketId);
-            if (existingSocket && socketId !== socket.id) {
-              existingParticipants.push({
-                socketId,
-                name: existingSocket.data.name,
-                userRole: existingSocket.data.userRole,
-                participantType: existingSocket.data.participantType
-              });
-              
-              // Notify existing participant about new joiner
-              existingSocket.emit('user-joined', {
-                socketId: socket.id,
-                name,
-                userRole,
-                participantType,
-                shouldCreateOffer: shouldCreateOffer(
-                  { ...existingSocket.data, socketId }, 
-                  { userRole, participantType, socketId: socket.id }
-                )
-              });
-            }
-          });
-          
-          // Send existing participants list to new joiner
-          socket.emit('existing-participants', existingParticipants);
-          
-          // Start timer when second participant joins (if not started)
-          if (numClients === 1 && !roomStartTimes.has(roomId)) {
+        if (numClients === 1) {
+          // Notify existing peer
+          const [existingSocketId] = room;
+          const existingSocket = io.sockets.sockets.get(existingSocketId);
+          socket.to(existingSocketId).emit('other-user', { socketId: socket.id, name });
+          socket.emit('offer-request', existingSocketId);
+          socket.emit('participant-name', { socketId: existingSocketId, name: existingSocket?.data.name });
+
+          // Start timer when second participant joins
+          if (!roomStartTimes.has(roomId)) {
             const startTs = Date.now();
             roomStartTimes.set(roomId, startTs);
             io.to(roomId).emit('room-start', startTs);

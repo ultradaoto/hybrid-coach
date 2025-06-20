@@ -14,7 +14,7 @@ export class TriPartyWebRTC {
         this.remoteStreams = new Map(); // peerId -> MediaStream
         this.pendingCandidates = new Map(); // peerId -> ICE candidates array
         
-        this.socket = null; // Socket.IO connection
+        this.socket = null; // WebSocket connection
         this.localStream = null;
         this.iceServers = null;
         
@@ -43,7 +43,7 @@ export class TriPartyWebRTC {
             // Setup local media
             await this.setupLocalMedia();
             
-            // Connect to Socket.IO
+            // Connect to WebSocket
             this.connectSocket();
             
         } catch (err) {
@@ -100,79 +100,83 @@ export class TriPartyWebRTC {
     }
 
     /**
-     * Connect to Socket.IO server
+     * Connect to WebSocket server
      */
     connectSocket() {
-        console.log('[TriPartyWebRTC] Connecting to Socket.IO...');
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws-simple/${this.roomId}`;
         
-        // Connect to Socket.IO (global io should be available)
-        this.socket = io({
-            transports: ['polling'], // Use same transport as main server
-            forceNew: true
-        });
+        console.log('[TriPartyWebRTC] Connecting to WebSocket:', wsUrl);
         
-        this.socket.on('connect', () => {
-            console.log('[TriPartyWebRTC] Socket.IO connected:', this.socket.id);
+        this.socket = new WebSocket(wsUrl);
+        
+        this.socket.onopen = () => {
+            console.log('[TriPartyWebRTC] WebSocket connected');
             this.isConnected = true;
             this.reconnectAttempts = 0;
             
-            // Join room using Socket.IO room system
-            this.socket.emit('join-room', {
+            // Join room
+            this.socket.send(JSON.stringify({
+                type: 'join',
                 roomId: this.roomId,
-                name: this.userName,
+                userId: this.userId,
+                userName: this.userName,
                 userRole: this.userRole,
                 participantType: this.participantType
-            });
+            }));
             
             this.onConnectionState('connected');
-        });
+        };
 
-        // Handle existing participants list
-        this.socket.on('existing-participants', (participants) => {
-            console.log('[TriPartyWebRTC] Existing participants:', participants);
-            participants.forEach(async (participant) => {
-                await this.handleUserJoined(participant);
-            });
-        });
+        this.socket.onmessage = async (event) => {
+            try {
+                let data;
+                
+                // Handle both text and blob messages
+                if (event.data instanceof Blob) {
+                    const text = await event.data.text();
+                    data = JSON.parse(text);
+                } else {
+                    data = JSON.parse(event.data);
+                }
+                
+                await this.handleWebSocketMessage(data);
+            } catch (err) {
+                console.error('[TriPartyWebRTC] WebSocket message error:', err);
+            }
+        };
 
-        // Handle new user joining
-        this.socket.on('user-joined', async (data) => {
-            console.log('[TriPartyWebRTC] User joined:', data);
-            await this.handleUserJoined(data);
-        });
+        this.socket.onerror = (error) => {
+            console.error('[TriPartyWebRTC] WebSocket error:', error);
+            this.onError('websocket', error);
+        };
 
-        // Handle WebRTC signaling
-        this.socket.on('signal', async (data) => {
-            console.log('[TriPartyWebRTC] Signal from', data.sender, ':', data.signal.type);
-            await this.handleSignal(data);
-        });
-
-        // Handle room events
-        this.socket.on('room-full', () => {
-            console.error('[TriPartyWebRTC] Room is full');
-            this.onError('room-full', new Error('Room is full'));
-        });
-
-        this.socket.on('room-start', (startTime) => {
-            console.log('[TriPartyWebRTC] Room session started at:', new Date(startTime));
-        });
-
-        this.socket.on('connect_error', (error) => {
-            console.error('[TriPartyWebRTC] Socket.IO connection error:', error);
-            this.onError('connection', error);
-        });
-
-        this.socket.on('disconnect', (reason) => {
-            console.log('[TriPartyWebRTC] Socket.IO disconnected:', reason);
+        this.socket.onclose = () => {
+            console.log('[TriPartyWebRTC] WebSocket disconnected');
             this.isConnected = false;
             this.onConnectionState('disconnected');
             
-            // Attempt reconnection for certain disconnect reasons
-            if (reason === 'io server disconnect') {
-                // Server initiated disconnect, reconnect manually
-                this.socket.connect();
+            // Attempt reconnection
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                console.log(`[TriPartyWebRTC] Reconnecting... (attempt ${this.reconnectAttempts})`);
+                setTimeout(() => this.connectSocket(), 3000);
             }
-        });
+        };
+        
+        // Setup heartbeat
+        this.setupHeartbeat();
+    }
+    
+    /**
+     * Setup heartbeat to keep connection alive
+     */
+    setupHeartbeat() {
+        setInterval(() => {
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                this.socket.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000); // Every 30 seconds
     }
 
     /**
@@ -366,15 +370,11 @@ export class TriPartyWebRTC {
         // Handle ICE candidates
         pc.onicecandidate = (event) => {
             if (event.candidate) {
-                this.socket.emit('signal', {
-                    target: peerId,
-                    signal: {
-                        type: 'candidate',
-                        candidate: event.candidate.candidate,
-                        sdpMLineIndex: event.candidate.sdpMLineIndex,
-                        sdpMid: event.candidate.sdpMid
-                    }
-                });
+                this.socket.send(JSON.stringify({
+                    type: 'ice-candidate',
+                    candidate: event.candidate,
+                    toId: peerId
+                }));
             }
         };
         
@@ -423,10 +423,11 @@ export class TriPartyWebRTC {
             
             await pc.setLocalDescription(offer);
             
-            this.socket.emit('signal', {
-                target: peerId,
-                signal: offer
-            });
+            this.socket.send(JSON.stringify({
+                type: 'offer',
+                offer: offer,
+                toId: peerId
+            }));
             
             console.log(`[TriPartyWebRTC] Sent offer to ${peerId}`);
         } catch (err) {
@@ -454,11 +455,11 @@ export class TriPartyWebRTC {
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             
-            this.sendWebSocketMessage({
+            this.socket.send(JSON.stringify({
                 type: 'answer',
                 answer: answer,
                 toId: peerId
-            });
+            }));
             
             console.log(`[TriPartyWebRTC] Sent answer to ${peerId}`);
         } catch (err) {
@@ -582,18 +583,13 @@ export class TriPartyWebRTC {
     }
 
     /**
-     * Send Socket.IO message (for AI control commands)
+     * Send WebSocket message
      */
     sendWebSocketMessage(data) {
-        if (this.socket && this.socket.connected) {
-            // For AI control messages, emit directly
-            if (data.type === 'ai_control' || data.type === 'client_signal') {
-                this.socket.emit(data.type, data);
-            } else {
-                console.warn('[TriPartyWebRTC] Unknown message type for Socket.IO:', data.type);
-            }
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(data));
         } else {
-            console.error('[TriPartyWebRTC] Socket.IO not connected');
+            console.error('[TriPartyWebRTC] WebSocket not connected');
         }
     }
 
@@ -625,9 +621,9 @@ export class TriPartyWebRTC {
     disconnect() {
         console.log('[TriPartyWebRTC] Disconnecting...');
         
-        // Disconnect from Socket.IO
-        if (this.socket && this.socket.connected) {
-            this.socket.disconnect();
+        // Disconnect from WebSocket
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.close();
             this.socket = null;
         }
         
