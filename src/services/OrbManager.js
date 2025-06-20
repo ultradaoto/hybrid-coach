@@ -193,6 +193,7 @@ export class OrbManager extends EventEmitter {
             startTime: Date.now(),
             status: 'spawning',
             lastHeartbeat: Date.now(),
+            spawnedViaAPI: false, // Mark as directly spawned
             metrics: {
                 cpu: 0,
                 memory: 0,
@@ -221,11 +222,13 @@ export class OrbManager extends EventEmitter {
 
         console.log(`[OrbManager] 🔴 Killing orb for room ${roomId} (PID: ${orb.pid}, Reason: ${reason})`);
         
-        if (orb.spawnedViaAPI) {
+        if (orb.spawnedViaAPI && orb.orbId) {
             // Use GPU Manager API to kill the orb
+            console.log(`[OrbManager] 🎯 Using API termination for orb ${orb.orbId}`);
             await this.killOrbViaAPI(roomId, orb.orbId, reason);
         } else {
             // Use direct process killing (legacy method)
+            console.log(`[OrbManager] 🎯 Using direct termination for PID ${orb.pid}`);
             await this.killOrbDirect(orb, reason);
         }
 
