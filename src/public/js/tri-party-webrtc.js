@@ -597,8 +597,8 @@ export class TriPartyWebRTC {
      * Determine if we should create offer to peer
      */
     shouldCreateOffer(peer) {
-        // AI always receives offers
-        if (peer.participantType === 'ai') return false;
+        // AI always receives offers from humans
+        if (peer.participantType === 'ai') return true;
         if (this.participantType === 'ai') return false;
         
         // Coach creates offer to client
