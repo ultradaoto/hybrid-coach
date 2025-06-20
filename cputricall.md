@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-This document outlines the CPU-side implementation for transforming the Hybrid Coach system from a 2-party video call with separate AI audio to a true 3-party WebRTC mesh network where the AI participates as a native video/audio stream with 80ms latency. Kinda getting there, only working on Coach - AI Orb calls now, excluding the Client now.
+This document outlines the CPU-side implementation for transforming the Hybrid Coach system from a 2-party video call with separate AI audio to a true 3-party WebRTC mesh network where the AI participates as a native video/audio stream with 80ms latency. Kinda getting there, only working on Coach - AI Orb calls now, excluding the Client now. Orb looks really good.
 
 ## 🏗️ Architecture Overview
 
