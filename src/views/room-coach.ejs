@@ -172,12 +172,11 @@
                     <div class="video-label" id="remoteLabel">Waiting for client...</div>
                 </div>
 
-                <!-- AI Avatar -->
+                <!-- AI Video -->
                 <div class="video-wrapper">
-                    <div class="ai-avatar-wrapper">
-                        <div class="ai-avatar" id="aiAvatar">
-                            <div class="ai-sphere"></div>
-                        </div>
+                    <video id="aiVideo" autoplay playsinline style="display: none;"></video>
+                    <div class="ai-video-placeholder" id="aiPlaceholder">
+                        Waiting for AI Coach...
                     </div>
                     <div class="video-label">AI Coach</div>
                 </div>
@@ -249,8 +248,14 @@
             },
             onRemoteStream: (userId, stream, peerInfo) => {
                 if (peerInfo.participantType === 'ai') {
-                    // AI streams go to the avatar area (handled differently)
-                    console.log('AI stream received, updating avatar');
+                    // AI stream goes to AI video element
+                    console.log('AI stream received, connecting to video element');
+                    const aiVideo = document.getElementById('aiVideo');
+                    const aiPlaceholder = document.getElementById('aiPlaceholder');
+                    
+                    aiVideo.srcObject = stream;
+                    aiVideo.style.display = 'block';
+                    aiPlaceholder.style.display = 'none';
                 } else {
                     // Client stream goes to remote video
                     document.getElementById('remoteVideo').srcObject = stream;
@@ -296,10 +301,8 @@
         function updateAIStatus(status) {
             const indicator = document.getElementById('aiIndicator');
             const text = document.getElementById('aiStatusText');
-            const avatar = document.getElementById('aiAvatar');
             
             indicator.className = `ai-indicator ${status}`;
-            avatar.className = `ai-avatar ${status}`;
             
             switch(status) {
                 case 'speaking':

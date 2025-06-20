@@ -85,6 +85,28 @@ export function initEnhancedWebSocket(httpServer) {
                         broadcastToOthers(room, currentParticipant, data);
                         break;
                         
+                    case 'client_signal':
+                        // Handle client signals (hand raising, etc.) and forward to coach
+                        console.log(`[EnhancedWS] Client signal: ${data.action} from ${currentParticipant?.userName}`);
+                        broadcastToOthers(room, currentParticipant, data);
+                        break;
+                        
+                    case 'ai_control':
+                        // Handle AI control commands from coach and forward to AI orb
+                        console.log(`[EnhancedWS] AI control: ${data.action} from ${currentParticipant?.userName}`);
+                        broadcastToOthers(room, currentParticipant, data);
+                        break;
+                        
+                    case 'ai-orb-shutdown':
+                        // Handle AI orb shutdown notifications
+                        console.log(`[EnhancedWS] AI orb shutdown notification for session ${data.sessionId}`);
+                        // Remove AI participant from room when it shuts down
+                        const aiParticipant = Array.from(room.values()).find(p => p.participantType === 'ai');
+                        if (aiParticipant) {
+                            handleLeave(room, roomId, aiParticipant);
+                        }
+                        break;
+                        
                     default:
                         console.log(`[EnhancedWS] Unhandled message type: ${data.type}`);
                 }

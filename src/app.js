@@ -63,7 +63,9 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from both public directories
+app.use(express.static(path.join(__dirname, '..', 'public'))); // Main public directory for styles.css
+app.use(express.static(path.join(__dirname, 'public'))); // src/public for JS files
 
 // 🚀 STREAMING OPTIMIZATION: Serve JavaScript modules from src/services
 app.use('/src/services', express.static(path.join(__dirname, 'services')));

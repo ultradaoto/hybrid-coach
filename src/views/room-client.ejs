@@ -15,22 +15,29 @@
 
         .client-info {
             background: #2a2a2a;
-            padding: 1rem;
+            padding: 0.5rem;
             text-align: center;
             border-bottom: 1px solid #404040;
         }
 
         .client-info h3 {
             color: #17a2b8;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.25rem;
+            font-size: 1rem;
+        }
+
+        .client-info p {
+            margin: 0.25rem 0;
+            font-size: 0.85rem;
+            opacity: 0.9;
         }
 
         .session-status {
             background: #1e1e1e;
-            padding: 0.5rem;
+            padding: 0.25rem;
             border-radius: 4px;
-            margin-top: 0.5rem;
-            font-size: 0.9rem;
+            margin-top: 0.25rem;
+            font-size: 0.8rem;
         }
 
         .connection-quality {
@@ -140,12 +147,11 @@
                     <div class="video-label" id="remoteLabel">Waiting for coach...</div>
                 </div>
 
-                <!-- AI Avatar -->
+                <!-- AI Video -->
                 <div class="video-wrapper">
-                    <div class="ai-avatar-wrapper">
-                        <div class="ai-avatar" id="aiAvatar">
-                            <div class="ai-sphere"></div>
-                        </div>
+                    <video id="aiVideo" autoplay playsinline style="display: none;"></video>
+                    <div class="ai-video-placeholder" id="aiPlaceholder">
+                        Waiting for AI Coach...
                     </div>
                     <div class="video-label">AI Coach</div>
                 </div>
@@ -182,8 +188,14 @@
             },
             onRemoteStream: (userId, stream, peerInfo) => {
                 if (peerInfo.participantType === 'ai') {
-                    // AI streams enhance the avatar
-                    console.log('AI stream received, enhancing avatar');
+                    // AI stream goes to AI video element
+                    console.log('AI stream received, connecting to video element');
+                    const aiVideo = document.getElementById('aiVideo');
+                    const aiPlaceholder = document.getElementById('aiPlaceholder');
+                    
+                    aiVideo.srcObject = stream;
+                    aiVideo.style.display = 'block';
+                    aiPlaceholder.style.display = 'none';
                     updateAIStatus('ready');
                 } else {
                     // Coach stream goes to remote video
@@ -241,10 +253,8 @@
         function updateAIStatus(status) {
             const indicator = document.getElementById('aiIndicator');
             const text = document.getElementById('aiStatusText');
-            const avatar = document.getElementById('aiAvatar');
             
             indicator.className = `ai-indicator ${status}`;
-            avatar.className = `ai-avatar ${status}`;
             
             switch(status) {
                 case 'speaking':
