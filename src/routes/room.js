@@ -129,30 +129,38 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
       // Continue without profile - don't break the session
     }
 
-    // 5. 🤖 AI ORB MANAGEMENT: Spawn AI orb when COACH joins
+    // 5. 🤖 AI ORB MANAGEMENT: Start AI orb spawn process (non-blocking)
+    let orbExists = false;
     try {
       // Track participant joining
       orbManager.trackParticipantJoin(roomId, req.user.id, req.user.role);
 
       // Only spawn AI orb when a COACH joins the room
       if (req.user.role === 'coach' && !orbManager.hasOrbForRoom(roomId)) {
-        console.log(`[ROOM] 👨‍🏫 Coach joined room ${roomId}, spawning AI Orb for supervised session`);
+        console.log(`[ROOM] 👨‍🏫 Coach joined room ${roomId}, starting AI Orb spawn (non-blocking)`);
         
-        await orbManager.spawnOrb(roomId, sessionId, appointment);
+        // Start orb spawning asynchronously - don't wait for it
+        orbManager.spawnOrb(roomId, sessionId, appointment)
+          .then(spawnResult => {
+            console.log(`[ROOM] 🚀 AI Orb spawn completed:`, spawnResult?.status || 'unknown');
+          })
+          .catch(spawnError => {
+            console.error('[ROOM] ❌ AI Orb spawn failed:', spawnError);
+          });
         
-        // Wait briefly for orb to initialize
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        console.log(`[ROOM] ➡️ Coach proceeding to room while orb initializes in background`);
         
-        console.log(`[ROOM] ✅ AI Orb spawned and ready for coach supervision`);
       } else if (req.user.role === 'coach' && orbManager.hasOrbForRoom(roomId)) {
         console.log(`[ROOM] 🔄 Coach rejoined room ${roomId}, orb already exists`);
+        orbExists = true;
       } else if (req.user.role === 'client' && !orbManager.hasOrbForRoom(roomId)) {
         console.log(`[ROOM] 👤 Client joined room ${roomId}, waiting for coach to start AI session`);
       } else {
         console.log(`[ROOM] 👤 Client joined room ${roomId}, AI orb already active with coach supervision`);
+        orbExists = true;
       }
     } catch (orbError) {
-      console.error('[ROOM] ❌ Failed to spawn AI Orb:', orbError);
+      console.error('[ROOM] ❌ Error in orb management:', orbError);
       // Continue without AI if spawn fails - don't break the session
     }
 
@@ -166,7 +174,8 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
       clientProfile: clientProfile,
       coachProfile: coachProfile,
       appointment: appointment,
-      orbStatus: orbManager.getOrbStatus(roomId)
+      orbStatus: orbManager.getOrbStatus(roomId),
+      orbExists: orbExists
     };
 
     // Render role-specific view

@@ -269,6 +269,8 @@
                 updateStatus(`${userInfo.userName} joined as ${userInfo.userRole}`, 'success');
                 if (userInfo.participantType === 'ai') {
                     updateOrbStatus('ready');
+                    addTranscriptItem('System', 'AI Orb has joined the session and is ready!', 'ai');
+                    updateStatus('AI Orb connected and ready for coaching', 'success');
                 }
             },
             onUserLeft: (userId) => {
@@ -466,24 +468,16 @@
         });
 
         // Initialize orb status based on server data
-        <% if (orbStatus) { %>
+        <% if (orbStatus && orbExists) { %>
+            // Orb already exists and ready
             updateOrbStatus('<%= orbStatus.status %>');
-            addTranscriptItem('System', 'AI Orb is active and ready for coaching session', 'ai');
+            addTranscriptItem('System', 'AI Orb is already active and ready for coaching session', 'ai');
+            updateStatus('AI Orb ready for coaching session', 'success');
         <% } else { %>
+            // Orb is being spawned in background - show initial spawning status
             updateOrbStatus('spawning');
-            addTranscriptItem('System', 'Coach joined - AI Orb is being spawned for supervised session...', 'ai');
-            
-            // Show spawning message to coach
-            setTimeout(() => {
-                updateStatus('Spawning AI Orb for supervised coaching session...', 'info');
-            }, 500);
-            
-            // Wait for orb to become ready
-            setTimeout(() => {
-                updateOrbStatus('ready');
-                addTranscriptItem('System', 'AI Orb spawned successfully and joined the session', 'ai');
-                updateStatus('AI Orb ready for coaching session', 'success');
-            }, 3000);
+            addTranscriptItem('System', 'Welcome Coach! AI Orb is initializing in the background...', 'ai');
+            updateStatus('Coach room ready - AI Orb connecting...', 'info');
         <% } %>
 
         // Cleanup on page unload

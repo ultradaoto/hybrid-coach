@@ -15,7 +15,7 @@ export async function initMediaSFU(httpServer) {
 
   const worker = await mediasoup.createWorker();
   const mediaCodecs = [
-    { kind: 'audio', mimeType: 'audio/opus', clockRate: 16000, channels: 1 },
+    { kind: 'audio', mimeType: 'audio/opus', clockRate: 48000, channels: 2 },
     { kind: 'video', mimeType: 'video/VP8', clockRate: 90000 },
   ];
 

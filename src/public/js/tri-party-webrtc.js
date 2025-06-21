@@ -1,6 +1,7 @@
 /**
  * TriPartyWebRTC - Client-side WebRTC implementation for 3-party mesh network
  * Supports Coach ↔ Client ↔ AI Orb connections
+ * Updated: 2025-01-21 - Removed 16kHz forcing, accept browser defaults
  */
 export class TriPartyWebRTC {
     constructor(config) {
@@ -97,11 +98,12 @@ export class TriPartyWebRTC {
      */
     async validateAudioSupport() {
         try {
-            // Check if browser supports 16kHz audio
+            // Test basic audio support (browsers typically default to 48kHz)
             const testConstraints = {
                 audio: {
-                    sampleRate: 16000,
-                    channelCount: 1
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
                 }
             };
             
@@ -115,22 +117,20 @@ export class TriPartyWebRTC {
             // Stop test stream
             testStream.getTracks().forEach(track => track.stop());
             
-            // Validate 16kHz support
-            if (settings.sampleRate && settings.sampleRate !== 16000) {
-                console.warn(`[TriPartyWebRTC] Warning: Requested 16kHz but got ${settings.sampleRate}Hz`);
-                return { supported: true, actualRate: settings.sampleRate, warning: true };
-            }
+            // Accept whatever format the browser provides (usually 48kHz)
+            // Server-side will handle resampling to 16kHz for AI processing
+            console.log(`[TriPartyWebRTC] ✅ Audio format validated: ${settings.sampleRate}Hz ${settings.channelCount}ch`);
+            console.log('[TriPartyWebRTC] 📡 Server will resample to 16kHz mono for AI processing');
             
-            if (settings.channelCount && settings.channelCount !== 1) {
-                console.warn(`[TriPartyWebRTC] Warning: Requested mono but got ${settings.channelCount} channels`);
-                return { supported: true, actualChannels: settings.channelCount, warning: true };
-            }
-            
-            console.log('[TriPartyWebRTC] ✅ 16kHz mono audio format validated');
-            return { supported: true, actualRate: settings.sampleRate, actualChannels: settings.channelCount };
+            return { 
+                supported: true, 
+                actualRate: settings.sampleRate, 
+                actualChannels: settings.channelCount,
+                requiresResampling: settings.sampleRate !== 16000 || settings.channelCount !== 1
+            };
             
         } catch (err) {
-            console.error('[TriPartyWebRTC] ❌ 16kHz audio validation failed:', err);
+            console.error('[TriPartyWebRTC] ❌ Audio validation failed:', err);
             return { supported: false, error: err.message };
         }
     }
@@ -143,13 +143,10 @@ export class TriPartyWebRTC {
             // Validate audio format support first
             const audioValidation = await this.validateAudioSupport();
             if (!audioValidation.supported) {
-                throw new Error(`16kHz audio not supported: ${audioValidation.error}`);
+                throw new Error(`Audio not supported: ${audioValidation.error}`);
             }
             
-            if (audioValidation.warning) {
-                console.warn('[TriPartyWebRTC] Audio format mismatch detected but continuing');
-            }
-            
+            // Use browser-friendly constraints (let browser choose optimal format)
             const constraints = {
                 video: {
                     width: { ideal: 640, max: 1280 },
@@ -157,8 +154,6 @@ export class TriPartyWebRTC {
                     facingMode: 'user'
                 },
                 audio: {
-                    sampleRate: 16000,
-                    channelCount: 1,
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true
@@ -180,15 +175,8 @@ export class TriPartyWebRTC {
                     autoGainControl: audioSettings.autoGainControl
                 });
                 
-                // Verify we got the 16kHz mono format
-                if (audioSettings.sampleRate === 16000 && audioSettings.channelCount === 1) {
-                    console.log('[TriPartyWebRTC] 🎯 Perfect! 16kHz mono audio confirmed for AI compatibility');
-                } else {
-                    console.warn('[TriPartyWebRTC] ⚠️ Audio format mismatch:', {
-                        expected: '16kHz mono',
-                        actual: `${audioSettings.sampleRate}Hz ${audioSettings.channelCount}ch`
-                    });
-                }
+                console.log(`[TriPartyWebRTC] 🎯 Audio ready: ${audioSettings.sampleRate}Hz ${audioSettings.channelCount}ch`);
+                console.log('[TriPartyWebRTC] 📡 GPU Claude will handle resampling to 16kHz mono for ElevenLabs');
             }
             
             // Setup audio level detection for local stream

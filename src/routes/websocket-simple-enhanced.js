@@ -110,9 +110,13 @@ export function initEnhancedWebSocket(httpServer) {
                     case 'orb_heartbeat':
                         // Handle AI orb heartbeat messages
                         console.log(`[EnhancedWS] AI orb heartbeat received for room ${roomId}`);
-                        // Forward heartbeat to OrbManager via process message (if available)
+                        // Forward heartbeat to OrbManager
                         if (currentParticipant?.participantType === 'ai') {
-                            // This heartbeat will be handled by OrbManager through the process channel
+                            orbManager.handleOrbMessage(roomId, {
+                                type: 'orb_heartbeat',
+                                metrics: data.metrics || null,
+                                timestamp: Date.now()
+                            });
                         }
                         break;
                         
