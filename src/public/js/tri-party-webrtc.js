@@ -93,10 +93,63 @@ export class TriPartyWebRTC {
     }
 
     /**
+     * Validate browser audio format support
+     */
+    async validateAudioSupport() {
+        try {
+            // Check if browser supports 16kHz audio
+            const testConstraints = {
+                audio: {
+                    sampleRate: 16000,
+                    channelCount: 1
+                }
+            };
+            
+            // Test audio format support
+            const testStream = await navigator.mediaDevices.getUserMedia(testConstraints);
+            const audioTrack = testStream.getAudioTracks()[0];
+            const settings = audioTrack.getSettings();
+            
+            console.log('[TriPartyWebRTC] Audio validation - Settings:', settings);
+            
+            // Stop test stream
+            testStream.getTracks().forEach(track => track.stop());
+            
+            // Validate 16kHz support
+            if (settings.sampleRate && settings.sampleRate !== 16000) {
+                console.warn(`[TriPartyWebRTC] Warning: Requested 16kHz but got ${settings.sampleRate}Hz`);
+                return { supported: true, actualRate: settings.sampleRate, warning: true };
+            }
+            
+            if (settings.channelCount && settings.channelCount !== 1) {
+                console.warn(`[TriPartyWebRTC] Warning: Requested mono but got ${settings.channelCount} channels`);
+                return { supported: true, actualChannels: settings.channelCount, warning: true };
+            }
+            
+            console.log('[TriPartyWebRTC] ✅ 16kHz mono audio format validated');
+            return { supported: true, actualRate: settings.sampleRate, actualChannels: settings.channelCount };
+            
+        } catch (err) {
+            console.error('[TriPartyWebRTC] ❌ 16kHz audio validation failed:', err);
+            return { supported: false, error: err.message };
+        }
+    }
+
+    /**
      * Setup local media stream
      */
     async setupLocalMedia() {
         try {
+            // Validate audio format support first
+            const audioValidation = await this.validateAudioSupport();
+            if (!audioValidation.supported) {
+                throw new Error(`16kHz audio not supported: ${audioValidation.error}`);
+            }
+            
+            if (audioValidation.warning) {
+                console.warn('[TriPartyWebRTC] Audio format mismatch detected but continuing');
+            }
+            
             const constraints = {
                 video: {
                     width: { ideal: 640, max: 1280 },
@@ -104,6 +157,8 @@ export class TriPartyWebRTC {
                     facingMode: 'user'
                 },
                 audio: {
+                    sampleRate: 16000,
+                    channelCount: 1,
                     echoCancellation: true,
                     noiseSuppression: true,
                     autoGainControl: true
@@ -112,6 +167,29 @@ export class TriPartyWebRTC {
             
             this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
             this.onLocalStream(this.localStream);
+            
+            // Log actual audio track settings for verification
+            const audioTracks = this.localStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                const audioSettings = audioTracks[0].getSettings();
+                console.log('[TriPartyWebRTC] ✅ Audio track settings:', {
+                    sampleRate: audioSettings.sampleRate,
+                    channelCount: audioSettings.channelCount,
+                    echoCancellation: audioSettings.echoCancellation,
+                    noiseSuppression: audioSettings.noiseSuppression,
+                    autoGainControl: audioSettings.autoGainControl
+                });
+                
+                // Verify we got the 16kHz mono format
+                if (audioSettings.sampleRate === 16000 && audioSettings.channelCount === 1) {
+                    console.log('[TriPartyWebRTC] 🎯 Perfect! 16kHz mono audio confirmed for AI compatibility');
+                } else {
+                    console.warn('[TriPartyWebRTC] ⚠️ Audio format mismatch:', {
+                        expected: '16kHz mono',
+                        actual: `${audioSettings.sampleRate}Hz ${audioSettings.channelCount}ch`
+                    });
+                }
+            }
             
             // Setup audio level detection for local stream
             this.setupAudioLevelDetection('local', this.localStream);

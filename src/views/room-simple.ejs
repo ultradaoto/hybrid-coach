@@ -266,6 +266,8 @@
                         facingMode: 'user'
                     },
                     audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
                         echoCancellation: true,
                         noiseSuppression: true,
                         autoGainControl: true
@@ -278,10 +280,13 @@
                 } catch (err) {
                     debugLog('Failed with ideal constraints, trying basic', err);
                     try {
-                        // Fallback to basic constraints
+                        // Fallback to basic constraints with 16kHz audio
                         localStream = await navigator.mediaDevices.getUserMedia({
                             video: true,
-                            audio: true
+                            audio: {
+                                sampleRate: 16000,
+                                channelCount: 1
+                            }
                         });
                     } catch (err2) {
                         debugLog('Failed to get any media, continuing without local stream', err2);

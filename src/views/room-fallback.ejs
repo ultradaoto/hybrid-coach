@@ -124,7 +124,13 @@
               width: { ideal: 320 },
               height: { ideal: 240 }
             }, 
-            audio: true 
+            audio: {
+              sampleRate: 16000,
+              channelCount: 1,
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
           });
           
           localVideo.srcObject = localStream;
