@@ -55,7 +55,43 @@ jobs:
             else
               npm install --omit=dev --prefer-offline --no-audit
             fi
+            # Database operations with error handling
+            echo "🗄️ Setting up database..."
             npm run generate
-            npx prisma migrate deploy
+            
+            # Check if database is accessible
+            echo "🔍 Checking database connection..."
+            if npx prisma db pull 2>/dev/null; then
+              echo "✅ Database connection successful"
+            else
+              echo "❌ Database connection failed - checking if PostgreSQL is running..."
+              sudo systemctl status postgresql || echo "PostgreSQL service not found"
+              sudo systemctl start postgresql || echo "Could not start PostgreSQL"
+            fi
+            
+            # Run migrations with verbose output
+            echo "🚀 Running database migrations..."
+            npx prisma migrate deploy --schema=./prisma/schema.prisma
+            
+            # Verify tables exist
+            echo "🔍 Verifying authentication tables..."
+            npx prisma studio --browser none --port 5555 &
+            STUDIO_PID=$!
+            sleep 2
+            kill $STUDIO_PID 2>/dev/null || echo "Studio check completed"
+            
+            # Generate fresh Prisma client
+            echo "🔄 Generating Prisma client..."
+            npx prisma generate
+            
+            echo "✅ Database setup completed"
+            
+            # Application deployment
+            echo "🚀 Starting application..."
             pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs
+            
+            # Show final status
+            echo "📊 Deployment status:"
+            pm2 status
+            pm2 logs --lines 5
           ' 

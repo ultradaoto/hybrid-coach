@@ -267,15 +267,36 @@ class LiveDMBot {
       
       console.log(`🔍 [${timestamp}] Checking mail icon status...`);
 
-      // Method 1: Look for MAIL icon specifically (not notifications!)
-      // Use the newly trained selectors to distinguish mail from notifications
-      const mailIconUnread = await this.browserService.page.$('.styled__ButtonWrapper-sc-1crx28g-1.GvgtH');
-      const mailIconNormal = await this.browserService.page.$('.styled__ButtonWrapper-sc-1crx28g-1');
+      // Method 1: Multi-selector strategy for MAIL icon detection
+      // Try multiple selectors in priority order as suggested
+      const mailIconSelectors = [
+        '.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', // Trained unread mail icon
+        '.styled__ButtonWrapper-sc-1crx28g-1', // General mail button wrapper
+        'button[aria-label*="message" i]', // Accessibility-based selector
+        'button:has(svg[viewBox*="0 0 40 34"])', // Mail SVG container
+        '.styled__ChatNotificationsIconButton-sc-14ipnak-0', // Legacy selector
+        'svg[viewBox*="0 0 40 34"]' // Direct SVG fallback
+      ];
       
-      // Check if we can see the mail icon at all
-      const mailIconExists = mailIconUnread || mailIconNormal;
-      if (!mailIconExists) {
-        console.log(`📧 [${timestamp}] Mail icon not found - may need to navigate to messages`);
+      let mailElement = null;
+      let usedSelector = null;
+      
+      // Try each selector until we find the mail icon
+      for (const selector of mailIconSelectors) {
+        try {
+          mailElement = await this.browserService.page.$(selector);
+          if (mailElement) {
+            usedSelector = selector;
+            console.log(`📧 [${timestamp}] Found mail icon using: ${selector}`);
+            break;
+          }
+        } catch (error) {
+          // Continue to next selector
+        }
+      }
+      
+      if (!mailElement) {
+        console.log(`📧 [${timestamp}] Mail icon not found with any selector - may need to navigate to messages`);
         return;
       }
       
