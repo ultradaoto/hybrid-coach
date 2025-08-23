@@ -303,75 +303,35 @@ class LiveDMBot {
       // Method 2: Look for red badge path elements (more specific)
       const redBadgePaths = await this.browserService.page.$$('path');
       
-      // Method 3: Advanced detection - look for red/notification styling
-      const hasVisualUnreadIndicator = await this.browserService.page.evaluate(() => {
-        // Look for elements with red background colors near mail icons
-        const allElements = Array.from(document.querySelectorAll('*'));
-        
-        for (let element of allElements) {
-          const computedStyle = window.getComputedStyle(element);
-          const bgColor = computedStyle.backgroundColor;
-          const color = computedStyle.color;
-          
-          // Check for red backgrounds (common notification colors)
-          const redPatterns = [
-            'rgb(220, 38, 38)', // Tailwind red-600
-            'rgb(239, 68, 68)', // Tailwind red-500
-            'rgb(248, 113, 113)', // Tailwind red-400
-            'rgb(255, 0, 0)', // Pure red
-            'rgb(204, 0, 0)', // Dark red
-            'rgb(255, 51, 51)' // Bright red
-          ];
-          
-          const hasRedBackground = redPatterns.some(pattern => bgColor.includes(pattern));
-          
-          if (hasRedBackground) {
-            // Check if this red element is near an SVG (mail icon)
-            const nearbyElements = [];
-            let parent = element.parentElement;
-            let child = element;
-            
-            // Check parent and siblings for SVG elements
-            for (let i = 0; i < 3 && parent; i++) {
-              const svgs = parent.querySelectorAll('svg');
-              if (svgs.length > 0) {
-                console.log('🔴 Found red element near SVG (mail icon)!');
-                return { hasUnread: true, method: 'red-background-near-svg', element: element.className };
-              }
-              child = parent;
-              parent = parent.parentElement;
-            }
-          }
-        }
-        
-        // Also check for any elements containing numbers (like "1", "2", etc.)
-        const numberElements = Array.from(document.querySelectorAll('*')).filter(el => {
-          const text = el.textContent?.trim();
-          return text && /^[0-9]+$/.test(text) && text.length <= 2;
-        });
-        
-        for (let numEl of numberElements) {
-          const parent = numEl.closest('svg, [class*="mail"], [class*="message"], [class*="notification"]');
-          if (parent) {
-            console.log('🔢 Found number badge near mail-related element!');
-            return { hasUnread: true, method: 'number-badge', number: numEl.textContent };
-          }
-        }
-        
-        return { hasUnread: false };
-      });
-
-      // Method 4: Count path elements (baseline vs unread comparison)
+      // Method 3: Count path elements (baseline vs unread comparison)
       const pathCount = redBadgePaths.length;
       console.log(`📊 Current path count: ${pathCount} (baseline: ~2, unread: ~3+)`);
       
+      // Method 4: Check for visual unread indicators (red badge, styling)
+      const hasVisualUnreadIndicator = await this.browserService.page.evaluate(() => {
+        // Look for red styling or badge indicators near mail elements
+        const redElements = Array.from(document.querySelectorAll('*')).filter(el => {
+          const styles = getComputedStyle(el);
+          return styles.backgroundColor.includes('rgb(239, 68, 68)') || // red-500
+                 styles.backgroundColor.includes('rgb(220, 38, 38)') || // red-600  
+                 styles.color.includes('rgb(239, 68, 68)') ||
+                 el.textContent.match(/^\d+$/) && el.offsetWidth < 30; // Small number badges
+        });
+        
+        return {
+          hasUnread: redElements.length > 0,
+          method: redElements.length > 0 ? `visual-red-detection (${redElements.length} elements)` : 'no-visual-indicators'
+        };
+      });
+
       // Determine if we have unread messages using multiple indicators
       let hasUnread = false;
       let detectionMethod = '';
       
-      if (unreadBadgeContainer) {
+      // Check if mail element shows unread state (based on specific trained selectors)
+      if (usedSelector && usedSelector.includes('.GvgtH')) {
         hasUnread = true;
-        detectionMethod = 'unread-badge-container';
+        detectionMethod = 'trained-unread-selector';
       } else if (hasVisualUnreadIndicator.hasUnread) {
         hasUnread = true;
         detectionMethod = hasVisualUnreadIndicator.method;

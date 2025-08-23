@@ -73,25 +73,25 @@ jobs:
             echo "🚀 Running database migrations..."
             npx prisma migrate deploy --schema=./prisma/schema.prisma
             
-            # Verify tables exist
-            echo "🔍 Verifying authentication tables..."
-            npx prisma studio --browser none --port 5555 &
-            STUDIO_PID=$!
-            sleep 2
-            kill $STUDIO_PID 2>/dev/null || echo "Studio check completed"
-            
             # Generate fresh Prisma client
             echo "🔄 Generating Prisma client..."
             npx prisma generate
             
             echo "✅ Database setup completed"
             
+            # Stop any conflicting processes first
+            echo "🧹 Cleaning up old processes..."
+            pm2 stop all 2>/dev/null || echo "No processes to stop"
+            pm2 delete all 2>/dev/null || echo "No processes to delete"
+            
             # Application deployment
             echo "🚀 Starting application..."
-            pm2 reload ecosystem.config.cjs --update-env || pm2 start ecosystem.config.cjs
+            pm2 start ecosystem.config.cjs
             
-            # Show final status
+            # Show final status (without hanging logs)
             echo "📊 Deployment status:"
             pm2 status
-            pm2 logs --lines 5
+            pm2 logs --lines 5 --nostream
+            
+            echo "✅ Deployment completed successfully!"
           ' 

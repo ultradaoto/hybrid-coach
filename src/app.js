@@ -13,9 +13,10 @@ import { Server as SocketIOServer } from 'socket.io';
 import { initWebSocketRelay } from './routes/api/ws-relay.js';
 import { initTestWebSocket } from './routes/api/websocket-test.js';
 import { debugMiddleware } from './middlewares/debugMiddleware.js';
-import { initEnhancedWebSocket } from './routes/websocket-simple-enhanced.js';
-import { setupAISessionWebSocket } from './routes/ai-session-ws.js';
-import { sessionSummaryHandler } from './services/SessionSummaryHandler.js';
+// 🔄 TEMPORARILY DISABLED - GPU/Orb services causing deployment conflicts
+// import { initEnhancedWebSocket } from './routes/websocket-simple-enhanced.js';
+// import { setupAISessionWebSocket } from './routes/ai-session-ws.js';
+// import { sessionSummaryHandler } from './services/SessionSummaryHandler.js';
 import skoolSyncDaemon from './daemons/skoolSyncDaemon.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -35,9 +36,9 @@ app.use((req, res, next) => {
   // Extended path check to fix 403 forbidden errors
   if (req.headers.upgrade === 'websocket' || 
       req.url.startsWith('/ws-relay') || 
-      req.url.startsWith('/ai-session') ||
-      req.url.includes('/ws-relay') || 
-      req.url.includes('/ai-session')) {
+      // req.url.startsWith('/ai-session') ||  // DISABLED - GPU services
+      req.url.includes('/ws-relay')) {
+      // req.url.includes('/ai-session')) {    // DISABLED - GPU services
     
     console.log(`[WS-BYPASS] WebSocket/Protoo request to ${req.url}, bypassing auth`);
     // Allow WebSocket requests to bypass auth
@@ -226,11 +227,12 @@ const startServer = async (attemptPort) => {
     // Initialize test WebSocket server  
     // initTestWebSocket(httpServer);
     
+    // 🔄 TEMPORARILY DISABLED - GPU/Orb services causing deployment conflicts
     // Initialize Enhanced WebSocket for tri-party video calls (Coach ↔ Client ↔ AI Orb)
-    initEnhancedWebSocket(httpServer);
+    // initEnhancedWebSocket(httpServer);
     
-    // Initialize AI Session WebSocket for hybrid coaching
-    setupAISessionWebSocket(httpServer);
+    // Initialize AI Session WebSocket for hybrid coaching  
+    // setupAISessionWebSocket(httpServer);
 
     httpServer.listen(attemptPort, HOST, () => {
       console.log(`🚀 Server & Socket.IO listening on http://${HOST}:${attemptPort}`);
