@@ -477,7 +477,7 @@ class LiveDMBot {
       
       // Generate auth code
       const authResult = await authService.generateAuthCode(userInfo.skoolUserId, userInfo.skoolUsername);
-      const loginUrl = `https://myultra.coach/login?code=${authResult.code}`;
+                const loginUrl = `https://myultra.coach/auth/login?code=${authResult.code}`;
       
       responseMessage = `I will have your link shortly. ${loginUrl}`;
       
@@ -515,6 +515,25 @@ class LiveDMBot {
   async closeChatWindow() {
     console.log('❌ Attempting to close chat window...');
     
+    try {
+      // Method 0: Try clicking the modal background first (most reliable)
+      console.log('🎯 First attempt: clicking modal background...');
+      const modalBackground = await this.browserService.page.$('.styled__ModalBackground-sc-1j2ymu8-1');
+      if (modalBackground) {
+        await modalBackground.click({ force: true });
+        await this.browserService.page.waitForTimeout(1000);
+        
+        // Check if modal is gone
+        const modal = await this.browserService.page.$('.styled__BaseModalWrapper-sc-1j2ymu8-0');
+        if (!modal || !(await modal.isVisible())) {
+          console.log('✅ Modal closed by clicking background!');
+          return;
+        }
+      }
+    } catch (error) {
+      console.log(`⚠️ Background click failed: ${error.message}`);
+    }
+    
     // Method 1: Handle modal dialog close using newly trained selectors
     const modalCloseSelectors = [
       '.styled__ButtonWrapper-sc-1crx28g-1.bwaWQm', // Trained modal close button!
@@ -536,7 +555,7 @@ class LiveDMBot {
           
           if (isVisible) {
             console.log('🖱️ Clicking modal close element...');
-            await closeElement.click();
+            await closeElement.click({ force: true });
             await this.browserService.page.waitForTimeout(2000);
             
             // Check if modal is closed
