@@ -1,6 +1,829 @@
-<section>
-  <h2>Welcome to Hybrid-Coach!</h2>
-  <p>Seamlessly blending human empathy with AI-powered insights.</p>
-  <p>Get started by creating an account or logging in.</p>
-  <p><a href="/dashboard" style="text-decoration:none;color:#3182ce;font-weight:bold;">Visit Dashboard →</a></p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyUltra.Coach - Professional Ultrasound Coaching</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-light: #ffffff;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --border: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-secondary: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+        }
+
+        [data-theme="dark"] {
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-light: #1e293b;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --border: #334155;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .hero {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.3;
+        }
+
+        [data-theme="dark"] .hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        [data-theme="dark"] .hero::before {
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .hero-content {
+            max-width: 1200px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+            position: relative;
+        }
+
+        .logo::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: var(--gradient-primary);
+            border-radius: 2px;
+        }
+
+        .tagline {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-weight: 400;
+            position: relative;
+        }
+
+        .tagline::before {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 24px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        .hero-text {
+            max-width: 600px;
+            margin: 0 auto 3rem;
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            position: relative;
+            z-index: 2;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.875rem 1.75rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            margin: 0 0.5rem 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-secondary {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-secondary);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
+        }
+
+        .section {
+            padding: 4rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .section-subtitle {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .feature-card {
+            background: var(--bg-primary);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+            border-radius: 12px 12px 0 0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            display: block;
+            opacity: 0.8;
+        }
+
+        .feature-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .feature-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .stats-section {
+            background: var(--gradient-primary);
+            color: white;
+            text-align: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .stat-item h3 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-item p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .testimonial-section {
+            background: var(--bg-secondary);
+        }
+
+        .testimonial {
+            background: var(--bg-primary);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border);
+            margin-bottom: 2rem;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .testimonial:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .testimonial::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+            border-radius: 12px 12px 0 0;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .testimonial:hover::before {
+            opacity: 1;
+        }
+
+        .testimonial-text {
+            font-size: 1.125rem;
+            font-style: italic;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        .testimonial-text::before {
+            content: '"';
+            font-size: 3rem;
+            color: var(--primary);
+            position: absolute;
+            top: -10px;
+            left: -20px;
+            opacity: 0.3;
+        }
+
+        .testimonial-author {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .testimonial-role {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .fade-in-delay-1 { transition-delay: 0.2s; }
+        .fade-in-delay-2 { transition-delay: 0.4s; }
+        .fade-in-delay-3 { transition-delay: 0.6s; }
+
+        @media (max-width: 768px) {
+            .hero { padding: 3rem 1rem; }
+            .logo { font-size: 2.5rem; }
+            .tagline { font-size: 1.1rem; }
+            .section { padding: 3rem 1rem; }
+            .features-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: 1fr; }
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .logo { font-size: 2.5rem; }
+            .tagline { font-size: 1.2rem; }
+            .hero { padding: 4rem 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+
+    <section class="hero">
+        <div class="hero-content">
+            <h1 class="logo">MyUltra.Coach</h1>
+            <p class="tagline">Professional Ultrasound Coaching & Training</p>
+            <p class="hero-text">
+                Transform your ultrasound skills with our comprehensive hybrid learning platform.
+                Get instant AI-powered guidance combined with personalized coaching from certified ultrasound professionals.
+            </p>
+            <div>
+                <a href="/dashboard" class="btn btn-primary">Access Your Dashboard</a>
+                <a href="/auth/register" class="btn btn-secondary">Start Your Journey</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-header">
+            <h2 class="section-title">Why Choose MyUltra.Coach?</h2>
+            <p class="section-subtitle">
+                Our platform combines cutting-edge AI technology with human expertise to deliver
+                the most effective ultrasound training experience available.
+            </p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="feature-icon">🤖</span>
+                <h3 class="feature-title">AI-Powered Learning</h3>
+                <p class="feature-description">
+                    Advanced artificial intelligence provides instant feedback, real-time guidance,
+                    and personalized learning paths tailored to your skill level.
+                </p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">👨‍🏫</span>
+                <h3 class="feature-title">Expert Human Coaching</h3>
+                <p class="feature-description">
+                    Connect with board-certified ultrasound professionals for in-depth case discussions,
+                    technique refinement, and career guidance.
+                </p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">📊</span>
+                <h3 class="feature-title">Progress Tracking</h3>
+                <p class="feature-description">
+                    Comprehensive analytics and detailed progress reports help you monitor improvement
+                    and identify areas for focused development.
+                </p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">🎓</span>
+                <h3 class="feature-title">Professional Community</h3>
+                <p class="feature-description">
+                    Join a network of healthcare professionals, share experiences, and learn from
+                    peers in the Vagus Skool and Ultra Skool communities.
+                </p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">⚡</span>
+                <h3 class="feature-title">24/7 Availability</h3>
+                <p class="feature-description">
+                    Access your AI coach anytime, anywhere. Get instant answers to technical questions
+                    and guidance whenever you need it most.
+                </p>
+            </div>
+            <div class="feature-card">
+                <span class="feature-icon">🔒</span>
+                <h3 class="feature-title">Secure & Private</h3>
+                <p class="feature-description">
+                    Enterprise-grade security ensures your data and training sessions remain confidential
+                    and protected at all times.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="stats-section section">
+        <h2 class="section-title">Proven Results</h2>
+        <div class="stats-grid">
+            <div class="stat-item">
+                <h3>99%</h3>
+                <p>AI Accuracy Rate</p>
+            </div>
+            <div class="stat-item">
+                <h3>500+</h3>
+                <p>Expert Coaches</p>
+            </div>
+            <div class="stat-item">
+                <h3>24/7</h3>
+                <p>AI Support</p>
+            </div>
+            <div class="stat-item">
+                <h3>10K+</h3>
+                <p>Training Sessions</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="testimonial-section section">
+        <div class="section-header">
+            <h2 class="section-title">What Our Users Say</h2>
+            <p class="section-subtitle">
+                Hear from healthcare professionals who have transformed their ultrasound skills
+                with MyUltra.Coach.
+            </p>
+        </div>
+
+        <div class="features-grid">
+            <div class="testimonial">
+                <p class="testimonial-text">
+                    MyUltra.Coach revolutionized how I approach ultrasound training. The AI provides instant feedback while the human coaches offer that crucial mentorship that only experience can provide.
+                </p>
+                <div class="testimonial-author">Dr. Sarah Chen</div>
+                <div class="testimonial-role">Cardiologist, Ultra Skool Member</div>
+            </div>
+
+            <div class="testimonial">
+                <p class="testimonial-text">
+                    The combination of AI precision and human expertise creates a learning environment that's both efficient and deeply supportive. I feel more confident in my ultrasound skills than ever before.
+                </p>
+                <div class="testimonial-author">Dr. Michael Rodriguez</div>
+                <div class="testimonial-role">Emergency Medicine Physician</div>
+            </div>
+
+            <div class="testimonial">
+                <p class="testimonial-text">
+                    As someone new to ultrasound, the platform's structured approach and immediate feedback helped me build confidence quickly. The community aspect is also incredibly valuable.
+                </p>
+                <div class="testimonial-author">Dr. Emily Watson</div>
+                <div class="testimonial-role">Internal Medicine Resident</div>
+            </div>
+        </div>
 </section> 
+
+    <script>
+        // Theme management
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            updateThemeToggle(theme);
+        }
+
+        function updateThemeToggle(theme) {
+            const toggle = document.querySelector('.theme-toggle');
+            toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+            toggle.style.transform = 'scale(1.1)';
+            setTimeout(() => toggle.style.transform = 'scale(1)', 200);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
+
+        // Initialize theme based on time or preference
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                setTheme(savedTheme);
+            } else {
+                const hour = new Date().getHours();
+                const isNightTime = hour < 6 || hour > 18;
+                setTheme(isNightTime ? 'dark' : 'light');
+            }
+        }
+
+        // Add scroll effects
+        function handleScroll() {
+            const scrolled = window.pageYOffset;
+            const hero = document.querySelector('.hero');
+            hero.style.transform = `translateY(${scrolled * 0.5}px)`;
+            hero.style.opacity = 1 - scrolled / 1000;
+        }
+
+        // Mouse tracking for interactive background
+        function handleMouseMove(e) {
+            const hero = document.querySelector('.hero');
+            const rect = hero.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+            hero.style.setProperty('--mouse-x', `${x}%`);
+            hero.style.setProperty('--mouse-y', `${y}%`);
+        }
+
+        // Animated counters
+        function animateCounters() {
+            const counters = document.querySelectorAll('.stat-counter');
+            const speed = 200;
+
+            counters.forEach(counter => {
+                const target = parseInt(counter.getAttribute('data-target'));
+                const count = parseInt(counter.innerText);
+                const increment = target / speed;
+
+                if (count < target) {
+                    counter.innerText = Math.ceil(count + increment);
+                    setTimeout(animateCounters, 10);
+                } else {
+                    counter.innerText = target + (counter.getAttribute('data-target').includes('%') ? '%' : '+');
+                }
+            });
+        }
+
+        // Logo click effects
+        function addLogoEffects() {
+            const logo = document.querySelector('.logo');
+            let clickCount = 0;
+
+            logo.addEventListener('click', () => {
+                clickCount++;
+                logo.style.transform = `scale(${1 + clickCount * 0.1}) rotate(${clickCount * 5}deg)`;
+
+                // Reset after 3 clicks
+                if (clickCount >= 3) {
+                    setTimeout(() => {
+                        logo.style.transform = 'scale(1) rotate(0deg)';
+                        clickCount = 0;
+                    }, 1000);
+                }
+
+                // Create click burst effect
+                createClickBurst(logo);
+            });
+        }
+
+        // Create particle burst effect
+        function createClickBurst(element) {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            for (let i = 0; i < 12; i++) {
+                const particle = document.createElement('div');
+                particle.style.position = 'fixed';
+                particle.style.left = centerX + 'px';
+                particle.style.top = centerY + 'px';
+                particle.style.width = '8px';
+                particle.style.height = '8px';
+                particle.style.background = `hsl(${Math.random() * 360}, 100%, 70%)`;
+                particle.style.borderRadius = '50%';
+                particle.style.zIndex = '9999';
+                particle.style.pointerEvents = 'none';
+
+                document.body.appendChild(particle);
+
+                const angle = (i / 12) * Math.PI * 2;
+                const velocity = 5 + Math.random() * 5;
+                const vx = Math.cos(angle) * velocity;
+                const vy = Math.sin(angle) * velocity;
+
+                let x = centerX;
+                let y = centerY;
+                let opacity = 1;
+
+                const animate = () => {
+                    x += vx;
+                    y += vy;
+                    opacity -= 0.02;
+
+                    particle.style.left = x + 'px';
+                    particle.style.top = y + 'px';
+                    particle.style.opacity = opacity;
+
+                    if (opacity > 0) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        particle.remove();
+                    }
+                };
+
+                requestAnimationFrame(animate);
+            }
+        }
+
+        // Dynamic particle interaction
+        function addParticleInteraction() {
+            const particles = document.querySelectorAll('.particle');
+
+            document.addEventListener('mousemove', (e) => {
+                particles.forEach(particle => {
+                    const rect = particle.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+
+                    const distance = Math.sqrt(
+                        Math.pow(e.clientX - centerX, 2) +
+                        Math.pow(e.clientY - centerY, 2)
+                    );
+
+                    if (distance < 100) {
+                        const angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+                        const force = (100 - distance) / 100;
+                        const moveX = Math.cos(angle) * force * 2;
+                        const moveY = Math.sin(angle) * force * 2;
+
+                        particle.style.transform = `translate(${moveX}px, ${moveY}px)`;
+                    } else {
+                        particle.style.transform = 'translate(0px, 0px)';
+                    }
+                });
+            });
+        }
+
+        // Add click effects
+        function addClickEffects() {
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    const ripple = document.createElement('div');
+                    ripple.style.position = 'absolute';
+                    ripple.style.borderRadius = '50%';
+                    ripple.style.background = 'rgba(255,255,255,0.3)';
+                    ripple.style.transform = 'scale(0)';
+                    ripple.style.animation = 'ripple 0.6s linear';
+                    ripple.style.left = e.offsetX + 'px';
+                    ripple.style.top = e.offsetY + 'px';
+
+                    this.appendChild(ripple);
+                    setTimeout(() => ripple.remove(), 600);
+                });
+            });
+        }
+
+        // Add CSS for ripple effect
+        const rippleStyle = document.createElement('style');
+        rippleStyle.textContent = `
+            @keyframes ripple {
+                to {
+                    transform: scale(4);
+                    opacity: 0;
+                }
+            }
+            .btn { position: relative; overflow: hidden; }
+        `;
+        document.head.appendChild(rippleStyle);
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTheme();
+            addSmoothScrolling();
+
+            // Add subtle scroll effect to hero
+            window.addEventListener('scroll', () => {
+                const hero = document.querySelector('.hero');
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                if (scrollTop < 500) {
+                    hero.style.transform = `translateY(${scrollTop * 0.3}px)`;
+                }
+            });
+
+            // Add fade-in animations for sections
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const fadeInObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, observerOptions);
+
+            // Observe elements for fade-in
+            document.querySelectorAll('.section, .feature-card, .testimonial').forEach(el => {
+                el.classList.add('fade-in');
+                fadeInObserver.observe(el);
+            });
+
+            // Add delays for staggered animation
+            document.querySelectorAll('.feature-card').forEach((card, index) => {
+                if (index % 3 === 1) card.classList.add('fade-in-delay-1');
+                if (index % 3 === 2) card.classList.add('fade-in-delay-2');
+            });
+        });
+
+        // Keyboard shortcut for theme toggle
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 't' && e.ctrlKey) {
+                e.preventDefault();
+                toggleTheme();
+            }
+        });
+    </script>
+</body>
+</html> 

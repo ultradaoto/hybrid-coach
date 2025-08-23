@@ -2,56 +2,44 @@ import { Router } from 'express';
 
 const router = Router();
 
-// Widget inspector page
+// Main widget page - clean and simple
 router.get('/', (req, res) => {
   try {
     res.render('widget', {
-      title: 'ElevenLabs Widget Inspector',
-      layout: false, // Don't use the default layout since this is a standalone page
+      title: 'ElevenLabs Voice Agent',
+      layout: false,
       user: req.user || null
     });
   } catch (error) {
     console.error('Error rendering widget page:', error);
-    res.status(500).send('Error loading widget inspector');
+    res.status(500).send('Error loading voice agent');
   }
 });
 
-// API endpoint to get widget status (for future integration)
+// API endpoint for widget status
 router.get('/api/status', (req, res) => {
-  try {
-    res.json({
-      status: 'active',
-      timestamp: new Date().toISOString(),
-      message: 'ElevenLabs widget inspector is running'
-    });
-  } catch (error) {
-    console.error('Error getting widget status:', error);
-    res.status(500).json({ 
-      error: 'Failed to get widget status',
-      timestamp: new Date().toISOString()
-    });
-  }
+  res.json({
+    status: 'active',
+    timestamp: new Date().toISOString(),
+    message: 'ElevenLabs voice agent is ready'
+  });
 });
 
-// API endpoint for widget events (for future WebRTC streaming integration)
+// API endpoint for widget events
 router.post('/api/events', (req, res) => {
   try {
     const { eventType, data } = req.body;
-    
-    console.log(`[Widget Event] ${eventType}:`, data);
-    
-    // Here you could forward events to the GPU server for orb integration
-    // or process widget state changes for WebRTC streaming
-    
+    console.log(`[Voice Agent Event] ${eventType}:`, data);
+
     res.json({
       success: true,
-      message: `Event ${eventType} received`,
+      message: `Event ${eventType} processed`,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('Error processing widget event:', error);
-    res.status(500).json({ 
-      error: 'Failed to process widget event',
+    console.error('Error processing voice agent event:', error);
+    res.status(500).json({
+      error: 'Failed to process event',
       timestamp: new Date().toISOString()
     });
   }

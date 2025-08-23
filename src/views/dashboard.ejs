@@ -1,220 +1,732 @@
-<section>
-  <style>
-    .appointment-item {
-      margin-bottom: 1rem;
-      padding: 1rem;
-      background: #f5f5f5;
-      border-radius: 8px;
-      border-left: 4px solid #28a745;
-    }
-    .appointment-item.coach {
-      border-left-color: #007bff;
-    }
-  </style>
-  
-  <h2>Welcome, <%= user.displayName %></h2>
-  <p>Your email: <%= user.email ?? 'N/A' %></p>
-  
-  <% if (message) { %>
-    <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-      <%= message %>
-    </div>
-  <% } %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - MyUltra.Coach</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-light: #ffffff;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --border: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
 
-  <!-- Include membership warning component -->
-  <%- include('partials/membership-warning') %>
+        [data-theme="dark"] {
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-light: #1e293b;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --border: #334155;
+        }
 
-  <% if (user.role === 'coach') { %>
-    <!-- Auto-refresh for coaches every 10 seconds -->
-    <script>
-      setTimeout(() => {
-        window.location.reload();
-      }, 10000);
-    </script>
-    
-    <h3>Coach Tools</h3>
-    
-    <!-- Coach Availability Toggle -->
-    <div style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <div>
-          <strong>📊 Availability Status</strong>
-          <br>
-          <small style="color: #666;">
-            <% if (user.isAvailable) { %>
-              You are currently accepting new client bookings
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        [data-theme="dark"] .header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.3;
+        }
+
+        [data-theme="dark"] .header::before {
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+            position: relative;
+        }
+
+        .logo::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 3px;
+            background: var(--gradient-primary);
+            border-radius: 2px;
+        }
+
+        .welcome-text {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .user-info {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .user-info::before {
+            content: '👤';
+            font-size: 1.1rem;
+        }
+
+        .alert {
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            border: 1px solid;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            position: relative;
+        }
+
+        .alert-success {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
+
+        .alert-warning {
+            background-color: #fffbeb;
+            border-color: #fde68a;
+            color: #92400e;
+        }
+
+        .alert-error {
+            background-color: #fef2f2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+
+        .card {
+            background: var(--bg-primary);
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .card-header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .card-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin: 0.25rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #d97706;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .appointment-item {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .appointment-item:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .appointment-item.client {
+            border-left: 4px solid var(--success);
+        }
+
+        .appointment-item.coach {
+            border-left: 4px solid var(--primary);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-cancelled {
+            background: var(--error);
+            color: white;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+
+        .section-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .availability-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+        }
+
+        .availability-title {
+            color: var(--text-primary);
+        }
+
+        .availability-subtitle {
+            color: var(--text-secondary);
+        }
+
+        .availability-toggle {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .availability-toggle input {
+            margin-right: 0.5rem;
+        }
+
+        .availability-status {
+            font-weight: bold;
+        }
+
+        .availability-status.available {
+            color: #10b981;
+        }
+
+        .availability-status.unavailable {
+            color: #ef4444;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-container { padding: 1rem; }
+            .header { padding: 1.5rem 1rem; }
+            .card { padding: 1.5rem; }
+            .availability-section {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+
+    <div class="dashboard-container">
+        <header class="header">
+            <div class="logo">MyUltra.Coach</div>
+            <p class="welcome-text">Welcome back, <%= user.displayName %></p>
+            <div class="user-info">
+                <%= user.email ?? 'N/A' %>
+            </div>
+        </header>
+
+        <% if (message) { %>
+            <div class="alert alert-success">
+                <%= message %>
+            </div>
+        <% } %>
+
+        <!-- Include membership warning component -->
+        <%- include('partials/membership-warning') %>
+
+        <% if (user.role === 'coach') { %>
+            <!-- Auto-refresh for coaches every 10 seconds -->
+            <script>
+                setTimeout(() => {
+                    window.location.reload();
+                }, 10000);
+            </script>
+
+            <div class="card fade-in">
+                <div class="card-header">
+                    <h3 class="card-title">🎓 Coach Tools</h3>
+                    <p class="card-subtitle">Manage your coaching availability and settings</p>
+                </div>
+
+                <!-- Coach Availability Toggle -->
+                <div class="availability-section">
+                    <div>
+                        <strong class="availability-title">📊 Availability Status</strong>
+                        <br>
+                        <small class="availability-subtitle">
+                            <% if (user.isAvailable) { %>
+                                You are currently accepting new client bookings
+                            <% } else { %>
+                                You are not accepting new client bookings
+                            <% } %>
+                        </small>
+                    </div>
+                    <form method="post" action="/coach/toggle-availability">
+                        <label class="availability-toggle">
+                            <input type="checkbox" <%= user.isAvailable ? 'checked' : '' %> onchange="this.form.submit()">
+                            <span class="availability-status <%= user.isAvailable ? 'available' : 'unavailable' %>">
+                                <%= user.isAvailable ? 'Available' : 'Unavailable' %>
+                            </span>
+                        </label>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Calendar Connection -->
+            <% if (!calendarConnected) { %>
+                <div class="alert alert-warning">
+                    <strong>📅 Calendar not connected</strong><br>
+                    Connect your Google Calendar to manage availability and view upcoming events.
+                    <div style="margin-top: 1rem;">
+                        <a href="/coach/calendar/connect" class="btn btn-primary">🔗 Connect Google Calendar</a>
+                    </div>
+                </div>
             <% } else { %>
-              You are not accepting new client bookings
+                <div class="alert alert-success">
+                    <strong>✅ Calendar connected</strong><br>
+                    Your Google Calendar is successfully connected and synced.
+                </div>
             <% } %>
-          </small>
-        </div>
-        <form method="post" action="/coach/toggle-availability" style="margin: 0;">
-          <label style="display: flex; align-items: center; cursor: pointer;">
-            <input type="checkbox" <%= user.isAvailable ? 'checked' : '' %> onchange="this.form.submit()" style="margin-right: 0.5rem;">
-            <span style="font-weight: bold; color: <%= user.isAvailable ? '#28a745' : '#dc3545' %>;">
-              <%= user.isAvailable ? 'Available' : 'Unavailable' %>
-            </span>
-          </label>
-        </form>
-      </div>
-    </div>
-    
-    <% if (!calendarConnected) { %>
-      <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-        <strong>📅 Calendar not connected</strong><br>
-        Connect your Google Calendar to manage availability and view upcoming events.
-      </div>
-      <a href="/coach/calendar/connect" class="btn" style="background: #007bff; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">
-        🔗 Connect Google Calendar
-      </a>
-    <% } else { %>
-      <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-        <strong>✅ Calendar connected</strong><br>
-        Your Google Calendar is successfully connected and synced.
-      </div>
-    <% } %>
-    <h4>Upcoming Meetings</h4>
-    <% if (meetings && meetings.length) { %>
-      <ul>
-        <% meetings.forEach(m => { %>
-          <li><%= m.start %> – <%= m.summary %></li>
-        <% }) %>
-      </ul>
-    <% } else { %>
-      <p>No upcoming meetings.</p>
-    <% } %>
-  <% } else { %>
-    <h3>Client Tools</h3>
-    <% if (!calendarConnected) { %>
-      <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-        <strong>📅 Calendar not connected</strong><br>
-        Connect your Google Calendar to automatically receive appointment invitations and reminders.
-      </div>
-      <a href="/client/calendar/connect" class="btn" style="background: #007bff; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block; margin-bottom: 1rem;">
-        🔗 Connect Google Calendar
-      </a>
-    <% } else { %>
-      <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-        <strong>✅ Calendar connected</strong><br>
-        Your Google Calendar is successfully connected. You'll receive appointment invitations automatically.
-      </div>
-    <% } %>
-    
-    <h3>Schedule Your Hybrid Coaching Call</h3>
-    <% if (slots && slots.length && availableCoaches && availableCoaches.length) { %>
-      <form method="post" action="/schedule" style="background: #f8f9fa; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-        <div style="margin-bottom: 1rem;">
-          <label for="coach" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Choose your coach:</label>
-          <select name="coachId" id="coach" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-            <option value="">Select a coach...</option>
-            <% availableCoaches.forEach(coach => { %>
-              <option value="<%= coach.id %>">
-                <%= coach.coachName || coach.displayName %> 
-                <% if (coach.coachLevel) { %>
-                  - Level <%= coach.coachLevel %>
-                <% } %>
-              </option>
-            <% }) %>
-          </select>
-        </div>
-        
-        <div style="margin-bottom: 1rem;">
-          <label for="slot" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Choose a time slot:</label>
-          <select name="slot" id="slot" required style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-            <option value="">Select a time...</option>
-            <% slots.forEach(s => { %>
-              <option value="<%= s.iso %>"><%= s.label %></option>
-            <% }) %>
-          </select>
-        </div>
-        
-        <button type="submit" style="background: #007bff; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem;">
-          📅 Book Appointment
-        </button>
-      </form>
-    <% } else if (!availableCoaches || availableCoaches.length === 0) { %>
-      <div style="background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem;">
-        <strong>⚠️ No coaches available</strong><br>
-        All coaches are currently unavailable for new bookings. Please check back later.
-      </div>
-    <% } else { %>
-      <p>Click below to create a test room immediately:</p>
-      <a href="/room/create" class="btn" style="background: #28a745; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">Create Instant Room</a>
-    <% } %>
-  <% } %>
 
-  <h3>
-    Upcoming Appointments
-    <% if (user.role === 'coach') { %>
-      <span style="font-size: 0.8em; color: #666;">(Auto-refreshing every 10 seconds)</span>
-    <% } %>
-  </h3>
-  <% if (appointments && appointments.length) { %>
-    <ul style="list-style: none; padding: 0;">
-      <% appointments.forEach(a => { %>
-        <li class="appointment-item <%= user.role === 'coach' ? 'coach' : '' %>">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div style="flex: 1;">
-              <strong>📅 <%= new Date(a.scheduledFor).toLocaleString() %></strong>
-              <% if (a.status === 'cancelled') { %>
-                <span style="background: #dc3545; color: white; padding: 0.2rem 0.5rem; border-radius: 3px; font-size: 0.8rem; margin-left: 0.5rem;">CANCELLED</span>
-              <% } %>
-              <% if (user.role === 'coach' && a.client) { %>
-                <br>👤 Client: <%= a.client.displayName || a.client.email %>
-              <% } else if (user.role === 'client' && a.coach) { %>
-                <br>🎓 Coach: <%= a.coach.coachName || a.coach.displayName %> 
-                <% if (a.coach.coachLevel) { %>
-                  (Level <%= a.coach.coachLevel %>)
-                <% } %>
-              <% } %>
-              <br>
-              <span style="color: #666; font-size: 0.9em;">Room ID: <%= a.roomId.substring(0, 8) %>...</span>
-            </div>
-            
-            <% if (a.status !== 'cancelled') { %>
-              <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-left: 1rem;">
-                <% if (user.role === 'coach') { %>
-                  <form method="post" action="/coach/reassign-appointment" style="margin: 0;">
-                    <input type="hidden" name="appointmentId" value="<%= a.id %>">
-                    <button type="submit" style="background: #ffc107; color: #212529; padding: 0.3rem 0.6rem; border: none; border-radius: 3px; font-size: 0.8rem; cursor: pointer;" onclick="return confirm('Send this call back to the coach pool?')">
-                      🔄 Return to Pool
-                    </button>
-                  </form>
+            <!-- Upcoming Meetings -->
+            <div class="card fade-in">
+                <div class="card-header">
+                    <h4 class="card-title">📅 Upcoming Meetings</h4>
+                </div>
+                <% if (meetings && meetings.length) { %>
+                    <ul style="list-style: none; padding: 0;">
+                        <% meetings.forEach(m => { %>
+                            <li style="padding: 0.75rem 0; border-bottom: 1px solid var(--border);">
+                                <strong><%= m.start %></strong> – <%= m.summary %>
+                            </li>
+                        <% }) %>
+                    </ul>
                 <% } else { %>
-                  <form method="post" action="/client/cancel-appointment" style="margin: 0;">
-                    <input type="hidden" name="appointmentId" value="<%= a.id %>">
-                    <button type="submit" style="background: #dc3545; color: white; padding: 0.3rem 0.6rem; border: none; border-radius: 3px; font-size: 0.8rem; cursor: pointer;" onclick="return confirm('Cancel this appointment?')">
-                      ❌ Cancel
-                    </button>
-                  </form>
+                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No upcoming meetings.</p>
                 <% } %>
-              </div>
-            <% } %>
-          </div>
-          
-          <% if (a.status !== 'cancelled') { %>
-            <div style="margin-top: 0.5rem;">
-              <a href="/room/<%= a.roomId %>" class="btn" style="background: #28a745; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px; display: inline-block;">✅ Join Room</a>
             </div>
-          <% } %>
-        </li>
-      <% }) %>
-    </ul>
-  <% } else { %>
-    <p style="color: #666;">No upcoming appointments. 
-      <% if (user.role === 'client') { %>
-        Schedule one above or create an instant room.
-      <% } else { %>
-        Waiting for clients to book appointments...
-      <% } %>
-    </p>
-  <% } %>
+        <% } %>
 
-  <% if (user.role === 'coach') { %>
-    <div style="margin-top:1rem">
-      <a href="/room/create" class="btn" style="background: #17a2b8; color: white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 4px;">🧪 Launch Test Room</a>
+            <!-- Client Tools -->
+            <div class="card fade-in">
+                <div class="card-header">
+                    <h3 class="card-title">🎓 Client Tools</h3>
+                    <p class="card-subtitle">Schedule and manage your coaching sessions</p>
+                </div>
+
+                <% if (!calendarConnected) { %>
+                    <div class="alert alert-warning">
+                        <strong>📅 Calendar not connected</strong><br>
+                        Connect your Google Calendar to automatically receive appointment invitations and reminders.
+                        <div style="margin-top: 1rem;">
+                            <a href="/client/calendar/connect" class="btn btn-primary">🔗 Connect Google Calendar</a>
+                        </div>
+                    </div>
+                <% } else { %>
+                    <div class="alert alert-success">
+                        <strong>✅ Calendar connected</strong><br>
+                        Your Google Calendar is successfully connected. You'll receive appointment invitations automatically.
+                    </div>
+                <% } %>
+            </div>
+
+            <!-- Scheduling Form -->
+            <h3 class="section-title">📅 Schedule Your Hybrid Coaching Call</h3>
+            <% if (slots && slots.length && availableCoaches && availableCoaches.length) { %>
+                <div class="card fade-in">
+                    <form method="post" action="/schedule">
+                        <div class="form-group">
+                            <label for="coach" class="form-label">Choose your coach:</label>
+                            <select name="coachId" id="coach" required class="form-select">
+                                <option value="">Select a coach...</option>
+                                <% availableCoaches.forEach(coach => { %>
+                                    <option value="<%= coach.id %>">
+                                        <%= coach.coachName || coach.displayName %>
+                                        <% if (coach.coachLevel) { %>
+                                            - Level <%= coach.coachLevel %>
+                                        <% } %>
+                                    </option>
+                                <% }) %>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="slot" class="form-label">Choose a time slot:</label>
+                            <select name="slot" id="slot" required class="form-select">
+                                <option value="">Select a time...</option>
+                                <% slots.forEach(s => { %>
+                                    <option value="<%= s.iso %>"><%= s.label %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">📅 Book Appointment</button>
+                    </form>
+                </div>
+            <% } else if (!availableCoaches || availableCoaches.length === 0) { %>
+                <div class="alert alert-warning">
+                    <strong>⚠️ No coaches available</strong><br>
+                    All coaches are currently unavailable for new bookings. Please check back later.
+                </div>
+            <% } else { %>
+                <div class="card fade-in">
+                    <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Click below to create a test room immediately:</p>
+                    <a href="/room/create" class="btn btn-success">🧪 Create Instant Room</a>
+                </div>
+            <% } %>
+            <% } %>
+
+            <!-- Upcoming Appointments -->
+            <div class="card fade-in">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        📅 Upcoming Appointments
+                        <% if (user.role === 'coach') { %>
+                            <span style="font-size: 0.8em; color: var(--text-secondary); font-weight: normal;">(Auto-refreshing every 10 seconds)</span>
+                        <% } %>
+                    </h3>
+                </div>
+
+                <% if (appointments && appointments.length) { %>
+                    <div style="list-style: none; padding: 0;">
+                        <% appointments.forEach(a => { %>
+                            <div class="appointment-item <%= user.role === 'coach' ? 'coach' : 'client' %>">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div style="flex: 1;">
+                                        <strong style="color: var(--text-primary);">📅 <%= new Date(a.scheduledFor).toLocaleString() %></strong>
+                                        <% if (a.status === 'cancelled') { %>
+                                            <span class="status-badge status-cancelled">CANCELLED</span>
+                                        <% } %>
+                                        <% if (user.role === 'coach' && a.client) { %>
+                                            <br>👤 Client: <%= a.client.displayName || a.client.email %>
+                                        <% } else if (user.role === 'client' && a.coach) { %>
+                                            <br>🎓 Coach: <%= a.coach.coachName || a.coach.displayName %>
+                                            <% if (a.coach.coachLevel) { %>
+                                                (Level <%= a.coach.coachLevel %>)
+                                            <% } %>
+                                        <% } %>
+                                        <br>
+                                        <span style="color: var(--text-secondary); font-size: 0.9em;">Room ID: <%= a.roomId.substring(0, 8) %>...</span>
+                                    </div>
+
+                                    <% if (a.status !== 'cancelled') { %>
+                                        <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-left: 1rem;">
+                                            <% if (user.role === 'coach') { %>
+                                                <form method="post" action="/coach/reassign-appointment" style="margin: 0;">
+                                                    <input type="hidden" name="appointmentId" value="<%= a.id %>">
+                                                    <button type="submit" class="btn btn-warning" onclick="return confirm('Send this call back to the coach pool?')">
+                                                        🔄 Return to Pool
+                                                    </button>
+                                                </form>
+                                            <% } else { %>
+                                                <form method="post" action="/client/cancel-appointment" style="margin: 0;">
+                                                    <input type="hidden" name="appointmentId" value="<%= a.id %>">
+                                                    <button type="submit" class="btn btn-danger" onclick="return confirm('Cancel this appointment?')">
+                                                        ❌ Cancel
+                                                    </button>
+                                                </form>
+                                            <% } %>
+                                        </div>
+                                    <% } %>
+                                </div>
+
+                                <% if (a.status !== 'cancelled') { %>
+                                    <div style="margin-top: 1rem;">
+                                        <a href="/room/<%= a.roomId %>" class="btn btn-success">✅ Join Room</a>
+                                    </div>
+                                <% } %>
+                            </div>
+                        <% }) %>
+                    </div>
+                <% } else { %>
+                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                        No upcoming appointments.
+                        <% if (user.role === 'client') { %>
+                            Schedule one above or create an instant room.
+                        <% } else { %>
+                            Waiting for clients to book appointments...
+                        <% } %>
+                    </p>
+                <% } %>
+            </div>
+
+            <% if (user.role === 'coach') { %>
+                <div class="card fade-in">
+                    <div style="text-align: center;">
+                        <a href="/room/create" class="btn btn-primary">🧪 Launch Test Room</a>
+                    </div>
+                </div>
+            <% } %>
+
+            <!-- Logout -->
+            <div style="text-align: center; margin-top: 3rem; padding: 2rem;">
+                <a href="/auth/logout" style="color: var(--text-secondary); text-decoration: none; font-size: 0.9rem;">
+                    🔓 Logout
+                </a>
+            </div>
+        </div>
     </div>
-  <% } %>
 
-  <p style="margin-top:2rem"><a href="/auth/logout">Logout</a></p>
-</section> 
+    <script>
+        // Theme management
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            const toggle = document.querySelector('.theme-toggle');
+            toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
+
+        // Initialize theme based on time or preference
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                setTheme(savedTheme);
+            } else {
+                const hour = new Date().getHours();
+                const isNightTime = hour < 6 || hour > 18;
+                setTheme(isNightTime ? 'dark' : 'light');
+            }
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTheme();
+
+            // Add fade-in animations for cards
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -50px 0px'
+            };
+
+            const fadeInObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, observerOptions);
+
+            document.querySelectorAll('.card, .alert').forEach(el => {
+                el.classList.add('fade-in');
+                fadeInObserver.observe(el);
+            });
+
+            // Auto-refresh for coaches
+            const userRole = '<%= user.role %>';
+            if (userRole === 'coach') {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 10000);
+            }
+        });
+
+        // Keyboard shortcut for theme toggle
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 't' && e.ctrlKey) {
+                e.preventDefault();
+                toggleTheme();
+            }
+        });
+    </script>
+</body>
+</html> 

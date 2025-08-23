@@ -1,11 +1,76 @@
 import { Router } from 'express';
 import passport from 'passport';
+import { 
+    checkSkoolAuth, 
+    validateAuthCode, 
+    logoutSkoolUser, 
+    redirectIfAuthenticated,
+    getAuthStatus,
+    getClientInfo 
+} from '../middlewares/skoolAuthMiddleware.js';
+import authService from '../services/authService.js';
 
 const router = Router();
 
-// Show login page
-router.get('/login', (req, res) => {
-  res.render('login', { title: 'Login' });
+// Apply Skool auth check to all routes
+router.use(checkSkoolAuth);
+
+// Show login page with Skool authentication
+router.get('/login', redirectIfAuthenticated, async (req, res) => {
+    try {
+        const { error, message } = req.query;
+        const authStatus = getAuthStatus(req);
+
+        // Prepare error/success data for template
+        let alertData = null;
+        if (error && message) {
+            alertData = {
+                type: 'error',
+                title: getErrorTitle(error),
+                message: decodeURIComponent(message),
+                actionUrl: getErrorActionUrl(error),
+                actionText: getErrorActionText(error)
+            };
+        }
+
+        res.render('login', {
+            title: 'Login to MyUltra.Coach',
+            ...authStatus,
+            error: alertData?.type === 'error' ? alertData.title : null,
+            message: alertData?.message || null,
+            actionUrl: alertData?.actionUrl || null,
+            actionText: alertData?.actionText || null,
+            isSkoolAuth: true // Flag to show Skool-specific content
+        });
+
+    } catch (error) {
+        console.error('❌ Error rendering login page:', error);
+        res.status(500).render('error', { 
+            title: 'Login Error', 
+            message: 'Unable to load login page. Please try again.' 
+        });
+    }
+});
+
+// Handle Skool authentication code validation
+router.get('/login/:code', validateAuthCode, async (req, res) => {
+    try {
+        // If we get here, the code was valid and session was created
+        const authStatus = getAuthStatus(req);
+        
+        // Redirect to dashboard or intended destination
+        const returnTo = req.session?.returnTo || '/dashboard';
+        delete req.session?.returnTo;
+
+        console.log(`🎉 Redirecting ${authStatus.user.skoolUsername} to ${returnTo}`);
+        
+        res.redirect(`${returnTo}?welcome=true&user=${encodeURIComponent(authStatus.user.skoolUsername)}`);
+
+    } catch (error) {
+        console.error('❌ Error handling auth code:', error);
+        const errorMessage = encodeURIComponent('Unexpected error during login. Please try again.');
+        res.redirect(`/login?error=unexpected_error&message=${errorMessage}`);
+    }
 });
 
 // Google OAuth
@@ -63,12 +128,97 @@ router.get(
   }
 );
 
-// Logout
-router.get('/logout', (req, res, next) => {
-  req.logout(err => {
-    if (err) return next(err);
-    res.redirect('/');
-  });
+// Skool logout (also handles Google logout for compatibility)
+router.get('/logout', logoutSkoolUser, (req, res, next) => {
+  // Also handle Google logout if user was logged in via Google
+  if (req.user) {
+    req.logout(err => {
+      if (err) return next(err);
+      const message = encodeURIComponent('You have been logged out successfully.');
+      res.redirect(`/login?message=${message}`);
+    });
+  } else {
+    const message = encodeURIComponent('You have been logged out successfully.');
+    res.redirect(`/login?message=${message}`);
+  }
 });
+
+// Additional API endpoints for Skool auth
+router.get('/status', async (req, res) => {
+    try {
+        const authStatus = getAuthStatus(req);
+        
+        if (authStatus.isAuthenticated) {
+            res.json({
+                authenticated: true,
+                user: {
+                    skoolUserId: authStatus.user.skoolUserId,
+                    skoolUsername: authStatus.user.skoolUsername,
+                    sessionId: authStatus.user.sessionId,
+                    lastActive: authStatus.user.lastActive
+                }
+            });
+        } else {
+            res.json({
+                authenticated: false,
+                redirectUrl: '/auth/login'
+            });
+        }
+
+    } catch (error) {
+        console.error('❌ Error checking auth status:', error);
+        res.status(500).json({
+            error: 'Unable to check authentication status'
+        });
+    }
+});
+
+/**
+ * Helper function to get appropriate error title based on error type
+ * @param {string} errorType - Error type from query params
+ * @returns {string} Human-readable error title
+ */
+function getErrorTitle(errorType) {
+    const errorTitles = {
+        'authentication_required': '🔐 Authentication Required',
+        'invalid_code': '❌ Invalid Code',
+        'code_validation_failed': '❌ Code Validation Failed',
+        'service_error': '⚠️ Service Error',
+        'unexpected_error': '❌ Unexpected Error',
+        'rate_limit_exceeded': '⏰ Too Many Requests'
+    };
+    
+    return errorTitles[errorType] || '❌ Authentication Error';
+}
+
+/**
+ * Helper function to get action URL for error types that need user action
+ * @param {string} errorType - Error type from query params
+ * @returns {string|null} Action URL or null
+ */
+function getErrorActionUrl(errorType) {
+    const actionUrls = {
+        'authentication_required': 'https://www.skool.com/@my-ultra-coach-6588',
+        'invalid_code': 'https://www.skool.com/@my-ultra-coach-6588',
+        'code_validation_failed': 'https://www.skool.com/@my-ultra-coach-6588'
+    };
+    
+    return actionUrls[errorType] || null;
+}
+
+/**
+ * Helper function to get action text for error types that need user action
+ * @param {string} errorType - Error type from query params
+ * @returns {string|null} Action text or null
+ */
+function getErrorActionText(errorType) {
+    const actionTexts = {
+        'authentication_required': '📱 DM @MyUltraCoach on Skool',
+        'invalid_code': '📱 Request New Code',
+        'code_validation_failed': '📱 Get Fresh Code'
+    };
+    
+    return actionTexts[errorType] || null;
+}
 
 export default router;

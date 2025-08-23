@@ -2,83 +2,83 @@
   "cookies": [
     {
       "name": "client_id",
-      "value": "d85889b086b5428887614c2fecbb39b4",
+      "value": "96588b91bef34abfb041c33f01c746db",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1781849273,
+      "expires": 1787385225,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Lax"
     },
     {
       "name": "m",
-      "value": "90679daf-c8dc-470c-bb54-136f5ad6ac95ffd685",
+      "value": "5ed6c066-a357-4b17-a468-099661da2803548cc2",
       "domain": "m.stripe.com",
       "path": "/",
-      "expires": 1784873485.665441,
+      "expires": 1790409228.96427,
       "httpOnly": true,
       "secure": true,
       "sameSite": "None"
     },
     {
       "name": "__stripe_mid",
-      "value": "338c4697-eb34-4dc8-ad49-7a1e8bc5bd627a354f",
+      "value": "34a0e6ac-6b6f-4431-876f-94c4184b3e9afc4217",
       "domain": ".www.skool.com",
       "path": "/",
-      "expires": 1781849485,
+      "expires": 1787385228,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Strict"
     },
     {
       "name": "__stripe_sid",
-      "value": "3b14c08b-6650-4fbc-a6aa-680593ed0b47e4534f",
+      "value": "000d2958-ffb3-4a79-adca-04137bb7ef8d7c05f2",
       "domain": ".www.skool.com",
       "path": "/",
-      "expires": 1750315285,
+      "expires": 1755851028,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Strict"
     },
     {
       "name": "auth_token",
-      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODE4NDkyOTMsImlhdCI6MTc1MDMxMzI5MywidXNlcl9pZCI6IjQ0YThkNWY1Njk5ZDQzNDc5MDdiODM5MjIzOGJjOTI2In0.MqGnQ6OKL2QE6h2clWTF0SPDNYSRnRbRljNDiIR1dtw",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODczODUyMjUsImlhdCI6MTc1NTg0OTIyNSwidXNlcl9pZCI6IjlmYmE1ZjE1N2NjMDRhM2Y4MGZmNGI1ZTBlNjNkNjQ1In0.4_6XTMoXSRAJjJ4gFDuHWOSlHbAZz-2BOwhVw6MW1cI",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1781849584.640688,
+      "expires": 1787385227.952582,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"
     },
     {
-      "name": "aws-waf-token",
-      "value": "923fb058-8214-47f3-9b55-f88d5dcd6d05:FAoAs/cqnmRDAAAA:uzQOgSOgRDDsMH3nMsVoet4zNmpDSPJP2iz41aAB4qv8zkEow6ycLI9cOs2xHYSWdCILAeiztxMKs4Zq6KsVOch0mpMRYNBKkUfnE0nwOWCC6uxvxESIAj1VvIv54RGELQR47uBd5G5QezjWMbi4DzgVNkiiR0cSNnE5I75Wjrc2Fw89wQKBdQUtkfRljzTxpt+5z/v8MBokXw6VUoT6ytQGEK5kZmg4BluCNp72tOvKAMxOPsxdeGvpDkWQ0PGGcceZA2alPHPBHvTPdxfgTcz4",
-      "domain": ".skool.com",
-      "path": "/",
-      "expires": 1750659065,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "Lax"
-    },
-    {
       "name": "AWSALB",
-      "value": "X+vdLuH8zAOtkHWIIlM0bZczvGYMU4Gdg9gfG+7FpAFo1jM+FOD2U5CDBSMl3zllbiS4K4hhY8xTbix2dxn16Z391Fs7ZzT134I7ZCuvC0akF4iS4/+2FqXeqKPI",
+      "value": "XXBboKK2PQJr34/px6f2W4ovN8u+kHIujZosvfAOzW/QES7rUDQcSvtE5V7C8RzXgdhr8KjHAdgqdvV6fkQk1pR1+0jPMPep897o+J8dls0fYyxdwj7Eo6je6UAM",
       "domain": "www.skool.com",
       "path": "/",
-      "expires": 1750918284.850158,
+      "expires": 1756454028.092417,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "AWSALBCORS",
-      "value": "X+vdLuH8zAOtkHWIIlM0bZczvGYMU4Gdg9gfG+7FpAFo1jM+FOD2U5CDBSMl3zllbiS4K4hhY8xTbix2dxn16Z391Fs7ZzT134I7ZCuvC0akF4iS4/+2FqXeqKPI",
+      "value": "XXBboKK2PQJr34/px6f2W4ovN8u+kHIujZosvfAOzW/QES7rUDQcSvtE5V7C8RzXgdhr8KjHAdgqdvV6fkQk1pR1+0jPMPep897o+J8dls0fYyxdwj7Eo6je6UAM",
       "domain": "www.skool.com",
       "path": "/",
-      "expires": 1750918284.850219,
+      "expires": 1756454028.092485,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
+    },
+    {
+      "name": "aws-waf-token",
+      "value": "3ad8dfd4-064b-4164-9034-ce878f1f6ef3:FAoAk3M26ykkAAAA:k47yGN16eoVLN3L9Wag5bP9PgiTMkJYa+dTQzYqgbUg+OQcENqJPQIHgm+XRPghEtMi7iuZiTEmQhedpJrdAwv//qd9deKD9aZWYBQKeFr4DzmG1cH7HDsTanaujIWanj7N4Z3jZF0PNnuPPc0Lze1yDAiPzrzEY2kJEZlFekIWomCJjaB3vFF7rnv/WD83Dk823TzvQUTBpgpLKBe0ZDAlucESdSvqfNVRKFGTYfx0vpd0fpuK2JwfIDl+IIVh8ziD5Lg==",
+      "domain": ".skool.com",
+      "path": "/",
+      "expires": 1756194829,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
     }
   ],
   "origins": [
@@ -87,19 +87,19 @@
       "localStorage": [
         {
           "name": "awswaf_token_refresh_timestamp",
-          "value": "1750313465776"
+          "value": "1755849225615"
         },
         {
           "name": "last-group",
-          "value": "{\"value\":\"ultra\"}"
+          "value": "{\"value\":\"desci-2718\"}"
         },
         {
           "name": "awswaf_session_storage",
-          "value": "923fb058-8214-47f3-9b55-f88d5dcd6d05:FAoAptEqoGEqAAAA:2VvnzJdi0LgXlDNQDCDQsdWnj+TL8QS2zmXxINGUxqPlqbwRGa7MPmdmuFkbzNLZRY5ec5LS+nxzALpf005QwEGeMbJ4Twk5PUUrPEwy3lJ3vJBfEDAEDU/7hQ9nuPfUKH35NyL8C/I0A0jyqxB22e8cqVsbTJN9VEpKbJnbHOtwVTm0NI8enJ+2b1xzBeRFueQSFlKA0al+YvGMUkMtv3EPeH0NUOYG07PpZvhOWgzK4XrRs8vR3/oXNDmy3gRditpLwEvEPGBtbo85gt6UdAMNrt5zZcW5F6rdhLXEBxkOKpByitZa7h55WzuBz+YGUJaW/jkyCoeSZMpol61Lo7FIIQ9i+NLn28Br72ZDGuX/svQBAz6HM79OUPta8hNGc+1/Vm4Y/8HpMcOJNaj8B6vLm7Iu1/UxTEzZhdp2DPpS4EVaNvZEv32l/18o8wAL/xXVONYvNdmCBDqPH4ivC1GjOpW9nqheSWzhw5WpJr/grcIvgRXT5R9eV5Y077IgSCiKT1d1atOd5b6yk11qshXuuBfMib88dHttH0WfJWOgk6awGrGV2k7BvAXny/+EbxsZ3cMECmwOYJl1tPw/jG5uDw=="
+          "value": "3ad8dfd4-064b-4164-9034-ce878f1f6ef3:FAoAk3M26yokAAAA:Qiu+zT+PWJLs/IgpAfK0s0UsxZMKdl1Hsr7qBR06BGuuC7fbQRSwO63VBoHOTzWR/xyoBUKI8BLL7qumUn/Jqa4vikVlhz0FZMshw4XhUNTu5mNuiMCPkoVYqrJTYjpdiKjpFMCssLZQig+y4HoKBoyCJMJ+NtRAIQlYJ6i+rJWXiDaxUETIInh/9y9xsU4McuaKFb6fM4bcXnZ8ZFRc3ohJprB407dUdIiA8QtK9bTvQ2roNlOoJjqdpy7NvCLGAyvjPMxcYvo8EpEsYWHzPTABl780m2uGd1vwuDPC9bvoGCq2h14Yqkdk5bswke7zbUSTE1pNqhEZeVv+1aC1CHsE12fH3Y9Flj+OPHhKe6yrAzDNpMBouOS6s0NPoxZ9Nm/fhbQEpyAAfTBYfX92xkRXt/KHexNatIGwO8yVn7M1Uz0MNvqxGuptvI3XhyjdESq40NJtE3LE+VAh+nbGk4diHebSqvTHFItIrx3O1DJXV+aA3n/vTZa/zgb7hs3x4A=="
         },
         {
           "name": "se",
-          "value": "{\"value\":\"sterlingbiz2021@gmail.com\"}"
+          "value": "{\"value\":\"ultradaoto@gmail.com\"}"
         }
       ]
     }

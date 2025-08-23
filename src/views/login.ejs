@@ -1,62 +1,550 @@
-<section>
-  <h2><%= title || 'Login' %></h2>
-  
-  <% if (typeof error !== 'undefined' && error) { %>
-    <div class="alert alert-error">
-      <h3><%= error %></h3>
-      <p><%= message %></p>
-      <% if (typeof actionUrl !== 'undefined' && actionUrl) { %>
-        <a href="<%= actionUrl %>" class="btn btn-primary" target="_blank"><%= actionText %></a>
-        <p><em>After joining, return here and login with the same email address.</em></p>
-      <% } %>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title || 'Login' %> - MyUltra.Coach</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --error: #ef4444;
+            --error-bg: #fef2f2;
+            --error-border: #fecaca;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-light: #ffffff;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --border: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        [data-theme="dark"] {
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-light: #1e293b;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --border: #334155;
+            --error-bg: #1e1b20;
+            --error-border: #7c2d12;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23e2e8f0' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.3;
+        }
+
+        [data-theme="dark"] body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        [data-theme="dark"] body::before {
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--bg-primary);
+            border: 2px solid var(--border);
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .login-container {
+            background: var(--bg-primary);
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            padding: 3rem;
+            width: 100%;
+            max-width: 400px;
+            position: relative;
+            z-index: 2;
+            border: 1px solid var(--border);
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-align: center;
+            margin-bottom: 2rem;
+            letter-spacing: -0.02em;
+            position: relative;
+        }
+
+        .logo::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 2px;
+            background: var(--gradient-primary);
+            border-radius: 1px;
+        }
+
+        .login-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .alert {
+            padding: 1.25rem;
+            margin: 1.5rem 0;
+            border-radius: 8px;
+            border: 1px solid;
+            position: relative;
+        }
+
+        .alert-error {
+            background-color: var(--error-bg);
+            border-color: var(--error-border);
+            color: var(--error);
+        }
+
+        .alert h3 {
+            margin: 0 0 0.75rem 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .alert p {
+            margin: 0.5rem 0;
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+
+        .alert em {
+            font-style: italic;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 0.875rem 1.75rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            margin: 0.5rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-google {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 2px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .btn-google:hover {
+            background: var(--bg-secondary);
+            border-color: var(--primary);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-google::before {
+            content: '🔐';
+            font-size: 1.2rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Skool Authentication Styles */
+        .skool-auth-section {
+            margin: 2rem 0;
+        }
+
+        .auth-instructions {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .instruction-steps {
+            margin-top: 1rem;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+            gap: 1rem;
+        }
+
+        .step:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-number {
+            background: var(--primary);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-content strong {
+            color: var(--text-primary);
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .auth-help {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1.5rem;
+            border: 1px solid var(--border);
+        }
+
+        .auth-help h4 {
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .auth-help ul {
+            margin: 0;
+            padding-left: 1.2rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .auth-help li {
+            margin-bottom: 0.25rem;
+        }
+
+        .divider {
+            text-align: center;
+            margin: 2rem 0;
+            position: relative;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .divider span {
+            background: var(--bg-primary);
+            padding: 0 1rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .alert-success {
+            background-color: #f0fdf4;
+            border-color: #bbf7d0;
+            color: #166534;
+        }
+
+        [data-theme="dark"] .alert-success {
+            background-color: #0f2315;
+            border-color: #166534;
+            color: #22c55e;
+        }
+
+        @media (max-width: 768px) {
+            .login-container {
+                margin: 1rem;
+                padding: 2rem;
+            }
+            .logo { font-size: 1.75rem; }
+            .login-title { font-size: 1.25rem; }
+            
+            .auth-instructions {
+                padding: 1rem;
+            }
+            
+            .step {
+                gap: 0.75rem;
+            }
+            
+            .step-content strong {
+                font-size: 0.9rem;
+            }
+            
+            .step-content p {
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+
+    <div class="login-container fade-in">
+        <div class="logo">MyUltra.Coach</div>
+
+        <h1 class="login-title"><%= title || 'Welcome Back' %></h1>
+
+        <% if (typeof isSkoolAuth !== 'undefined' && isSkoolAuth) { %>
+            <p class="login-subtitle">
+                Access your personalized Vagus Nerve Stimulation coaching platform through your Skool community membership.
+            </p>
+        <% } else { %>
+            <p class="login-subtitle">
+                Sign in to access your personalized ultrasound coaching dashboard and continue your professional development journey.
+            </p>
+        <% } %>
+
+        <% if (typeof error !== 'undefined' && error) { %>
+            <div class="alert alert-error">
+                <h3><%= error %></h3>
+                <p><%= message %></p>
+                <% if (typeof actionUrl !== 'undefined' && actionUrl) { %>
+                    <a href="<%= actionUrl %>" class="btn btn-primary" target="_blank"><%= actionText %></a>
+                    <p><em>After sending your DM, return here and click the link you receive.</em></p>
+                <% } %>
+            </div>
+        <% } %>
+
+        <% if (typeof message !== 'undefined' && message && !error) { %>
+            <div class="alert alert-success">
+                <p><%= message %></p>
+            </div>
+        <% } %>
+
+        <% if (typeof isSkoolAuth !== 'undefined' && isSkoolAuth) { %>
+            <!-- Skool Authentication Flow -->
+            <div class="skool-auth-section">
+                <div class="auth-instructions">
+                    <h3 style="color: var(--primary); margin-bottom: 1rem; font-size: 1.1rem;">
+                        🔐 Skool Community Login
+                    </h3>
+                    <div class="instruction-steps">
+                        <div class="step">
+                            <span class="step-number">1</span>
+                            <div class="step-content">
+                                <strong>Open Skool</strong>
+                                <p>Go to the Vagus community on Skool</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <span class="step-number">2</span>
+                            <div class="step-content">
+                                <strong>Send a DM</strong>
+                                <p>Message <strong>@MyUltraCoach</strong> with the word <strong>"ACCESS"</strong></p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <span class="step-number">3</span>
+                            <div class="step-content">
+                                <strong>Click Your Link</strong>
+                                <p>You'll receive a secure login link valid for 30 minutes</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <a href="https://www.skool.com/@my-ultra-coach-6588" class="btn btn-primary" target="_blank">
+                    📱 Open Skool & Send DM
+                </a>
+
+                <div class="auth-help">
+                    <h4>Having trouble?</h4>
+                    <ul>
+                        <li>Make sure you're a member of the Vagus Skool community</li>
+                        <li>Check that you're messaging the correct account: @MyUltraCoach</li>
+                        <li>Links expire after 30 minutes - request a new one if needed</li>
+                        <li>You can request up to 5 codes per day</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="divider">
+                <span>or</span>
+            </div>
+        <% } %>
+
+        <a href="/auth/google" class="btn btn-google">Continue with Google</a>
+
+        <div style="text-align: center; margin-top: 2rem;">
+            <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                New to MyUltra.Coach?
+                <a href="/auth/register" style="color: var(--primary); text-decoration: none; font-weight: 500;">
+                    Start your journey
+                </a>
+            </p>
+        </div>
     </div>
-  <% } else { %>
-    <a href="/auth/google" class="btn-google">Sign in with Google</a>
-  <% } %>
-</section>
 
-<style>
-.alert {
-  padding: 20px;
-  margin: 20px 0;
-  border-radius: 8px;
-  border: 1px solid;
-}
+    <script>
+        // Theme management
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            const toggle = document.querySelector('.theme-toggle');
+            toggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
 
-.alert-error {
-  background-color: #fef2f2;
-  border-color: #fecaca;
-  color: #b91c1c;
-}
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
 
-.alert h3 {
-  margin: 0 0 10px 0;
-  font-size: 1.2em;
-  font-weight: bold;
-}
+        // Initialize theme based on time or preference
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                setTheme(savedTheme);
+            } else {
+                const hour = new Date().getHours();
+                const isNightTime = hour < 6 || hour > 18;
+                setTheme(isNightTime ? 'dark' : 'light');
+            }
+        }
 
-.alert p {
-  margin: 10px 0;
-  line-height: 1.5;
-}
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeTheme();
 
-.btn {
-  display: inline-block;
-  padding: 12px 24px;
-  margin: 10px 0;
-  text-decoration: none;
-  border-radius: 6px;
-  font-weight: 500;
-  text-align: center;
-}
+            // Add fade-in animation
+            setTimeout(() => {
+                document.querySelector('.login-container').classList.add('visible');
+            }, 100);
+        });
 
-.btn-primary {
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-}
-
-.btn-primary:hover {
-  background-color: #2563eb;
-}
-</style> 
+        // Keyboard shortcut for theme toggle
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 't' && e.ctrlKey) {
+                e.preventDefault();
+                toggleTheme();
+            }
+        });
+    </script>
+</body>
+</html> 

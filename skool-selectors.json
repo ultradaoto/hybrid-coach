@@ -1,0 +1,627 @@
+{
+  "login": {
+    "emailInput": {
+      "selector": "#email",
+      "description": "Email input field on login page",
+      "alternatives": [
+        "input[type='email']",
+        "[placeholder*='email' i]"
+      ]
+    },
+    "passwordInput": {
+      "selector": "#password",
+      "description": "Password input field on login page",
+      "alternatives": [
+        "input[type='password']",
+        "[placeholder*='password' i]"
+      ]
+    },
+    "submitButton": {
+      "selector": "button[type='submit']",
+      "description": "Login submit button",
+      "alternatives": [
+        "button:has-text('Log in')",
+        "button:has-text('Sign in')"
+      ]
+    }
+  },
+  "navigation": {
+    "messagesLink": {
+      "selector": "a[href*='messages']",
+      "description": "Main navigation link to messages",
+      "alternatives": [
+        "a:has-text('Messages')",
+        "[aria-label*='message' i]"
+      ]
+    },
+    "profileLink": {
+      "selector": "a[href*='@my-ultra-coach-6588']",
+      "description": "Link to My Ultra Coach profile",
+      "alternatives": [
+        "a:has-text('My Ultra Coach')",
+        "[href*='my-ultra-coach']"
+      ]
+    }
+  },
+  "messages": {
+    "conversationList": {
+      "selector": "[class*='conversation'], [class*='chat'], [data-testid*='conversation']",
+      "description": "List of conversation items in messages inbox",
+      "alternatives": [
+        "[role='listitem']",
+        ".message-thread"
+      ]
+    },
+    "messageInput": {
+      "selector": "input[placeholder*='message' i], textarea[placeholder*='message' i], [contenteditable='true']",
+      "description": "Message input field",
+      "alternatives": [
+        "[role='textbox']",
+        ".message-input",
+        "[data-testid*='input']"
+      ]
+    },
+    "sendButton": {
+      "selector": "button[aria-label*='send' i], button:has-text('Send')",
+      "description": "Send message button",
+      "alternatives": [
+        "[data-testid*='send']",
+        ".send-button",
+        "button[type='submit']"
+      ]
+    },
+    "messageItem": {
+      "selector": "[class*='message'], [class*='Message'], [data-testid*='message']",
+      "description": "Individual message items in conversation",
+      "alternatives": [
+        "[role='article']",
+        ".chat-message",
+        ".message-bubble"
+      ]
+    },
+    "lastMessage": {
+      "selector": "[class*='message']:last-child, [class*='Message']:last-child",
+      "description": "Most recent message in conversation",
+      "alternatives": [
+        ".message-thread > div:last-child",
+        ".messages > *:last-child"
+      ]
+    }
+  },
+  "profile": {
+    "messageButton": {
+      "selector": "button:has-text('Message'), button:has-text('Chat'), button:has-text('DM')",
+      "description": "Message button on profile pages",
+      "alternatives": [
+        "[aria-label*='message' i]",
+        ".message-btn",
+        "[data-action='message']"
+      ]
+    },
+    "profileName": {
+      "selector": "h1, [class*='ProfileName'], [class*='UserName'], [class*='profile-name']",
+      "description": "Profile display name",
+      "alternatives": [
+        "[data-testid*='name']",
+        ".profile-title",
+        ".user-name"
+      ]
+    },
+    "profileBio": {
+      "selector": "[class*='bio'], [class*='description'], .profile-description",
+      "description": "Profile bio/description text",
+      "alternatives": [
+        "[data-testid*='bio']",
+        ".about",
+        ".profile-info"
+      ]
+    }
+  },
+  "common": {
+    "loadingSpinner": {
+      "selector": "[class*='loading'], [class*='spinner'], [aria-label*='loading' i]",
+      "description": "Loading indicators",
+      "alternatives": [
+        ".loader",
+        "[data-testid*='loading']",
+        "[role='progressbar']"
+      ]
+    },
+    "modal": {
+      "selector": "[role='dialog'], [class*='modal'], [class*='popup']",
+      "description": "Modal dialogs and popups",
+      "alternatives": [
+        ".overlay",
+        "[data-testid*='modal']",
+        ".dialog"
+      ]
+    },
+    "closeButton": {
+      "selector": "button[aria-label*='close' i], button:has-text('×'), button:has-text('Close')",
+      "description": "Close buttons for modals and popups",
+      "alternatives": [
+        ".close-btn",
+        "[data-action='close']",
+        ".modal-close"
+      ]
+    }
+  },
+  "chat-close-button": {
+    "selector": "path",
+    "description": "❌ Chat Close Button (X) - marked via right-click menu",
+    "timestamp": "2025-08-22T07:25:54.262Z"
+  },
+  "conversation-item": {
+    "selector": ".styled__Paragraph-sc-y5pp90-3",
+    "description": "Conversation Item - marked via right-click menu",
+    "timestamp": "2025-08-22T06:35:04.962Z"
+  },
+  "username": {
+    "selector": "text=\"Sterling Cooley\"",
+    "description": "🏷️ Username Text - marked via right-click menu",
+    "timestamp": "2025-08-22T07:00:22.078Z"
+  },
+  "user-avatar": {
+    "selector": "img",
+    "description": "👤 User Avatar Image - marked via right-click menu",
+    "timestamp": "2025-08-22T07:00:29.704Z"
+  },
+  "message-input": {
+    "selector": ".styled__MultiLineInput-sc-1saiqqb-2",
+    "description": "📝 Message Input Field - marked via right-click menu",
+    "timestamp": "2025-08-22T07:24:09.723Z"
+  },
+  "chat-open-button": {
+    "selector": "svg",
+    "description": "💬 Chat Open Button - marked via right-click menu",
+    "timestamp": "2025-08-22T07:46:03.146Z"
+  },
+  "chat-window": {
+    "selector": ".styled__DropdownContent-sc-13jov82-1",
+    "description": "🪟 Chat Window Container - marked via right-click menu",
+    "timestamp": "2025-08-22T06:57:00.234Z"
+  },
+  "conversation-preview": {
+    "selector": ".styled__MessageContent-sc-5xhq84-9",
+    "description": "👁️ Conversation Preview Text - marked via right-click menu",
+    "timestamp": "2025-08-22T06:57:14.934Z"
+  },
+  "read-status": {
+    "selector": ".styled__ReadButton-sc-5xhq84-1",
+    "description": "✓ Message Read Status - marked via right-click menu",
+    "timestamp": "2025-08-22T06:57:27.344Z"
+  },
+  "dropdown-menu": {
+    "selector": "path",
+    "description": "📋 Dropdown Menu - marked via right-click menu",
+    "timestamp": "2025-08-22T06:58:27.659Z"
+  },
+  "timestamp": {
+    "selector": ".styled__TypographyWrapper-sc-70zmwu-0",
+    "description": "🕐 Message Timestamp - marked via right-click menu",
+    "timestamp": "2025-08-22T06:59:15.861Z"
+  },
+  "message-bubble": {
+    "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+    "description": "💬 Message Bubble Container - marked via right-click menu",
+    "timestamp": "2025-08-22T06:59:51.173Z"
+  },
+  "message-text": {
+    "selector": ".styled__MultiLineInput-sc-1saiqqb-2",
+    "description": "💭 Message Text Content - marked via right-click menu",
+    "timestamp": "2025-08-22T07:24:35.394Z"
+  },
+  "profile-link": {
+    "selector": "img",
+    "description": "🔗 Profile Link - marked via right-click menu",
+    "timestamp": "2025-08-22T07:00:33.052Z"
+  },
+  "mail-icon-normal": {
+    "selector": {
+      "selector": "svg",
+      "alternativeSelectors": [],
+      "description": "📧 Mail Icon (Normal - No Unread) - marked via right-click menu",
+      "timestamp": "2025-08-22T07:54:13.654Z",
+      "analysis": {
+        "basic": {
+          "tagName": "svg",
+          "id": "none",
+          "className": {},
+          "textContent": "none",
+          "innerHTML": "<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M36.072 20.0398C36.4522 18.5322 36.5226 16.6598 36.5217 13.913C36.5226 11.1663 36.4522 9.29391 36.072 7.78619C35.7739 6.4101 35.6057 6.03388 34.7659 5."
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1347.75,
+            "y": 20.75,
+            "width": 22.5,
+            "height": 22.5,
+            "top": 20.75,
+            "right": 1370.25,
+            "bottom": 43.25,
+            "left": 1347.75
+          },
+          "offsetParent": "none",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 23,
+            "height": 23
+          }
+        },
+        "attributes": {
+          "viewBox": "0 0 40 34",
+          "fill": "currentColor",
+          "xmlns": "http://www.w3.org/2000/svg",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+          "parentId": "none",
+          "grandparentTag": "BUTTON",
+          "grandparentClass": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+          "children": [
+            {
+              "tag": "path",
+              "class": {},
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 107,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 18,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 45,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 100,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-22T07:54:13.656Z"
+  },
+  "mail-icon-unread": {
+    "selector": {
+      "selector": "svg",
+      "alternativeSelectors": [],
+      "description": "🔴 Mail Icon (With Red Badge + Number) - marked via right-click menu",
+      "timestamp": "2025-08-22T07:54:50.324Z",
+      "analysis": {
+        "basic": {
+          "tagName": "svg",
+          "id": "none",
+          "className": {},
+          "textContent": "none",
+          "innerHTML": "<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M36.072 20.0398C36.4522 18.5322 36.5226 16.6598 36.5217 13.913C36.5226 11.1663 36.4522 9.29391 36.072 7.78619C35.7739 6.4101 35.6057 6.03388 34.7659 5."
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1355.25,
+            "y": 20.75,
+            "width": 22.5,
+            "height": 22.5,
+            "top": 20.75,
+            "right": 1377.75,
+            "bottom": 43.25,
+            "left": 1355.25
+          },
+          "offsetParent": "none",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 23,
+            "height": 23
+          }
+        },
+        "attributes": {
+          "viewBox": "0 0 40 34",
+          "fill": "currentColor",
+          "xmlns": "http://www.w3.org/2000/svg",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+          "parentId": "none",
+          "grandparentTag": "BUTTON",
+          "grandparentClass": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+          "children": [
+            {
+              "tag": "path",
+              "class": {},
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 107,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            },
+            {
+              "distance": 150,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 18,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 45,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 100,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-22T07:54:50.326Z"
+  },
+  "chat-popup": {
+    "selector": ".styled__DropdownContent-sc-13jov82-1",
+    "description": "📋 Chat Popup Container - marked via right-click menu",
+    "timestamp": "2025-08-22T07:22:17.576Z"
+  },
+  "conversation-unread": {
+    "selector": ".styled__ReadButton-sc-5xhq84-1",
+    "description": "🔴 Unread Conversation Item - marked via right-click menu",
+    "timestamp": "2025-08-22T07:22:28.782Z"
+  },
+  "message-received-from-user": {
+    "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+    "description": "⬅️ Message Received FROM Other User - marked via right-click menu",
+    "timestamp": "2025-08-22T07:23:18.723Z"
+  },
+  "message-sent-by-us": {
+    "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+    "description": "➡️ Message Sent BY My Ultra Coach - marked via right-click menu",
+    "timestamp": "2025-08-22T07:24:43.772Z"
+  },
+  "timestamp-date": {
+    "selector": ".styled__TypographyWrapper-sc-70zmwu-0",
+    "description": "📅 Date Timestamp (e.g., \"Dec 25, 2024\") - marked via right-click menu",
+    "timestamp": "2025-08-22T07:23:26.873Z"
+  },
+  "timestamp-time": {
+    "selector": ".styled__TypographyWrapper-sc-70zmwu-0",
+    "description": "🕐 Time Timestamp (e.g., \"10:30pm\") - marked via right-click menu",
+    "timestamp": "2025-08-22T07:23:56.915Z"
+  },
+  "user-avatar-us": {
+    "selector": "text=\"My Ultra Coach\"",
+    "description": "👤 My Ultra Coach Avatar - marked via right-click menu",
+    "timestamp": "2025-08-22T07:25:00.772Z"
+  },
+  "user-avatar-them": {
+    "selector": "img",
+    "description": "👥 Other User Avatar - marked via right-click menu",
+    "timestamp": "2025-08-22T07:25:26.973Z"
+  },
+  "username-us": {
+    "selector": "text=\"My Ultra Coach\"",
+    "description": "🏷️ My Ultra Coach Username - marked via right-click menu",
+    "timestamp": "2025-08-22T07:25:11.749Z"
+  },
+  "username-them": {
+    "selector": "text=\"Sterling Cooley\"",
+    "description": "🏷️ Other User Username - marked via right-click menu",
+    "timestamp": "2025-08-22T07:25:20.177Z"
+  },
+  "close-button": {
+    "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
+    "description": "❌ Close Button - marked via right-click menu",
+    "timestamp": "2025-08-22T07:25:50.958Z"
+  },
+  "unread-badge": {
+    "selector": {
+      "selector": "path",
+      "alternativeSelectors": [],
+      "description": "🔴 Unread Count Badge (Red Circle) - marked via right-click menu",
+      "timestamp": "2025-08-22T07:54:53.598Z",
+      "analysis": {
+        "basic": {
+          "tagName": "path",
+          "id": "none",
+          "className": {},
+          "textContent": "none",
+          "innerHTML": "none"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1355.25,
+            "y": 22.4375,
+            "width": 22.5,
+            "height": 18.717269897460938,
+            "top": 22.4375,
+            "right": 1377.75,
+            "bottom": 41.15476989746094,
+            "left": 1355.25
+          },
+          "offsetParent": "none",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
+          "fill-rule": "evenodd",
+          "clip-rule": "evenodd",
+          "d": "M36.072 20.0398C36.4522 18.5322 36.5226 16.6598 36.5217 13.913C36.5226 11.1663 36.4522 9.29391 36.072 7.78619C35.7739 6.4101 35.6057 6.03388 34.7659 5.48327C34.0805 4.96059 32.8176 4.40516 30.3299 4.02195C27.7798 3.62412 24.5033 3.47734 20 3.47826C15.4967 3.47734 12.2202 3.62412 9.67017 4.02195C7.18238 4.40516 5.91953 4.96059 5.2341 5.48327C4.39424 6.03388 4.22603 6.4101 3.92805 7.78619C3.54781 9.29391 3.47736 11.1663 3.47826 13.913C3.47826 17.8282 3.71544 19.8997 4.30826 21.1722C4.70346 22.0205 5.38986 22.8209 7.80563 23.4341C9.27932 23.8082 10.4348 25.1449 10.4348 26.8139V28.2835L15.489 24.9139C15.9469 24.6562 16.9528 24.36 17.4795 24.3289C18.2842 24.3417 19.1144 24.3478 20 24.3478C24.5033 24.3487 27.7798 24.2019 30.3299 23.8042C32.8176 23.4209 34.0805 22.8656 34.7659 22.3428C35.6057 21.7922 35.7739 21.416 36.072 20.0398ZM40 13.913C40 25.2174 38.3334 27.8261 20 27.8261C19.1017 27.8261 18.2433 27.8198 17.4233 27.8066L17.4184 27.808L9.66033 32.9802C8.50459 33.7506 6.95652 32.9221 6.95652 31.533V26.8139C6.95652 26.8099 6.95367 26.8064 6.94981 26.8054C0.764191 25.2353 0 21.5677 0 13.913C0 2.6087 1.66669 0 20 0C38.3334 0 40 2.6087 40 13.913Z",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "inline",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "svg",
+          "parentClass": {},
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 107,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            },
+            {
+              "distance": 148,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 19,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 46,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 100,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-22T07:54:53.602Z"
+  }
+}

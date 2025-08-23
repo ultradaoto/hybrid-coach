@@ -132,3 +132,53 @@ model MembershipStatusHistory {
   changeDetectedAt DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id])
 }
+
+// 🔐 SKOOL AUTHENTICATION SYSTEM
+model AuthCode {
+  id                 String         @id @default(cuid())
+  code               String         @unique // vgs-1703123456789-abc123
+  skoolUserId        String         // From Skool profile
+  skoolUsername      String         // Display name from Skool
+  generatedAt        DateTime       @default(now())
+  expiresAt          DateTime       // 30 minutes from generation
+  usedAt             DateTime?      // When code was consumed (NULL = unused)
+  usedIpAddress      String?        // IP that used the code
+  userAgent          String?        // Browser info
+  deviceFingerprint  String?        // Device identification
+  isActive           Boolean        @default(true)
+  userSessions       UserSession[]  // Sessions created from this code
+
+  @@index([code])
+  @@index([skoolUserId, generatedAt])
+}
+
+model UserSession {
+  id                String    @id @default(cuid())
+  sessionId         String    @unique // Secure random session ID
+  skoolUserId       String    // Links to auth_codes
+  skoolUsername     String    // For display purposes
+  authCodeUsed      String    // Which code created this session
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime  // 30 days from creation
+  lastActive        DateTime  @default(now())
+  ipAddress         String    // Login IP
+  userAgent         String    // Browser info
+  deviceFingerprint String    // Device identification
+  isActive          Boolean   @default(true)
+  authCode          AuthCode  @relation(fields: [authCodeUsed], references: [code])
+
+  @@index([sessionId])
+  @@index([skoolUserId])
+  @@index([expiresAt])
+}
+
+model RateLimit {
+  id              String   @id @default(cuid())
+  skoolUserId     String   // User identifier from Skool
+  requestDate     DateTime // Which day (date only)
+  requestCount    Int      @default(1) // How many codes requested today
+  lastRequestAt   DateTime @default(now()) // Most recent request time
+
+  @@unique([skoolUserId, requestDate])
+  @@index([skoolUserId, requestDate])
+}
