@@ -42,6 +42,12 @@ export async function getOrCreateSessionId(roomId) {
     sessionCache.set(roomId, sessionId);
     return sessionId;
   } catch (err) {
+    // In development without a database, just generate a session ID
+    if (process.env.NODE_ENV === 'development') {
+      const sessionId = uuidv4();
+      sessionCache.set(roomId, sessionId);
+      return sessionId;
+    }
     console.error('Error in getOrCreateSessionId:', err);
     // Return a fallback session ID if database access fails
     return uuidv4();

@@ -8,6 +8,19 @@
     <%- include('partials/room-base-styles') %>
     
     <style>
+        /* Override base styles for proper 3:4 layout */
+        .video-grid {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 2rem;
+            background: #111;
+            overflow-y: auto;
+            flex-wrap: nowrap; /* Keep boxes in a row */
+        }
+        
         /* Client-specific styles - simplified layout */
         .video-panel {
             flex: 1; /* Take full width - no side panel */
@@ -66,44 +79,57 @@
             background: #ffc107;
         }
 
-        /* Larger video display for client */
+        /* 3:4 aspect ratio for all video boxes - override base styles */
+        .video-wrapper {
+            position: relative;
+            width: 300px !important;
+            height: 400px !important;
+            margin: 0 10px;
+            background: #222;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+            border: 3px solid transparent;
+        }
+        
         .video-wrapper video {
-            width: 400px;
-            height: 300px;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover; /* This will crop the video to fit */
+            border-radius: 8px;
+            display: block;
         }
 
-        .ai-avatar-wrapper {
-            width: 400px;
-            height: 300px;
-        }
-
-        .ai-avatar {
-            width: 150px;
-            height: 150px;
-        }
-
-        /* AI Agent Container */
+        /* AI Agent Container - 3:4 ratio */
         .ai-agent-container {
-            width: 400px;
-            height: 300px;
+            width: 100%;
+            height: 100%;
             background: #1a1a1a;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             border: 2px solid #333;
+            position: relative;
+            overflow: hidden;
         }
 
         .ai-agent-container elevenlabs-convai {
             width: 100%;
             height: 100%;
             border-radius: 6px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
 
-        /* Coming Soon Placeholder */
+        /* Coming Soon Placeholder - 3:4 ratio */
         .coming-soon-placeholder {
-            width: 400px;
-            height: 300px;
+            width: 100%;
+            height: 100%;
             background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
             border-radius: 8px;
             display: flex;
@@ -148,17 +174,25 @@
 
         /* Mobile adjustments */
         @media (max-width: 768px) {
+            .video-grid {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .video-wrapper {
+                width: 225px !important;  /* Smaller on mobile but keep 3:4 ratio */
+                height: 300px !important;
+            }
+            
             .video-wrapper video {
-                width: 90vw;
-                max-width: 350px;
-                height: auto;
+                width: 100% !important;
+                height: 100% !important;
             }
             
             .ai-agent-container,
             .coming-soon-placeholder {
-                width: 90vw;
-                max-width: 350px;
-                height: 250px;
+                width: 100%;
+                height: 100%;
             }
 
             .coming-soon-content {
@@ -325,9 +359,10 @@
             }
         };
 
-        // Initialize WebRTC
-        const webrtc = new TriPartyWebRTC(config);
-        webrtc.initialize();
+        // Initialize WebRTC - DISABLED for now since we're using ElevenLabs widget
+        // TODO: Re-enable when we add human coach video support
+        // const webrtc = new TriPartyWebRTC(config);
+        // webrtc.initialize();
 
         // UI Functions
         function updateStatus(message, type = 'info') {
@@ -426,12 +461,31 @@
             }
         }
 
-        // Media Controls
+        // Media Controls - Local only for now
+        let localStream = null;
+        
+        // Get user media for local video
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then(stream => {
+                localStream = stream;
+                document.getElementById('localVideo').srcObject = stream;
+                updateConnectionStatus('Camera Connected', 'good');
+            })
+            .catch(err => {
+                console.error('Error accessing media devices:', err);
+                updateStatus('Camera/microphone access denied', 'error');
+                updateConnectionStatus('No Camera', 'poor');
+            });
+        
         document.getElementById('toggleVideo').addEventListener('click', () => {
             const btn = document.getElementById('toggleVideo');
             const isEnabled = !btn.classList.contains('active');
             
-            webrtc.toggleVideo(!isEnabled);
+            if (localStream) {
+                localStream.getVideoTracks().forEach(track => {
+                    track.enabled = !isEnabled;
+                });
+            }
             btn.classList.toggle('active');
             btn.textContent = isEnabled ? '📹 Video Off' : '📹 Video';
         });
@@ -440,12 +494,16 @@
             const btn = document.getElementById('toggleAudio');
             const isEnabled = !btn.classList.contains('active');
             
-            webrtc.toggleAudio(!isEnabled);
+            if (localStream) {
+                localStream.getAudioTracks().forEach(track => {
+                    track.enabled = !isEnabled;
+                });
+            }
             btn.classList.toggle('active');
             btn.textContent = isEnabled ? '🎤 Muted' : '🎤 Audio';
         });
 
-        // Raise Hand feature
+        // Raise Hand feature (visual only for now)
         let handRaised = false;
         document.getElementById('raiseHand').addEventListener('click', () => {
             const btn = document.getElementById('raiseHand');
@@ -454,14 +512,8 @@
             btn.classList.toggle('active');
             btn.textContent = handRaised ? '✋ Hand Raised' : '✋ Raise Hand';
             
-            // Send hand raise status to coach
-            webrtc.sendWebSocketMessage({
-                type: 'client_signal',
-                action: 'hand_raised',
-                value: handRaised
-            });
-            
-            updateStatus(handRaised ? 'Hand raised - coach will be notified' : 'Hand lowered', 'info');
+            // TODO: Send hand raise status when WebSocket is enabled
+            updateStatus(handRaised ? 'Hand raised (feature coming soon)' : 'Hand lowered', 'info');
         });
 
         // Initialize connection status
@@ -478,7 +530,9 @@
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
-            webrtc.disconnect();
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
         });
 
         // Client-specific welcome message and AI setup
