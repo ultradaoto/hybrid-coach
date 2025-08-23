@@ -529,7 +529,7 @@
         <%- include('partials/membership-warning') %>
 
         <!-- Hero Section - Primary Action -->
-        <div class="hero-section fade-in" style="display: block !important; visibility: visible !important;">
+        <div class="hero-section" style="display: block !important; visibility: visible !important; opacity: 1 !important;">
             <div class="hero-content">
                 <h1 class="hero-title">🎯 Ready for Your Coaching Session?</h1>
                 <p class="hero-subtitle">Your AI Ultra Coach is always available for personalized voice coaching and guidance.</p>
@@ -803,6 +803,14 @@
         document.addEventListener('DOMContentLoaded', () => {
             initializeTheme();
 
+            // Make hero section visible immediately
+            const heroSection = document.querySelector('.hero-section');
+            if (heroSection) {
+                heroSection.style.opacity = '1';
+                heroSection.style.visibility = 'visible';
+                heroSection.style.display = 'block';
+            }
+
             // Add fade-in animations for cards
             const observerOptions = {
                 threshold: 0.1,
@@ -817,8 +825,11 @@
                 });
             }, observerOptions);
 
-            document.querySelectorAll('.card, .alert').forEach(el => {
-                el.classList.add('fade-in');
+            // Observe cards, alerts, AND the hero section
+            document.querySelectorAll('.card, .alert, .hero-section').forEach(el => {
+                if (!el.classList.contains('fade-in')) {
+                    el.classList.add('fade-in');
+                }
                 fadeInObserver.observe(el);
             });
 
