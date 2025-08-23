@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { ensureAuthenticated } from '../middlewares/auth.js';
+import { requireSkoolAuth, checkSkoolAuth } from '../middlewares/skoolAuthMiddleware.js';
 import { randomUUID } from 'crypto';
 import { issueToken } from '../middlewares/jwtAuth.js';
 import { prisma } from '../lib/prisma.js';
@@ -9,181 +9,85 @@ import { orbManager } from '../services/OrbManager.js';
 
 const router = Router();
 
-router.get('/create', ensureAuthenticated, async (req, res, next) => {
+// Apply Skool auth check to all room routes
+router.use(checkSkoolAuth);
+
+router.get('/create', requireSkoolAuth, async (req, res, next) => {
   try {
     const roomId = randomUUID();
 
-    let coachId;
-    let clientId;
+    // For Skool users, we'll create a simpler room system
+    // All Skool users are clients, and we don't need coach/client distinction yet
+    const skoolUserId = req.skoolUser.skoolUserId;
+    const skoolUsername = req.skoolUser.skoolUsername;
 
-    if (req.user.role === 'coach') {
-      coachId = req.user.id;
-      // Pick any client (for quick testing) other than coach
-      const client = await prisma.user.findFirst({ where: { role: 'client' } });
-      clientId = client ? client.id : req.user.id; // fallback self
-    } else {
-      clientId = req.user.id;
-      const coach = await prisma.user.findFirst({ where: { role: 'coach' } });
-      coachId = coach ? coach.id : req.user.id; // fallback self
-    }
+    // Create a simplified appointment record for Skool users
+    console.log(`🏠 Creating room for Skool user: ${skoolUsername} (${skoolUserId})`);
 
-    const appointment = await prisma.appointment.create({
-      data: {
-        scheduledFor: new Date(),
-        durationMin: 30,
-        clientId,
-        coachId,
-        roomId,
-        status: 'active',
-      },
-    });
+    // For now, just use the Skool user ID as both client and coach
+    // This will be enhanced later when we add human coaches
+    const clientId = skoolUserId;
+    const coachId = 'ai-coach'; // Placeholder for AI coach
 
-    res.redirect(`/room/${appointment.roomId}`);
+    // For Skool users, skip appointment creation for now
+    // Just redirect directly to the room
+    console.log(`🚀 Redirecting to room: ${roomId}`);
+    res.redirect(`/room/${roomId}`);
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
+router.get('/:roomId', requireSkoolAuth, async (req, res, next) => {
   const { roomId } = req.params;
-  const token = issueToken(req.user);
+  
+  // Create a simple token for Skool users
+  const token = {
+    userId: req.skoolUser.skoolUserId,
+    username: req.skoolUser.skoolUsername,
+    role: 'client'
+  };
 
   try {
-    // 1. Find appointment by roomId
-    const appointment = await prisma.appointment.findUnique({ where: { roomId } });
-    if (!appointment) return res.status(404).send('Room not found');
+    // For Skool users, we'll create a simplified room system
+    // Skip appointment validation for now - any authenticated Skool user can access any room
+    console.log(`🏠 Skool user ${req.skoolUser.skoolUsername} accessing room ${roomId}`);
 
-    // 2. Verify current user is part of this appointment
-    const isParticipant = [appointment.clientId, appointment.coachId].includes(req.user.id);
-    if (!isParticipant) {
-      // If appointment currently has coachId placeholder as clientId, allow first real client to claim
-      if (req.user.role === 'client' && appointment.clientId === appointment.coachId) {
-        await prisma.appointment.update({
-          where: { id: appointment.id },
-          data: { clientId: req.user.id },
-        });
-      } else {
-        return res.status(403).send('You are not part of this appointment');
-      }
-    }
-
-    // 3. Get or create SHARED session ID for the room (for AI coordination)
-    // This ensures both coach and client use the same sessionId for AI coordination
+    // Get or create session ID for the room
     const sessionId = await getOrCreateSessionId(roomId);
     
-    // Create user-specific session record for tracking (each user gets their own session record)
-    const session = await prisma.session.upsert({
-      where: { appointment_user: { appointmentId: appointment.id, userId: req.user.id } },
-      create: {
-        roomId,
-        appointmentId: appointment.id,
-        userId: req.user.id,
-      },
-      update: {},
-    });
+    // For Skool users, we'll track sessions differently (future enhancement)
+    console.log(`🔑 Session ID for room ${roomId}: ${sessionId}`);
 
-    // 4. 🎯 CLIENT CONTEXT: Load client profile and coach information
-    let clientProfile = null;
-    let coachProfile = null;
+    // For Skool users, we'll implement simpler client profile tracking later
+    console.log(`👤 Loading room for Skool client: ${req.skoolUser.skoolUsername}`);
     
-    try {
-      // Get client and coach from appointment
-      const appointmentWithUsers = await prisma.appointment.findUnique({
-        where: { id: appointment.id },
-        include: {
-          client: {
-            include: { profile: true }
-          },
-          coach: {
-            include: { profile: true }
-          }
-        }
-      });
-      
-      if (appointmentWithUsers) {
-        // For AI context, we need the CLIENT's profile (regardless of who's viewing)
-        const client = appointmentWithUsers.client;
-        const coach = appointmentWithUsers.coach;
-        
-        // Load or create client profile
-        clientProfile = await prisma.profile.upsert({
-          where: { userId: client.id },
-          create: {
-            userId: client.id,
-            clientFacts: [],
-            challenges: [],
-            preferences: null,
-            lastSummary: null,
-            contextNotes: null
-          },
-          update: {} // Don't overwrite existing data
-        });
-        
-        // Load coach profile too
-        coachProfile = coach.profile;
-        
-        console.log(`[ROOM] 🎯 Loaded client context for ${client.displayName}: ${clientProfile.clientFacts.length} facts, ${clientProfile.challenges.length} challenges`);
-      }
-    } catch (profileError) {
-      console.error('[ROOM] ❌ Error loading client profile:', profileError);
-      // Continue without profile - don't break the session
-    }
+    // Skip complex OrbManager for now - we'll use ElevenLabs widget instead
+    const orbExists = false; // We'll handle AI agent differently
 
-    // 5. 🤖 AI ORB MANAGEMENT: Start AI orb spawn process (non-blocking)
-    let orbExists = false;
-    try {
-      // Track participant joining
-      orbManager.trackParticipantJoin(roomId, req.user.id, req.user.role);
-
-      // Only spawn AI orb when a COACH joins the room
-      if (req.user.role === 'coach' && !orbManager.hasOrbForRoom(roomId)) {
-        console.log(`[ROOM] 👨‍🏫 Coach joined room ${roomId}, starting AI Orb spawn (non-blocking)`);
-        
-        // Start orb spawning asynchronously - don't wait for it
-        orbManager.spawnOrb(roomId, sessionId, appointment)
-          .then(spawnResult => {
-            console.log(`[ROOM] 🚀 AI Orb spawn completed:`, spawnResult?.status || 'unknown');
-          })
-          .catch(spawnError => {
-            console.error('[ROOM] ❌ AI Orb spawn failed:', spawnError);
-          });
-        
-        console.log(`[ROOM] ➡️ Coach proceeding to room while orb initializes in background`);
-        
-      } else if (req.user.role === 'coach' && orbManager.hasOrbForRoom(roomId)) {
-        console.log(`[ROOM] 🔄 Coach rejoined room ${roomId}, orb already exists`);
-        orbExists = true;
-      } else if (req.user.role === 'client' && !orbManager.hasOrbForRoom(roomId)) {
-        console.log(`[ROOM] 👤 Client joined room ${roomId}, waiting for coach to start AI session`);
-      } else {
-        console.log(`[ROOM] 👤 Client joined room ${roomId}, AI orb already active with coach supervision`);
-        orbExists = true;
-      }
-    } catch (orbError) {
-      console.error('[ROOM] ❌ Error in orb management:', orbError);
-      // Continue without AI if spawn fails - don't break the session
-    }
-
-    // 6. 🎭 ROLE-SPECIFIC RENDERING: Serve appropriate view
+    // Prepare view data for Skool users
     const viewData = {
-      title: req.user.role === 'coach' ? 'Coach Dashboard - AI Hybrid Coaching' : 'Coaching Session',
+      title: 'AI Coaching Session - MyUltra.Coach',
       roomId,
-      user: req.user,
+      user: {
+        id: req.skoolUser.skoolUserId,
+        displayName: req.skoolUser.skoolUsername,
+        email: req.skoolUser.skoolUserId + '@skool.user',
+        role: 'client'
+      },
       jwt: token,
       sessionId: sessionId,
-      clientProfile: clientProfile,
-      coachProfile: coachProfile,
-      appointment: appointment,
-      orbStatus: orbManager.getOrbStatus(roomId),
-      orbExists: orbExists
+      clientProfile: null, // Will implement later
+      coachProfile: null,  // Will implement later
+      appointment: null,   // Simplified for Skool users
+      orbStatus: null,     // Using ElevenLabs instead
+      orbExists: orbExists,
+      elevenlabsAgentId: process.env.ELEVENLABS_AGENT_ID || 'agent_01jy88zv6zfe1a9v9zdxt69abd'
     };
 
-    // Render role-specific view
-    if (req.user.role === 'coach') {
-      res.render('room-coach', viewData);
-    } else {
-      res.render('room-client', viewData);
-    }
+    // All Skool users get the client view for now
+    console.log(`🎬 Rendering room-client view for ${req.skoolUser.skoolUsername}`);
+    res.render('room-client', viewData);
   } catch (err) {
     next(err);
   }
@@ -191,19 +95,30 @@ router.get('/:roomId', ensureAuthenticated, async (req, res, next) => {
 
 
 // Add a new route for the fallback room
-router.get('/:roomId/fallback', ensureAuthenticated, async (req, res) => {
+router.get('/:roomId/fallback', requireSkoolAuth, async (req, res) => {
   const { roomId } = req.params;
     // Generate a JWT token for the room with a 2-hour expiration
-  const jwt = generateJwtWithExpiry(req.user, '2h');
-    // Get or create a session ID for the room
+  // Simple token for Skool users
+  const jwt = {
+    userId: req.skoolUser.skoolUserId,
+    username: req.skoolUser.skoolUsername,
+    role: 'client'
+  };
+  
+  // Get or create a session ID for the room
   const sessionId = await getOrCreateSessionId(roomId);
-    // Render the fallback room template
+  
+  // Render the fallback room template
   res.render('room-fallback', {
-     title: 'Coaching Call',
+    title: 'Coaching Call',
     roomId,
     jwt,
     sessionId,
-    user: req.user
+    user: {
+      id: req.skoolUser.skoolUserId,
+      displayName: req.skoolUser.skoolUsername,
+      email: req.skoolUser.skoolUserId + '@skool.user'
+    }
   });
 });
 

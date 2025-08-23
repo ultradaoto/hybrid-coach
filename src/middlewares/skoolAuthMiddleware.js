@@ -73,6 +73,18 @@ async function checkSkoolAuth(req, res, next) {
  * Redirects to login page if not authenticated
  */
 function requireSkoolAuth(req, res, next) {
+    // 🔧 DEVELOPMENT BYPASS: Skip auth in development mode
+    if (process.env.NODE_ENV === 'development' && process.env.BYPASS_AUTH === 'true') {
+        console.log(`🛠️ DEVELOPMENT MODE: Bypassing Skool authentication`);
+        // Create a mock Skool user for development
+        req.skoolUser = {
+            skoolUserId: 'dev_user_123',
+            skoolUsername: 'Developer User',
+            sessionId: 'dev_session_123'
+        };
+        return next();
+    }
+    
     console.log(`🔐 requireSkoolAuth check: req.skoolUser = ${!!req.skoolUser}`);
     console.log(`🍪 Available cookies:`, req.cookies);
     console.log(`🔑 Session cookie: ${req.cookies?.skoolSessionId}`);
