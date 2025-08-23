@@ -395,6 +395,86 @@
             color: #ef4444;
         }
 
+        /* Hero Section Styles */
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            animation: drift 20s infinite linear;
+        }
+
+        @keyframes drift {
+            0% { transform: rotate(0deg) translate(-20px, -20px); }
+            100% { transform: rotate(360deg) translate(-20px, -20px); }
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 1rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .hero-subtitle {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .btn-hero {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1.5rem 2.5rem;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 1.4rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-hero:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .btn-hero-subtitle {
+            font-size: 0.9rem;
+            font-weight: 400;
+            opacity: 0.8;
+            margin-top: 0.5rem;
+        }
+
         @media (max-width: 768px) {
             .dashboard-container { padding: 1rem; }
             .header { padding: 1.5rem 1rem; }
@@ -403,6 +483,26 @@
                 flex-direction: column;
                 align-items: flex-start;
                 gap: 1rem;
+            }
+            
+            /* Hero Section Mobile */
+            .hero-section {
+                padding: 2rem 1.5rem;
+                margin-bottom: 1.5rem;
+            }
+            
+            .hero-title {
+                font-size: 2rem;
+            }
+            
+            .hero-subtitle {
+                font-size: 1rem;
+                margin-bottom: 1.5rem;
+            }
+            
+            .btn-hero {
+                font-size: 1.2rem;
+                padding: 1.25rem 2rem;
             }
         }
     </style>
@@ -427,6 +527,18 @@
 
         <!-- Include membership warning component -->
         <%- include('partials/membership-warning') %>
+
+        <!-- Hero Section - Primary Action -->
+        <div class="hero-section fade-in">
+            <div class="hero-content">
+                <h1 class="hero-title">🎯 Ready for Your Coaching Session?</h1>
+                <p class="hero-subtitle">Connect instantly with your AI-powered Ultra Coach for personalized guidance and support.</p>
+                <a href="/room/create" class="btn-hero">
+                    🎤 Speak to Your Ultra Coach
+                    <span class="btn-hero-subtitle">Start your voice coaching session now</span>
+                </a>
+            </div>
+        </div>
 
         <% if (user.role === 'coach') { %>
             <!-- Auto-refresh for coaches every 10 seconds -->

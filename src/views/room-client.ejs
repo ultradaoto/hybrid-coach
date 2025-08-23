@@ -82,6 +82,70 @@
             height: 150px;
         }
 
+        /* AI Agent Container */
+        .ai-agent-container {
+            width: 400px;
+            height: 300px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #333;
+        }
+
+        .ai-agent-container elevenlabs-convai {
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+        }
+
+        /* Coming Soon Placeholder */
+        .coming-soon-placeholder {
+            width: 400px;
+            height: 300px;
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #718096;
+            opacity: 0.7;
+        }
+
+        .coming-soon-content {
+            text-align: center;
+            color: #e2e8f0;
+            padding: 2rem;
+        }
+
+        .coming-soon-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.8;
+        }
+
+        .coming-soon-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+            color: #f7fafc;
+        }
+
+        .coming-soon-subtitle {
+            font-size: 1rem;
+            color: #ffd700;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .coming-soon-description {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            line-height: 1.4;
+            max-width: 200px;
+        }
+
         /* Mobile adjustments */
         @media (max-width: 768px) {
             .video-wrapper video {
@@ -90,10 +154,31 @@
                 height: auto;
             }
             
-            .ai-avatar-wrapper {
+            .ai-agent-container,
+            .coming-soon-placeholder {
                 width: 90vw;
                 max-width: 350px;
                 height: 250px;
+            }
+
+            .coming-soon-content {
+                padding: 1rem;
+            }
+
+            .coming-soon-icon {
+                font-size: 2.5rem;
+            }
+
+            .coming-soon-title {
+                font-size: 1rem;
+            }
+
+            .coming-soon-subtitle {
+                font-size: 0.9rem;
+            }
+
+            .coming-soon-description {
+                font-size: 0.75rem;
             }
         }
     </style>
@@ -144,19 +229,25 @@
                     <div class="video-label">You</div>
                 </div>
 
-                <!-- Remote video (Coach) -->
+                <!-- Remote video (Coach) - Coming Soon -->
                 <div class="video-wrapper">
-                    <video id="remoteVideo" autoplay playsinline></video>
-                    <div class="video-label" id="remoteLabel">Waiting for coach...</div>
+                    <div class="coming-soon-placeholder" id="coachPlaceholder">
+                        <div class="coming-soon-content">
+                            <div class="coming-soon-icon">👨‍🏫</div>
+                            <div class="coming-soon-title">Human Coach</div>
+                            <div class="coming-soon-subtitle">Feature Coming Soon</div>
+                            <div class="coming-soon-description">3-way sessions with professional coaches will be available in the future</div>
+                        </div>
+                    </div>
+                    <div class="video-label">👨‍🏫 Human Coach</div>
                 </div>
 
-                <!-- AI Video -->
+                <!-- AI Voice Agent -->
                 <div class="video-wrapper">
-                    <video id="aiVideo" autoplay playsinline style="display: none;"></video>
-                    <div class="ai-video-placeholder" id="aiPlaceholder">
-                        Waiting for AI Coach...
+                    <div class="ai-agent-container" id="aiAgentContainer">
+                        <elevenlabs-convai agent-id="<%= elevenlabsAgentId || 'agent_01jy88zv6zfe1a9v9zdxt69abd' %>"></elevenlabs-convai>
                     </div>
-                    <div class="video-label">AI Coach</div>
+                    <div class="video-label">🤖 Ultra Coach AI</div>
                 </div>
             </div>
 
@@ -172,6 +263,9 @@
     <!-- Status notifications -->
     <div id="status" class="status" style="display: none;"></div>
 
+    <!-- Include ElevenLabs ConvAI Widget -->
+    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+    
     <!-- Include Socket.IO client -->
     <script src="/socket.io/socket.io.js"></script>
     
@@ -193,39 +287,21 @@
                 updateConnectionStatus('Connected', 'good');
             },
             onRemoteStream: (userId, stream, peerInfo) => {
-                if (peerInfo.participantType === 'ai') {
-                    // AI stream goes to AI video element
-                    console.log('AI stream received, connecting to video element');
-                    const aiVideo = document.getElementById('aiVideo');
-                    const aiPlaceholder = document.getElementById('aiPlaceholder');
-                    
-                    // Only set stream if not already set to avoid resetting
-                    if (!aiVideo.srcObject) {
-                        aiVideo.srcObject = stream;
-                        aiVideo.style.display = 'block';
-                        aiPlaceholder.style.display = 'none';
-                        updateAIStatus('ready');
-                        console.log('AI video stream set for client:', stream.getVideoTracks().length, 'video tracks');
-                    }
-                } else {
-                    // Coach stream goes to remote video
-                    if (!document.getElementById('remoteVideo').srcObject) {
-                        document.getElementById('remoteVideo').srcObject = stream;
-                        document.getElementById('remoteLabel').textContent = `${peerInfo.userName} (Coach)`;
-                    }
+                // For now, we're using ElevenLabs widget instead of video streams for AI
+                // Future: This will handle human coach video streams
+                console.log('Remote stream received from:', peerInfo.userName, peerInfo.userRole);
+                if (peerInfo.userRole === 'coach' && peerInfo.participantType !== 'ai') {
+                    // This would be for a future human coach video stream
+                    console.log('Human coach stream would go here (feature coming soon)');
                 }
             },
             onUserJoined: (userInfo) => {
                 updateStatus(`${userInfo.userName} joined the session`, 'success');
                 if (userInfo.userRole === 'coach') {
                     updateConnectionStatus('Coach connected', 'good');
-                    updateSessionDescription('Your coach has joined! AI session will be activated.');
+                    updateSessionDescription('Your human coach has joined the session!');
                 }
-                if (userInfo.participantType === 'ai') {
-                    updateAIStatus('ready');
-                    updateAISessionStatus(true);
-                    updateSessionDescription('Your coach and AI assistant are here to help you achieve your goals.');
-                }
+                // Note: AI agent is handled by ElevenLabs widget, not WebRTC
             },
             onUserLeft: (userId) => {
                 updateStatus('Participant left the session', 'info');
@@ -334,11 +410,11 @@
                 // Local video (client)
                 videoWrapper = document.getElementById('localVideo')?.parentElement;
             } else if (participantInfo.participantType === 'ai') {
-                // AI stream
-                videoWrapper = document.getElementById('aiVideo')?.parentElement;
+                // AI agent container
+                videoWrapper = document.getElementById('aiAgentContainer')?.parentElement;
             } else if (participantInfo.userRole === 'coach') {
-                // Coach stream
-                videoWrapper = document.getElementById('remoteVideo')?.parentElement;
+                // Coach placeholder (future)
+                videoWrapper = document.getElementById('coachPlaceholder')?.parentElement;
             }
             
             if (videoWrapper) {
@@ -405,10 +481,28 @@
             webrtc.disconnect();
         });
 
-        // Client-specific welcome message
+        // Client-specific welcome message and AI setup
         setTimeout(() => {
-            updateStatus('Welcome! Your coach and AI assistant will join shortly.', 'info');
-        }, 1000);
+            updateStatus('Welcome! Your AI Ultra Coach is ready to speak with you.', 'info');
+            updateAIStatus('ready');
+            updateAISessionStatus(true);
+            updateSessionDescription('Your AI Ultra Coach is ready for conversation. Click on the AI widget to start speaking!');
+        }, 2000);
+
+        // Check for ElevenLabs widget loading
+        function checkElevenLabsWidget() {
+            const widget = document.querySelector('elevenlabs-convai');
+            if (widget && customElements.get('elevenlabs-convai')) {
+                console.log('✅ ElevenLabs AI Coach widget loaded successfully');
+                updateStatus('🤖 AI Coach is ready for conversation!', 'success');
+            } else {
+                console.log('⏳ Waiting for ElevenLabs widget to load...');
+                setTimeout(checkElevenLabsWidget, 1000);
+            }
+        }
+        
+        // Start checking for widget after a short delay
+        setTimeout(checkElevenLabsWidget, 3000);
     </script>
 </body>
 </html>
