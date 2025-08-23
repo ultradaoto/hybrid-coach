@@ -147,9 +147,129 @@
     }
   },
   "chat-close-button": {
-    "selector": "path",
-    "description": "❌ Chat Close Button (X) - marked via right-click menu",
-    "timestamp": "2025-08-22T07:25:54.262Z"
+    "selector": {
+      "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
+      "alternativeSelectors": [
+        ".styled__ButtonWrapper-sc-1crx28g-1",
+        ".bwaWQm",
+        "[type=\"button\"]"
+      ],
+      "description": "❌ Chat Close Button (X in top-right corner) - marked via right-click menu",
+      "timestamp": "2025-08-23T04:34:56.762Z",
+      "analysis": {
+        "basic": {
+          "tagName": "BUTTON",
+          "id": "none",
+          "className": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+          "textContent": "none",
+          "innerHTML": "<div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"height: 14px; width: 14px; padding: 0px; flex-shrink: 0;\"><svg viewBox=\"0 0 40 40\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\"><pa"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1378,
+            "y": 169,
+            "width": 40,
+            "height": 40,
+            "top": 169,
+            "right": 1418,
+            "bottom": 209,
+            "left": 1378
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 40,
+            "height": 40
+          }
+        },
+        "attributes": {
+          "type": "button",
+          "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "flex",
+          "position": "relative",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 kfVcuA",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 hDWNvB Row-sc-dwrxl6-0 kfVcuA",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": [
+            {
+              "tag": "BUTTON",
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "",
+              "id": "",
+              "text": ""
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 116,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 80,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 40,
+              "class": "styled__DropdownButton-sc-13jov82-9 ekCnSs",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:34:56.763Z"
   },
   "conversation-item": {
     "selector": ".styled__Paragraph-sc-y5pp90-3",
@@ -182,9 +302,103 @@
     "timestamp": "2025-08-22T06:57:00.234Z"
   },
   "conversation-preview": {
-    "selector": ".styled__MessageContent-sc-5xhq84-9",
-    "description": "👁️ Conversation Preview Text - marked via right-click menu",
-    "timestamp": "2025-08-22T06:57:14.934Z"
+    "selector": {
+      "selector": ".styled__MessageContent-sc-5xhq84-9",
+      "alternativeSelectors": [
+        ".styled__MessageContent-sc-5xhq84-9",
+        ".juRyfe",
+        "text=\"ACCESS\"",
+        ":has-text(\"ACCESS\")"
+      ],
+      "description": "👁️ Conversation Preview Text - marked via right-click menu",
+      "timestamp": "2025-08-23T04:33:58.541Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__MessageContent-sc-5xhq84-9 juRyfe",
+          "textContent": "ACCESS",
+          "innerHTML": "ACCESS"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1071,
+            "y": 210,
+            "width": 153.6875,
+            "height": 21,
+            "top": 210,
+            "right": 1224.6875,
+            "bottom": 231,
+            "left": 1071
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 154,
+            "height": 21
+          }
+        },
+        "attributes": {
+          "class": "styled__MessageContent-sc-5xhq84-9 juRyfe",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 duwkcK",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__Overlay-sc-5xhq84-6 gdcsYb",
+          "children": [],
+          "siblings": [
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 kfVcuA",
+              "id": "",
+              "text": "Sterling Cooley• 1m"
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 56,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:33:58.542Z"
   },
   "read-status": {
     "selector": ".styled__ReadButton-sc-5xhq84-1",
@@ -218,64 +432,69 @@
   },
   "mail-icon-normal": {
     "selector": {
-      "selector": "svg",
-      "alternativeSelectors": [],
-      "description": "📧 Mail Icon (Normal - No Unread) - marked via right-click menu",
-      "timestamp": "2025-08-22T07:54:13.654Z",
+      "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
+      "alternativeSelectors": [
+        ".styled__ButtonWrapper-sc-1crx28g-1",
+        ".GvgtH",
+        ".styled__ChatNotificationsIconButton-sc-14ipnak-0",
+        ".fOkxgW",
+        "[type=\"button\"]"
+      ],
+      "description": "📧 Mail Icon (Normal - No Unread Messages) - marked via right-click menu",
+      "timestamp": "2025-08-23T04:31:46.377Z",
       "analysis": {
         "basic": {
-          "tagName": "svg",
+          "tagName": "BUTTON",
           "id": "none",
-          "className": {},
+          "className": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
           "textContent": "none",
-          "innerHTML": "<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M36.072 20.0398C36.4522 18.5322 36.5226 16.6598 36.5217 13.913C36.5226 11.1663 36.4522 9.29391 36.072 7.78619C35.7739 6.4101 35.6057 6.03388 34.7659 5."
+          "innerHTML": "<div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"height: 22.5px; width: 22.5px; padding: 0px; flex-shrink: 0;\"><svg viewBox=\"0 0 40 34\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\""
         },
         "position": {
           "boundingRect": {
-            "x": 1347.75,
-            "y": 20.75,
-            "width": 22.5,
-            "height": 22.5,
-            "top": 20.75,
-            "right": 1370.25,
-            "bottom": 43.25,
-            "left": 1347.75
+            "x": 1342.5,
+            "y": 8,
+            "width": 48,
+            "height": 48,
+            "top": 8,
+            "right": 1390.5,
+            "bottom": 56,
+            "left": 1342.5
           },
-          "offsetParent": "none",
+          "offsetParent": "DIV",
           "scrollPosition": {
             "top": 0,
             "left": 0
           },
           "clientSize": {
-            "width": 23,
-            "height": 23
+            "width": 48,
+            "height": 48
           }
         },
         "attributes": {
-          "viewBox": "0 0 40 34",
-          "fill": "currentColor",
-          "xmlns": "http://www.w3.org/2000/svg",
+          "type": "button",
+          "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
           "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
         },
         "styling": {
           "backgroundColor": "rgba(0, 0, 0, 0)",
           "color": "rgb(144, 144, 144)",
-          "display": "block",
-          "position": "static",
+          "display": "flex",
+          "position": "relative",
           "zIndex": "auto",
           "cursor": "pointer",
           "visibility": "visible"
         },
         "hierarchy": {
           "parentTag": "DIV",
-          "parentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+          "parentClass": "none",
           "parentId": "none",
-          "grandparentTag": "BUTTON",
-          "grandparentClass": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
           "children": [
             {
-              "tag": "path",
-              "class": {},
+              "tag": "DIV",
+              "class": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
               "id": "",
               "text": ""
             }
@@ -286,123 +505,7 @@
           "nearbyText": "",
           "nearbyImages": [
             {
-              "distance": 107,
-              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
-              "alt": "My Ultra Coach",
-              "class": ""
-            }
-          ],
-          "nearbyButtons": [
-            {
-              "distance": 18,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            },
-            {
-              "distance": 45,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            },
-            {
-              "distance": 100,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            }
-          ],
-          "nearbySvgs": [],
-          "nearbyPaths": [],
-          "containsNumbers": false,
-          "hasRedStyling": false
-        },
-        "mailIconAnalysis": {
-          "couldBeMail": false,
-          "reasons": [],
-          "pathCount": 0,
-          "hasRedElements": false,
-          "distanceFromSvg": null
-        }
-      }
-    },
-    "description": "",
-    "timestamp": "2025-08-22T07:54:13.656Z"
-  },
-  "mail-icon-unread": {
-    "selector": {
-      "selector": "svg",
-      "alternativeSelectors": [],
-      "description": "🔴 Mail Icon (With Red Badge + Number) - marked via right-click menu",
-      "timestamp": "2025-08-22T07:54:50.324Z",
-      "analysis": {
-        "basic": {
-          "tagName": "svg",
-          "id": "none",
-          "className": {},
-          "textContent": "none",
-          "innerHTML": "<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M36.072 20.0398C36.4522 18.5322 36.5226 16.6598 36.5217 13.913C36.5226 11.1663 36.4522 9.29391 36.072 7.78619C35.7739 6.4101 35.6057 6.03388 34.7659 5."
-        },
-        "position": {
-          "boundingRect": {
-            "x": 1355.25,
-            "y": 20.75,
-            "width": 22.5,
-            "height": 22.5,
-            "top": 20.75,
-            "right": 1377.75,
-            "bottom": 43.25,
-            "left": 1355.25
-          },
-          "offsetParent": "none",
-          "scrollPosition": {
-            "top": 0,
-            "left": 0
-          },
-          "clientSize": {
-            "width": 23,
-            "height": 23
-          }
-        },
-        "attributes": {
-          "viewBox": "0 0 40 34",
-          "fill": "currentColor",
-          "xmlns": "http://www.w3.org/2000/svg",
-          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
-        },
-        "styling": {
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "color": "rgb(144, 144, 144)",
-          "display": "block",
-          "position": "static",
-          "zIndex": "auto",
-          "cursor": "pointer",
-          "visibility": "visible"
-        },
-        "hierarchy": {
-          "parentTag": "DIV",
-          "parentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
-          "parentId": "none",
-          "grandparentTag": "BUTTON",
-          "grandparentClass": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
-          "children": [
-            {
-              "tag": "path",
-              "class": {},
-              "id": "",
-              "text": ""
-            }
-          ],
-          "siblings": []
-        },
-        "context": {
-          "nearbyText": "",
-          "nearbyImages": [
-            {
-              "distance": 107,
+              "distance": 120,
               "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
               "alt": "My Ultra Coach",
               "class": ""
@@ -416,21 +519,135 @@
           ],
           "nearbyButtons": [
             {
-              "distance": 18,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            },
-            {
-              "distance": 45,
+              "distance": 56,
               "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
               "text": "",
               "type": "button",
               "ariaLabel": null
             },
             {
-              "distance": 100,
+              "distance": 112,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:31:46.380Z"
+  },
+  "mail-icon-unread": {
+    "selector": {
+      "selector": "div",
+      "alternativeSelectors": [],
+      "description": "🔴 Mail Icon (With Red Badge + Number) - marked via right-click menu",
+      "timestamp": "2025-08-23T04:32:19.106Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "none",
+          "textContent": "none",
+          "innerHTML": "<button type=\"button\" class=\"styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW\" style=\"\"><div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"heigh"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1342.5,
+            "y": 8,
+            "width": 48,
+            "height": 48,
+            "top": 8,
+            "right": 1390.5,
+            "bottom": 56,
+            "left": 1342.5
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 48,
+            "height": 48
+          }
+        },
+        "attributes": {
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__DropdownWrapper-sc-13jov82-0 dnxlIH",
+          "children": [
+            {
+              "tag": "BUTTON",
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 120,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            },
+            {
+              "distance": 150,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 0,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 56,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 112,
               "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
               "text": "",
               "type": "button",
@@ -452,7 +669,7 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-22T07:54:50.326Z"
+    "timestamp": "2025-08-23T04:32:19.107Z"
   },
   "chat-popup": {
     "selector": ".styled__DropdownContent-sc-13jov82-1",
@@ -460,9 +677,93 @@
     "timestamp": "2025-08-22T07:22:17.576Z"
   },
   "conversation-unread": {
-    "selector": ".styled__ReadButton-sc-5xhq84-1",
-    "description": "🔴 Unread Conversation Item - marked via right-click menu",
-    "timestamp": "2025-08-22T07:22:28.782Z"
+    "selector": {
+      "selector": ".styled__ReadButton-sc-5xhq84-1",
+      "alternativeSelectors": [
+        ".styled__ReadButton-sc-5xhq84-1",
+        ".eXgJxH"
+      ],
+      "description": "🔴 Unread Conversation Item - marked via right-click menu",
+      "timestamp": "2025-08-23T04:33:02.867Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__ReadButton-sc-5xhq84-1 eXgJxH",
+          "textContent": "none",
+          "innerHTML": "none"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1461,
+            "y": 202.5,
+            "width": 12,
+            "height": 12,
+            "top": 202.5,
+            "right": 1473,
+            "bottom": 214.5,
+            "left": 1461
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 6,
+            "height": 6
+          }
+        },
+        "attributes": {
+          "class": "styled__ReadButton-sc-5xhq84-1 eXgJxH",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgb(46, 110, 245)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hnblNR",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 140,
+              "class": "styled__DropdownButton-sc-13jov82-9 jQBqny",
+              "text": "All",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:33:02.869Z"
   },
   "message-received-from-user": {
     "selector": ".styled__BoxWrapper-sc-esqoz3-0",
@@ -623,5 +924,664 @@
     },
     "description": "",
     "timestamp": "2025-08-22T07:54:53.602Z"
+  },
+  "notifications-icon-unread": {
+    "selector": {
+      "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
+      "alternativeSelectors": [
+        ".styled__ButtonWrapper-sc-1crx28g-1",
+        ".eEjdKj",
+        ".styled__NotificationsIconButton-sc-kvqul9-0",
+        ".heKZyc",
+        "[type=\"button\"]"
+      ],
+      "description": "🔴 Notifications Icon (With Red Badge + Number) - marked via right-click menu",
+      "timestamp": "2025-08-23T04:31:14.485Z",
+      "analysis": {
+        "basic": {
+          "tagName": "BUTTON",
+          "id": "none",
+          "className": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+          "textContent": "none",
+          "innerHTML": "<div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"height: 25px; width: 25px; padding: 0px; flex-shrink: 0;\"><svg viewBox=\"0 0 30 40\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\"><pa"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1398.5,
+            "y": 8,
+            "width": 48,
+            "height": 48,
+            "top": 8,
+            "right": 1446.5,
+            "bottom": 56,
+            "left": 1398.5
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 48,
+            "height": 48
+          }
+        },
+        "attributes": {
+          "type": "button",
+          "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "flex",
+          "position": "relative",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "none",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 64,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 56,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 56,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:31:14.487Z"
+  },
+  "notifications-unread-badge": {
+    "selector": {
+      "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
+      "alternativeSelectors": [
+        ".styled__ButtonWrapper-sc-1crx28g-1",
+        ".eEjdKj",
+        ".styled__NotificationsIconButton-sc-kvqul9-0",
+        ".heKZyc",
+        "[type=\"button\"]"
+      ],
+      "description": "🔴 Notifications Unread Count Badge (Red Circle) - marked via right-click menu",
+      "timestamp": "2025-08-23T04:31:25.073Z",
+      "analysis": {
+        "basic": {
+          "tagName": "BUTTON",
+          "id": "none",
+          "className": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+          "textContent": "none",
+          "innerHTML": "<div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"height: 25px; width: 25px; padding: 0px; flex-shrink: 0;\"><svg viewBox=\"0 0 30 40\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\"><pa"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1398.5,
+            "y": 8,
+            "width": 48,
+            "height": 48,
+            "top": 8,
+            "right": 1446.5,
+            "bottom": 56,
+            "left": 1398.5
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 48,
+            "height": 48
+          }
+        },
+        "attributes": {
+          "type": "button",
+          "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "flex",
+          "position": "relative",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "none",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 64,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 56,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 56,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:31:25.074Z"
+  },
+  "notifications-icon-normal": {
+    "selector": {
+      "selector": "div",
+      "alternativeSelectors": [],
+      "description": "🔔 Notifications Icon (No New Notifications) - marked via right-click menu",
+      "timestamp": "2025-08-23T04:32:26.511Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "none",
+          "textContent": "none",
+          "innerHTML": "<button type=\"button\" class=\"styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc\" style=\"\"><div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"height: 2"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1398.5,
+            "y": 8,
+            "width": 48,
+            "height": 48,
+            "top": 8,
+            "right": 1446.5,
+            "bottom": 56,
+            "left": 1398.5
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 48,
+            "height": 48
+          }
+        },
+        "attributes": {
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__DropdownWrapper-sc-13jov82-0 dnxlIH",
+          "children": [
+            {
+              "tag": "BUTTON",
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 64,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 56,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 0,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 56,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:32:26.513Z"
+  },
+  "unread-indicator": {
+    "selector": {
+      "selector": ".styled__ReadButton-sc-5xhq84-1",
+      "alternativeSelectors": [
+        ".styled__ReadButton-sc-5xhq84-1",
+        ".eXgJxH"
+      ],
+      "description": "🔴 Unread Message Indicator - marked via right-click menu",
+      "timestamp": "2025-08-23T04:33:08.554Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__ReadButton-sc-5xhq84-1 eXgJxH",
+          "textContent": "none",
+          "innerHTML": "none"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1461,
+            "y": 202.5,
+            "width": 12,
+            "height": 12,
+            "top": 202.5,
+            "right": 1473,
+            "bottom": 214.5,
+            "left": 1461
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 6,
+            "height": 6
+          }
+        },
+        "attributes": {
+          "class": "styled__ReadButton-sc-5xhq84-1 eXgJxH",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgb(46, 110, 245)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hnblNR",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 140,
+              "class": "styled__DropdownButton-sc-13jov82-9 jQBqny",
+              "text": "All",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:33:08.555Z"
+  },
+  "conversation-read": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__ButtonWrapper-sc-5xhq84-0",
+        ".kfVcuA",
+        ".hEDBlx"
+      ],
+      "description": "✅ Read Conversation Item - marked via right-click menu",
+      "timestamp": "2025-08-23T04:33:25.181Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hEDBlx",
+          "textContent": "none",
+          "innerHTML": "<div class=\"styled__ReadButton-sc-5xhq84-1 dduCXD\" style=\"\"></div>"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1447,
+            "y": 188.5,
+            "width": 40,
+            "height": 40,
+            "top": 188.5,
+            "right": 1487,
+            "bottom": 228.5,
+            "left": 1447
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 40,
+            "height": 40
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hEDBlx",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "hidden"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__ReadButton-sc-5xhq84-1 dduCXD",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 123,
+              "class": "styled__DropdownButton-sc-13jov82-9 jQBqny",
+              "text": "All",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:33:25.182Z"
+  },
+  "chat-modal-close": {
+    "selector": {
+      "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
+      "alternativeSelectors": [
+        ".styled__ButtonWrapper-sc-1crx28g-1",
+        ".bwaWQm",
+        "[type=\"button\"]"
+      ],
+      "description": "❌ Chat Modal Close Button (X button on modal) - marked via right-click menu",
+      "timestamp": "2025-08-23T04:34:50.109Z",
+      "analysis": {
+        "basic": {
+          "tagName": "BUTTON",
+          "id": "none",
+          "className": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+          "textContent": "none",
+          "innerHTML": "<div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"height: 14px; width: 14px; padding: 0px; flex-shrink: 0;\"><svg viewBox=\"0 0 40 40\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\"><pa"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1378,
+            "y": 169,
+            "width": 40,
+            "height": 40,
+            "top": 169,
+            "right": 1418,
+            "bottom": 209,
+            "left": 1378
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 40,
+            "height": 40
+          }
+        },
+        "attributes": {
+          "type": "button",
+          "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "flex",
+          "position": "relative",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 kfVcuA",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 hDWNvB Row-sc-dwrxl6-0 kfVcuA",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": [
+            {
+              "tag": "BUTTON",
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "",
+              "id": "",
+              "text": ""
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 116,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 80,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 40,
+              "class": "styled__DropdownButton-sc-13jov82-9 ekCnSs",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-23T04:34:50.111Z"
   }
 }

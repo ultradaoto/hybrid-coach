@@ -120,15 +120,23 @@ class SkoolPlaywrightDev {
 
       // Skool element types for the right-click menu
       const ELEMENT_TYPES = {
-        // Mail Icon States
-        'mail-icon-normal': '📧 Mail Icon (Normal - No Unread)',
+        // Mail Icon States (DMs/Messages)
+        'mail-icon-normal': '📧 Mail Icon (Normal - No Unread Messages)',
         'mail-icon-unread': '🔴 Mail Icon (With Red Badge + Number)',
-        'unread-badge': '🔴 Unread Count Badge (Red Circle)',
-        'unread-number': '🔢 Unread Message Count Number',
+        'mail-unread-badge': '🔴 Mail Unread Count Badge (Red Circle)',
+        'mail-unread-number': '🔢 Mail Unread Message Count Number',
+        
+        // Notifications Icon States (Different from Mail!)
+        'notifications-icon-normal': '🔔 Notifications Icon (No New Notifications)', 
+        'notifications-icon-unread': '🔴 Notifications Icon (With Red Badge + Number)',
+        'notifications-unread-badge': '🔴 Notifications Unread Count Badge (Red Circle)',
+        'notifications-unread-number': '🔢 Notifications Unread Count Number',
         
         // Chat Interface
         'chat-open-button': '💬 Chat Open Button',
-        'chat-close-button': '❌ Chat Close Button (X)', 
+        'chat-close-button': '❌ Chat Close Button (X in top-right corner)', 
+        'chat-modal-close': '❌ Chat Modal Close Button (X button on modal)',
+        'chat-modal-background': '🖼️ Chat Modal Background (click to close)',
         'chat-window': '🪟 Chat Window Container',
         'chat-popup': '📋 Chat Popup Container',
         

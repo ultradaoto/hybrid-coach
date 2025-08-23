@@ -267,8 +267,17 @@ class LiveDMBot {
       
       console.log(`🔍 [${timestamp}] Checking mail icon status...`);
 
-      // Method 1: Look for the specific unread badge container (mail button with notifications)
-      const unreadBadgeContainer = await this.browserService.page.$('.styled__ChatNotificationsIconButton-sc-14ipnak-0');
+      // Method 1: Look for MAIL icon specifically (not notifications!)
+      // Use the newly trained selectors to distinguish mail from notifications
+      const mailIconUnread = await this.browserService.page.$('.styled__ButtonWrapper-sc-1crx28g-1.GvgtH');
+      const mailIconNormal = await this.browserService.page.$('.styled__ButtonWrapper-sc-1crx28g-1');
+      
+      // Check if we can see the mail icon at all
+      const mailIconExists = mailIconUnread || mailIconNormal;
+      if (!mailIconExists) {
+        console.log(`📧 [${timestamp}] Mail icon not found - may need to navigate to messages`);
+        return;
+      }
       
       // Method 2: Look for red badge path elements (more specific)
       const redBadgePaths = await this.browserService.page.$$('path');
@@ -400,12 +409,13 @@ class LiveDMBot {
   }
 
   async openMailPopup() {
-    // Click the mail icon BUTTON (not the SVG inside it) based on detailed analysis
+    // Click the MAIL icon BUTTON (not notifications!) using newly trained selectors
     const mailButtonSelectors = [
-      '.styled__ChatNotificationsIconButton-sc-14ipnak-0', // Specific mail button class
-      'button.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', // Button with specific classes
+      '.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', // Trained mail icon selector  
+      '.styled__ButtonWrapper-sc-1crx28g-1', // Fallback mail button class
       'button:has(svg[viewBox="0 0 40 34"])', // Button containing the mail SVG
       'button:has(.styled__IconWrapper-sc-zxv7pb-0)', // Button containing icon wrapper
+      '.styled__ChatNotificationsIconButton-sc-14ipnak-0', // Legacy selector
       'svg' // Fallback to SVG if button selectors fail
     ];
 
@@ -524,8 +534,10 @@ class LiveDMBot {
   async closeChatWindow() {
     console.log('❌ Attempting to close chat window...');
     
-    // Method 1: Handle modal dialog close (detected from error logs)
+    // Method 1: Handle modal dialog close using newly trained selectors
     const modalCloseSelectors = [
+      '.styled__ButtonWrapper-sc-1crx28g-1.bwaWQm', // Trained modal close button!
+      '[type="button"].styled__ButtonWrapper-sc-1crx28g-1', // Alternative trained selector
       '.styled__BaseModalWrapper-sc-1j2ymu8-0 button[aria-label*="close" i]', // Modal close button
       '.styled__BaseModalWrapper-sc-1j2ymu8-0 button:has-text("×")', // Modal × button
       '.skool-ui-base-modal button:has-text("×")', // Base modal × button
