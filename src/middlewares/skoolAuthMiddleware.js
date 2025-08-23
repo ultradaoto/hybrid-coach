@@ -33,6 +33,13 @@ function getClientInfo(req) {
  */
 async function checkSkoolAuth(req, res, next) {
     try {
+        // Ensure cookies object exists (requires cookie-parser middleware)
+        if (!req.cookies) {
+            console.log('⚠️ req.cookies is undefined - cookie-parser middleware may not be installed');
+            req.skoolUser = null;
+            return next();
+        }
+        
         const sessionId = req.cookies.skoolSessionId;
         const { ipAddress, userAgent } = getClientInfo(req);
 

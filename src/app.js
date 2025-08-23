@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import expressLayouts from 'express-ejs-layouts';
 import session from 'express-session';
+import cookieParser from 'cookie-parser';
 import passport from 'passport';
 import './config/passport.js';
 import { createServer } from 'http';
@@ -54,6 +55,7 @@ app.use((req, res, next) => {
 app.use(morgan('dev'));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cookieParser()); // 🍪 Enable cookie parsing for Skool authentication
 
 // IMPORTANT: Fix Express parsing for WebSocket endpoints
 app.use((req, res, next) => {
