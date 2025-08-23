@@ -9,6 +9,32 @@ async function index(req, res, next) {
     let appointments = [];
     let calendarConnected = false;
 
+    // Handle different authentication types
+    if (req.skoolUser) {
+      // Skool authentication - simplified dashboard
+      console.log(`📊 Loading dashboard for Skool user: ${req.skoolUser.skoolUsername}`);
+      
+      res.render('dashboard', {
+        title: 'Dashboard - MyUltra.Coach',
+        user: {
+          name: req.skoolUser.skoolUsername,
+          email: req.skoolUser.skoolUserId + '@skool.user',
+          role: 'client' // Skool users are clients
+        },
+        meetings: [],
+        slots: [],
+        appointments: [],
+        calendarConnected: false,
+        isSkoolUser: true
+      });
+      return;
+    }
+
+    // Google authentication - full dashboard
+    if (!req.user) {
+      return res.redirect('/auth/login');
+    }
+
     // Fetch fresh user data from database to get updated googleTokens
     const currentUser = await prisma.user.findUnique({
       where: { id: req.user.id }
