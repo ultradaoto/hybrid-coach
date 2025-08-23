@@ -17,7 +17,7 @@ async function index(req, res, next) {
       res.render('dashboard', {
         title: 'Dashboard - MyUltra.Coach',
         user: {
-          name: req.skoolUser.skoolUsername,
+          displayName: req.skoolUser.skoolUsername,
           email: req.skoolUser.skoolUserId + '@skool.user',
           role: 'client' // Skool users are clients
         },
