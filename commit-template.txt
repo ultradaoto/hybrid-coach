@@ -1,0 +1,16 @@
+# Commit Message Template
+# 
+# Format:
+# <type>: <subject>
+#
+# <body>
+#
+# Types: feat, fix, docs, style, refactor, test, chore
+#
+# Example:
+# fix: Resolve layout issues in room interface
+#
+# - Fixed 3:4 aspect ratio for video boxes
+# - Eliminated WebSocket 404 errors
+# - Added database connection fallback
+
