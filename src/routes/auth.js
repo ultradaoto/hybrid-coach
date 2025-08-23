@@ -15,10 +15,17 @@ const router = Router();
 // Apply Skool auth check to all routes
 router.use(checkSkoolAuth);
 
-// Show login page with Skool authentication
+// Handle Skool authentication code validation via query parameter
 router.get('/login', redirectIfAuthenticated, async (req, res) => {
     try {
-        const { error, message } = req.query;
+        const { code, error, message } = req.query;
+        
+        // If there's a code parameter, validate it
+        if (code) {
+            return await handleCodeValidation(req, res, code);
+        }
+        
+        // Otherwise, show login page
         const authStatus = getAuthStatus(req);
 
         // Prepare error/success data for template
@@ -52,26 +59,45 @@ router.get('/login', redirectIfAuthenticated, async (req, res) => {
     }
 });
 
-// Handle Skool authentication code validation
-router.get('/login/:code', validateAuthCode, async (req, res) => {
+// Helper function to handle code validation
+async function handleCodeValidation(req, res, code) {
     try {
-        // If we get here, the code was valid and session was created
-        const authStatus = getAuthStatus(req);
+        const { ipAddress, userAgent } = getClientInfo(req);
+
+        // Validate the code
+        const validation = await authService.validateAuthCode(code, ipAddress, userAgent);
         
-        // Redirect to dashboard or intended destination
+        if (!validation.valid) {
+            const errorMessage = encodeURIComponent(validation.error);
+            return res.redirect(`/login?error=code_validation_failed&message=${errorMessage}`);
+        }
+
+        // Create user session
+        const session = await authService.createUserSession(code, validation.authData);
+        
+        // Set secure session cookie
+        res.cookie('skoolSessionId', session.sessionId, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+            domain: process.env.COOKIE_DOMAIN || undefined
+        });
+
+        // Redirect to dashboard
         const returnTo = req.session?.returnTo || '/dashboard';
         delete req.session?.returnTo;
 
-        console.log(`🎉 Redirecting ${authStatus.user.skoolUsername} to ${returnTo}`);
+        console.log(`🎉 Successful login for ${session.userData.skoolUsername}, redirecting to ${returnTo}`);
         
-        res.redirect(`${returnTo}?welcome=true&user=${encodeURIComponent(authStatus.user.skoolUsername)}`);
+        res.redirect(`${returnTo}?welcome=true&user=${encodeURIComponent(session.userData.skoolUsername)}`);
 
     } catch (error) {
-        console.error('❌ Error handling auth code:', error);
-        const errorMessage = encodeURIComponent('Unexpected error during login. Please try again.');
-        res.redirect(`/login?error=unexpected_error&message=${errorMessage}`);
+        console.error('❌ Error validating auth code:', error);
+        const errorMessage = encodeURIComponent('Authentication service error. Please try again.');
+        res.redirect(`/login?error=service_error&message=${errorMessage}`);
     }
-});
+}
 
 // Google OAuth
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));

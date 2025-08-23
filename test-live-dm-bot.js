@@ -19,6 +19,8 @@ class LiveDMBot {
     this.isMonitoring = false;
     this.checkInterval = null;
     this.monitoringInterval = 15000; // 15 seconds as requested
+    this.lastMessageSentAt = null; // Track when we last sent a message
+    this.messagesSentToday = new Set(); // Track messages sent to avoid duplicates
   }
 
   async initialize() {
@@ -256,6 +258,13 @@ class LiveDMBot {
   async checkMailIcon() {
     try {
       const timestamp = new Date().toLocaleTimeString();
+      
+      // Check if we recently sent a message (avoid responding to our own messages)
+      if (this.lastMessageSentAt && (Date.now() - this.lastMessageSentAt) < 60000) {
+        console.log(`📧 [${timestamp}] Skipping check - recently sent message (${Math.round((Date.now() - this.lastMessageSentAt) / 1000)}s ago)`);
+        return;
+      }
+      
       console.log(`🔍 [${timestamp}] Checking mail icon status...`);
 
       // Method 1: Look for the specific unread badge container (mail button with notifications)
@@ -477,7 +486,7 @@ class LiveDMBot {
       
       // Generate auth code
       const authResult = await authService.generateAuthCode(userInfo.skoolUserId, userInfo.skoolUsername);
-      const loginUrl = `https://myultra.coach/login/${authResult.code}`;
+      const loginUrl = `https://myultra.coach/login?code=${authResult.code}`;
       
       responseMessage = `I will have your link shortly. ${loginUrl}`;
       
@@ -498,6 +507,10 @@ class LiveDMBot {
     console.log('📤 Sending message with Enter key...');
     await this.browserService.page.keyboard.press('Enter');
     await this.browserService.page.waitForTimeout(2000);
+
+    // Mark that we just sent a message to avoid immediate re-triggering
+    this.lastMessageSentAt = Date.now();
+    console.log(`📝 Marked message sent at: ${new Date().toLocaleTimeString()}`);
 
     // Verify message was sent (input should be cleared)
     const inputValue = await messageInput.inputValue().catch(() => '');
