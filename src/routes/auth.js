@@ -91,13 +91,18 @@ async function handleCodeValidation(req, res, code) {
         const session = await authService.createUserSession(code, validation.authData);
         
         // Set secure session cookie
+        console.log(`🍪 Setting cookie: skoolSessionId = ${session.sessionId}`);
+        console.log(`🔧 Cookie settings: NODE_ENV=${process.env.NODE_ENV}, COOKIE_DOMAIN=${process.env.COOKIE_DOMAIN}`);
+        
         res.cookie('skoolSessionId', session.sessionId, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            secure: false, // TODO: Enable in production with HTTPS
+            sameSite: 'lax', // Changed from strict to lax for redirect compatibility
             maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-            domain: process.env.COOKIE_DOMAIN || undefined
+            // domain: process.env.COOKIE_DOMAIN || undefined // Commented out for testing
         });
+        
+        console.log(`✅ Cookie set - proceeding with redirect`);
 
         // Redirect to dashboard
         const returnTo = req.session?.returnTo || '/dashboard';
