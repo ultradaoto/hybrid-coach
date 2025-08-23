@@ -534,10 +534,10 @@ class LiveDMBot {
       console.log(`⚠️ Background click failed: ${error.message}`);
     }
     
-    // Method 1: Handle modal dialog close using newly trained selectors
+    // Method 1: Handle modal dialog close using newly trained selectors  
     const modalCloseSelectors = [
-      '.styled__ButtonWrapper-sc-1crx28g-1.bwaWQm', // Trained modal close button!
-      '[type="button"].styled__ButtonWrapper-sc-1crx28g-1', // Alternative trained selector
+      '[type="button"].styled__ButtonWrapper-sc-1crx28g-1', // WORKING SELECTOR - use first!
+      '.styled__ButtonWrapper-sc-1crx28g-1.bwaWQm', // Backup selector
       '.styled__BaseModalWrapper-sc-1j2ymu8-0 button[aria-label*="close" i]', // Modal close button
       '.styled__BaseModalWrapper-sc-1j2ymu8-0 button:has-text("×")', // Modal × button
       '.skool-ui-base-modal button:has-text("×")', // Base modal × button
