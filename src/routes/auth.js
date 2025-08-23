@@ -20,8 +20,14 @@ router.get('/login', redirectIfAuthenticated, async (req, res) => {
     try {
         const { code, error, message } = req.query;
         
+        // Add debugging for code processing
+        console.log(`🔍 Login route accessed with query:`, req.query);
+        console.log(`🔍 Code parameter: ${code}`);
+        console.log(`🔍 User already authenticated: ${!!req.skoolUser}`);
+        
         // If there's a code parameter, validate it
         if (code) {
+            console.log(`🔑 Processing authentication code: ${code}`);
             return await handleCodeValidation(req, res, code);
         }
         
@@ -64,8 +70,17 @@ async function handleCodeValidation(req, res, code) {
     try {
         const { ipAddress, userAgent } = getClientInfo(req);
 
+        console.log(`🔑 Validating auth code: ${code}`);
+        console.log(`📍 Client info - IP: ${ipAddress}, UserAgent: ${userAgent?.substring(0, 50)}...`);
+
         // Validate the code
         const validation = await authService.validateAuthCode(code, ipAddress, userAgent);
+        
+        console.log(`✅ Validation result:`, {
+            valid: validation.valid,
+            error: validation.error,
+            hasAuthData: !!validation.authData
+        });
         
         if (!validation.valid) {
             const errorMessage = encodeURIComponent(validation.error);
