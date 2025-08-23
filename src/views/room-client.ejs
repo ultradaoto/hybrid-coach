@@ -111,11 +111,9 @@
             margin-top: 0.2rem;
         }
 
-        /* 3:4 aspect ratio for all video boxes - LARGER - override base styles */
+        /* Different sizes for each video box */
         .video-wrapper {
             position: relative;
-            width: 400px !important;  /* Was 300px, now 100px larger */
-            height: 533px !important;  /* Was 400px, maintaining 3:4 ratio */
             margin: 0 10px;
             background: #222;
             border-radius: 12px;
@@ -123,6 +121,19 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             transition: all 0.3s ease;
             border: 3px solid transparent;
+        }
+        
+        /* Client and AI boxes - LARGER */
+        .video-wrapper:nth-child(1),  /* Client */
+        .video-wrapper:nth-child(2) { /* AI */
+            width: 450px !important;
+            height: 600px !important;  /* Maintaining 3:4 ratio */
+        }
+        
+        /* Coach box - SMALLER (55% width) */
+        .video-wrapper:nth-child(3) { /* Coach */
+            width: 220px !important;   /* 55% of 400px */
+            height: 293px !important;  /* Maintaining 3:4 ratio */
         }
         
         .video-wrapper video {
@@ -214,9 +225,13 @@
                 gap: 1rem;
             }
             
-            .video-wrapper {
-                width: 300px !important;  /* Smaller on mobile but keep 3:4 ratio */
-                height: 400px !important;
+            /* All boxes same size on mobile */
+            .video-wrapper,
+            .video-wrapper:nth-child(1),
+            .video-wrapper:nth-child(2),
+            .video-wrapper:nth-child(3) {
+                width: 300px !important;  /* Same size for all on mobile */
+                height: 400px !important;  /* Maintaining 3:4 ratio */
             }
             
             .video-wrapper video {
@@ -307,7 +322,10 @@
                 <!-- AI Voice Agent - MIDDLE -->
                 <div class="video-wrapper">
                     <div class="ai-agent-container" id="aiAgentContainer">
-                        <elevenlabs-convai agent-id="<%= elevenlabsAgentId || 'agent_01jy88zv6zfe1a9v9zdxt69abd' %>"></elevenlabs-convai>
+                        <elevenlabs-convai 
+                            agent-id="<%= elevenlabsAgentId || 'agent_01jy88zv6zfe1a9v9zdxt69abd' %>"
+                            dynamic-variables='{"user_name": "<%= user.displayName || "Kirby" %>", "session_id": "<%= sessionId %>", "room_id": "<%= roomId %>"}'
+                        ></elevenlabs-convai>
                     </div>
                     <div class="video-label">🤖 Ultra Coach AI</div>
                 </div>

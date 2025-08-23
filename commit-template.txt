@@ -1,3 +1,16 @@
+# Git Best Practices for PowerShell
+# =====================================
+#
+# STAGING FILES:
+# Use: git add .           (stages all changes in current directory)
+# NOT: git add -A          (can hang in PowerShell)
+#
+# COMMIT MESSAGES:
+# Use: git commit -m "Single line message"
+# OR:  git commit          (opens editor for multi-line)
+# NOT: Multi-line strings in PowerShell (causes hanging)
+#
+# =====================================
 # Commit Message Template
 # 
 # Format:
@@ -7,10 +20,11 @@
 #
 # Types: feat, fix, docs, style, refactor, test, chore
 #
-# Example:
-# fix: Resolve layout issues in room interface
+# PowerShell Examples (single line):
+# git add .
+# git commit -m "fix: Resolve layout issues - Fixed aspect ratio - Removed padding"
 #
-# - Fixed 3:4 aspect ratio for video boxes
-# - Eliminated WebSocket 404 errors
-# - Added database connection fallback
+# Or use editor for detailed messages:
+# git add .
+# git commit  (opens Notepad)
 
