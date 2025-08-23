@@ -73,11 +73,15 @@ async function checkSkoolAuth(req, res, next) {
  * Redirects to login page if not authenticated
  */
 function requireSkoolAuth(req, res, next) {
+    console.log(`🔐 requireSkoolAuth check: req.skoolUser = ${!!req.skoolUser}`);
+    console.log(`🍪 Available cookies:`, req.cookies);
+    console.log(`🔑 Session cookie: ${req.cookies?.skoolSessionId}`);
+    
     if (!req.skoolUser) {
         // Store intended destination for redirect after login
         req.session.returnTo = req.originalUrl;
         
-        return res.redirect('/login?error=authentication_required&message=Please authenticate through Skool to access this page');
+        return res.redirect('/auth/login?error=authentication_required&message=Please authenticate through Skool to access this page');
     }
     
     next();
