@@ -19,12 +19,16 @@ async function index(req, res, next) {
         user: {
           displayName: req.skoolUser.skoolUsername,
           email: req.skoolUser.skoolUserId + '@skool.user',
-          role: 'client' // Skool users are clients
+          role: 'client', // Skool users are clients
+          isAvailable: false // Not applicable for Skool users
         },
         meetings: [],
         slots: [],
         appointments: [],
+        availableCoaches: [], // Empty for Skool users (no booking system)
         calendarConnected: false,
+        membershipWarning: null, // No membership warnings for Skool users
+        message: null, // No alert messages by default
         isSkoolUser: true
       });
       return;
