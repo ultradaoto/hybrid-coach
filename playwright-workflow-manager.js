@@ -116,17 +116,26 @@ class SkoolWorkflowManager {
       let currentElement = null;
       let customMenu = null;
 
-      // Element types for tagging - ENHANCED for smart bot workflow
+      // Element types for tagging - ENHANCED with DEEP VISUAL STATE DETECTION
       const ELEMENT_TYPES = {
+        // CRITICAL: Radio Button States (DEEP ANALYSIS)
+        'radio-blue-unread': '🔵 Radio Button - BLUE FILLED (UNREAD STATE)',
+        'radio-empty-read': '⚪ Radio Button - EMPTY/CLEAR (READ STATE)', 
+        'radio-container-unread': '📦 Radio Container - WITH BLUE CONTENT',
+        'radio-container-read': '📦 Radio Container - EMPTY CONTENT',
+        'radio-svg-unread': '🎨 Radio SVG - BLUE FILLED STATE',
+        'radio-svg-read': '🎨 Radio SVG - EMPTY STATE',
+        'radio-path-blue': '🛤️ Radio Path Element - BLUE FILLED',
+        'radio-path-empty': '🛤️ Radio Path Element - EMPTY',
+        
         // Mail Detection
         'mail-icon-normal': '📧 Mail Icon (Normal - No Unread)',
         'mail-icon-unread': '🔴 Mail Icon (With Unread Badge)',
         'mail-unread-badge': '🔴 Mail Unread Count Badge',
         
         // Conversation Detection  
-        'blue-radio-button': '🔵 Blue Radio Button (UNREAD Indicator)',
-        'conversation-unread-any': '🔴 ANY Unread Conversation Item',
-        'conversation-read-any': '✅ ANY Read Conversation Item',
+        'conversation-unread-full': '🔴 FULL Unread Conversation (entire row)',
+        'conversation-read-full': '✅ FULL Read Conversation (entire row)',
         'conversation-list-container': '📋 Conversation List Container',
         'conversation-preview-text': '👁️ Conversation Preview Text',
         
@@ -560,6 +569,21 @@ class SkoolWorkflowManager {
         
         updateElementDisplay();
         console.log(`🎯 Marked ${type}: ${selector}`);
+        
+        // Log deep analysis for radio buttons
+        if (selectorData.selector.analysis && selectorData.selector.analysis.radioButtonState) {
+          const radioState = selectorData.selector.analysis.radioButtonState;
+          console.log(`🔍 DEEP ANALYSIS:`, {
+            visualState: radioState.visualState,
+            hasBlueColor: radioState.hasBlueColor,
+            hasContent: radioState.hasContent,
+            isEmpty: radioState.isEmpty,
+            svgPathCount: radioState.svgPaths.length,
+            pathColors: radioState.pathColors,
+            pathFills: radioState.pathFills
+          });
+        }
+        
         console.log(`💾 Auto-saved to skool-selectors.json`);
       }
 
@@ -584,10 +608,13 @@ class SkoolWorkflowManager {
         return alternatives;
       }
 
-      // Generate element analysis
+      // DEEP element analysis for radio button state detection
       function generateElementAnalysis(element) {
         const rect = element.getBoundingClientRect();
         const styles = getComputedStyle(element);
+        
+        // DEEP VISUAL STATE ANALYSIS
+        const deepVisualAnalysis = analyzeRadioButtonState(element);
         
         return {
           basic: {
@@ -615,7 +642,8 @@ class SkoolWorkflowManager {
           attributes: {
             type: element.type || 'none',
             role: element.getAttribute('role') || 'none',
-            ariaLabel: element.getAttribute('aria-label') || 'none'
+            ariaLabel: element.getAttribute('aria-label') || 'none',
+            allAttributes: getAllAttributes(element)
           },
           styling: {
             backgroundColor: styles.backgroundColor,
@@ -624,9 +652,142 @@ class SkoolWorkflowManager {
             position: styles.position,
             zIndex: styles.zIndex,
             cursor: styles.cursor,
-            visibility: styles.visibility
-          }
+            visibility: styles.visibility,
+            border: styles.border,
+            borderRadius: styles.borderRadius,
+            boxShadow: styles.boxShadow,
+            opacity: styles.opacity,
+            transform: styles.transform
+          },
+          // CRITICAL: Deep visual state analysis
+          radioButtonState: deepVisualAnalysis,
+          // Child elements analysis
+          children: analyzeChildElements(element),
+          // SVG and Path analysis
+          svgAnalysis: analyzeSVGContent(element)
         };
+      }
+
+      // Analyze radio button visual state in detail
+      function analyzeRadioButtonState(element) {
+        const analysis = {
+          isRadioButton: false,
+          visualState: 'unknown',
+          hasBlueColor: false,
+          hasContent: false,
+          isEmpty: false,
+          svgPaths: [],
+          pathColors: [],
+          pathFills: []
+        };
+
+        // Check if this could be a radio button
+        const parent = element.closest('.styled__BoxWrapper-sc-esqoz3-0, .styled__NotificationRow-sc-5xhq84-2');
+        if (parent) {
+          analysis.isRadioButton = true;
+          
+          // Analyze all SVG elements within and nearby
+          const svgs = element.querySelectorAll('svg');
+          const nearbysvgs = parent.querySelectorAll('svg');
+          
+          [...svgs, ...nearbysvgs].forEach(svg => {
+            const paths = svg.querySelectorAll('path, circle, rect');
+            paths.forEach(path => {
+              const pathStyles = getComputedStyle(path);
+              const fill = path.getAttribute('fill') || pathStyles.fill;
+              const stroke = path.getAttribute('stroke') || pathStyles.stroke;
+              
+              analysis.svgPaths.push({
+                tag: path.tagName,
+                fill: fill,
+                stroke: stroke,
+                d: path.getAttribute('d'),
+                opacity: pathStyles.opacity,
+                visibility: pathStyles.visibility
+              });
+              
+              // Check for blue colors
+              if (fill && (fill.includes('blue') || fill.includes('#') || fill.includes('rgb'))) {
+                analysis.hasBlueColor = true;
+                analysis.pathColors.push(fill);
+              }
+            });
+          });
+          
+          // Check if the element appears to have content vs empty
+          const computedStyles = getComputedStyle(element);
+          const hasVisibleContent = element.offsetWidth > 0 && element.offsetHeight > 0;
+          const hasBackground = computedStyles.backgroundColor !== 'rgba(0, 0, 0, 0)';
+          
+          if (hasVisibleContent && (analysis.hasBlueColor || hasBackground)) {
+            analysis.visualState = 'filled_unread';
+            analysis.hasContent = true;
+          } else if (hasVisibleContent && !analysis.hasBlueColor && !hasBackground) {
+            analysis.visualState = 'empty_read';
+            analysis.isEmpty = true;
+          }
+        }
+
+        return analysis;
+      }
+
+      // Get all attributes of an element
+      function getAllAttributes(element) {
+        const attrs = {};
+        for (let i = 0; i < element.attributes.length; i++) {
+          const attr = element.attributes[i];
+          attrs[attr.name] = attr.value;
+        }
+        return attrs;
+      }
+
+      // Analyze child elements
+      function analyzeChildElements(element) {
+        const children = [];
+        for (let child of element.children) {
+          const childStyles = getComputedStyle(child);
+          children.push({
+            tagName: child.tagName.toLowerCase(),
+            className: child.className,
+            textContent: child.textContent ? child.textContent.trim().substring(0, 50) : '',
+            backgroundColor: childStyles.backgroundColor,
+            color: childStyles.color,
+            display: childStyles.display
+          });
+        }
+        return children;
+      }
+
+      // Analyze SVG content
+      function analyzeSVGContent(element) {
+        const svgData = {
+          hasSVG: false,
+          svgCount: 0,
+          pathData: [],
+          fillColors: [],
+          strokeColors: []
+        };
+
+        const svgs = element.querySelectorAll('svg');
+        if (svgs.length > 0) {
+          svgData.hasSVG = true;
+          svgData.svgCount = svgs.length;
+          
+          svgs.forEach(svg => {
+            const paths = svg.querySelectorAll('path, circle, rect, polygon');
+            paths.forEach(path => {
+              const fill = path.getAttribute('fill');
+              const stroke = path.getAttribute('stroke');
+              const d = path.getAttribute('d');
+              
+              svgData.pathData.push({ tag: path.tagName, fill, stroke, d });
+              if (fill) svgData.fillColors.push(fill);
+              if (stroke) svgData.strokeColors.push(stroke);
+            });
+          });
+        }
+
+        return svgData;
       }
 
       // Save selectors to file via fetch
