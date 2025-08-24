@@ -701,30 +701,72 @@ class LiveDMBot {
   }
 
   /**
-   * Extract user information from the current conversation
-   * @returns {Promise<{skoolUserId: string, skoolUsername: string}>}
+   * Extract REAL user information from profile link and display name
+   * @returns {Promise<{skoolUserId: string, skoolUsername: string, firstName: string, lastName: string, profileUrl: string}>}
    */
   async extractUserInfoFromConversation() {
     try {
-      // Look for username elements in the conversation
-      const usernameSelectors = [
+      let realSkoolId = null;
+      let fullName = null;
+      let profileUrl = null;
+      
+      console.log('🔍 Searching for user profile information...');
+      
+      // 1. PRIORITY: Look for profile URL in avatar links (e.g. https://www.skool.com/@sterling-cooley)
+      const avatarSelectors = [
+        'a[href*="@"]', // Profile links starting with @
+        'img[src*="profile"]', // Profile images
+        '.avatar a', // Avatar wrapper links
+        '.user-avatar a', // User avatar links
+        '[class*="avatar"] a', // Any avatar class with link
+        '[class*="Avatar"] a' // Capitalized avatar class
+      ];
+      
+      for (const selector of avatarSelectors) {
+        try {
+          const elements = await this.browserService.page.$$(selector);
+          for (const element of elements) {
+            const href = await element.getAttribute('href');
+            if (href && href.includes('@') && !href.includes('my-ultra-coach')) {
+              // Extract Skool ID from URL like https://www.skool.com/@sterling-cooley
+              const match = href.match(/@([a-zA-Z0-9-]+)/);
+              if (match) {
+                realSkoolId = match[1]; // e.g., "sterling-cooley"
+                profileUrl = href;
+                console.log(`🎯 Found REAL Skool ID from profile URL: ${realSkoolId}`);
+                console.log(`🔗 Profile URL: ${profileUrl}`);
+                break;
+              }
+            }
+          }
+          if (realSkoolId) break;
+        } catch (e) {
+          // Continue to next selector
+        }
+      }
+      
+      // 2. Look for the user's display name (full name like "Sterling Cooley")
+      const nameSelectors = [
         '.styled__Username-sc-1c7orh8-0', // From discovery sessions
         '[data-testid="username"]',
         '.username',
         '.author-name',
-        '.message-author'
+        '.message-author',
+        '.user-name',
+        '.display-name',
+        '.conversation-name',
+        '[class*="name"]',
+        '[class*="Name"]'
       ];
 
-      let skoolUsername = null;
-      
-      for (const selector of usernameSelectors) {
+      for (const selector of nameSelectors) {
         try {
           const element = await this.browserService.page.$(selector);
           if (element) {
             const text = await element.textContent();
-            if (text && text.trim() && text !== 'My Ultra Coach') {
-              skoolUsername = text.trim();
-              console.log(`👤 Found username: ${skoolUsername}`);
+            if (text && text.trim() && text !== 'My Ultra Coach' && text.includes(' ')) {
+              fullName = text.trim();
+              console.log(`👤 Found full name: ${fullName}`);
               break;
             }
           }
@@ -733,67 +775,119 @@ class LiveDMBot {
         }
       }
 
-      // Try to get username from conversation header or message area
-      if (!skoolUsername) {
-        try {
-          // Look for any text that looks like a username (not "My Ultra Coach")
-          const messageElements = await this.browserService.page.$$('.styled__ChatMessageHeader-sc-cfaah3-12, .message-header, .conversation-header');
-          
-          for (const element of messageElements) {
-            const text = await element.textContent();
-            if (text && text.includes(' ') && !text.includes('My Ultra Coach')) {
-              // Extract the first word as potential username
-              const words = text.trim().split(' ');
-              if (words[0] && words[0].length > 2) {
-                skoolUsername = words[0];
-                console.log(`👤 Extracted username from header: ${skoolUsername}`);
-                break;
-              }
-            }
-          }
-        } catch (e) {
-          console.log('❌ Could not extract username from conversation elements');
-        }
-      }
-
-      // Fallback: try to get from URL or page context
-      if (!skoolUsername) {
+      // 3. If no profile URL found, look in conversation title/header
+      if (!realSkoolId) {
         try {
           const pageTitle = await this.browserService.page.title();
           const urlMatch = pageTitle.match(/Chat with (.+)/i);
           if (urlMatch) {
-            skoolUsername = urlMatch[1].trim();
-            console.log(`👤 Extracted username from page title: ${skoolUsername}`);
+            fullName = fullName || urlMatch[1].trim();
+            console.log(`📄 Extracted name from page title: ${fullName}`);
           }
         } catch (e) {
-          console.log('❌ Could not extract username from page title');
+          console.log('❌ Could not extract from page title');
         }
       }
-
-      // If we still don't have a username, use a generic identifier
-      if (!skoolUsername) {
-        skoolUsername = `User_${Date.now()}`;
-        console.log(`👤 Using fallback username: ${skoolUsername}`);
+      
+      // 4. Parse first/last name from full name
+      let firstName = 'Unknown';
+      let lastName = 'User';
+      
+      if (fullName && fullName.includes(' ')) {
+        const nameParts = fullName.split(' ');
+        firstName = nameParts[0];
+        lastName = nameParts.slice(1).join(' ');
+        console.log(`✂️ Parsed name: ${firstName} ${lastName}`);
+      } else if (fullName) {
+        firstName = fullName;
+        lastName = '';
       }
 
-      // Generate a consistent user ID from the username
-      // In a real implementation, you'd want to get this from Skool's API or user profile
-      const skoolUserId = `skool_${skoolUsername.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${this.generateUserIdSuffix(skoolUsername)}`;
+      // 5. Generate Skool ID if we didn't find it from profile URL
+      if (!realSkoolId && fullName) {
+        // Create ID like "sterling-cooley" from "Sterling Cooley"
+        realSkoolId = fullName.toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+          .replace(/\s+/g, '-'); // Replace spaces with hyphens
+        console.log(`🔧 Generated Skool ID from name: ${realSkoolId}`);
+      }
+      
+      // 6. Final fallback if nothing worked
+      if (!realSkoolId) {
+        realSkoolId = `user-${Date.now()}`;
+        fullName = `User ${Date.now()}`;
+        firstName = 'Unknown';
+        lastName = 'User';
+        console.log(`🆘 Using complete fallback: ${realSkoolId}`);
+      }
 
-      return {
-        skoolUserId,
-        skoolUsername
+      const userInfo = {
+        skoolUserId: realSkoolId, // REAL Skool ID (e.g., "sterling-cooley")
+        skoolUsername: fullName || `${firstName} ${lastName}`, // Display name
+        firstName,
+        lastName,
+        profileUrl: profileUrl || `https://www.skool.com/@${realSkoolId}`
       };
+      
+      console.log('✅ EXTRACTED USER INFO:');
+      console.log(`   🆔 Skool ID: ${userInfo.skoolUserId}`);
+      console.log(`   👤 Full Name: ${userInfo.skoolUsername}`);
+      console.log(`   📝 First: ${firstName}, Last: ${lastName}`);
+      console.log(`   🔗 Profile: ${userInfo.profileUrl}`);
+      
+      // Store this user in our webhook database
+      await this.storeUserProfile(userInfo);
+      
+      return userInfo;
 
     } catch (error) {
       console.error('❌ Error extracting user info:', error);
       
       // Return fallback values
-      const fallbackId = `fallback_${Date.now()}`;
+      const fallbackId = `fallback-${Date.now()}`;
       return {
         skoolUserId: fallbackId,
-        skoolUsername: 'Unknown User'
+        skoolUsername: 'Unknown User',
+        firstName: 'Unknown',
+        lastName: 'User',
+        profileUrl: `https://www.skool.com/@${fallbackId}`
       };
+    }
+  }
+  
+  /**
+   * Store user profile data for webhook usage
+   * @param {Object} userInfo - User information extracted from Skool
+   */
+  async storeUserProfile(userInfo) {
+    try {
+      console.log('💾 Storing user profile for webhook usage...');
+      
+      // In the future, this would save to the database
+      // For now, let's at least log what would be stored
+      const profileData = {
+        skoolId: userInfo.skoolUserId,
+        firstName: userInfo.firstName,
+        lastName: userInfo.lastName,
+        fullName: userInfo.skoolUsername,
+        profileUrl: userInfo.profileUrl,
+        lastSeen: new Date().toISOString(),
+        goals: ['coaching_session'], // Default goals
+        sessions: 0 // New user
+      };
+      
+      console.log('📋 Profile data to store:');
+      console.log(JSON.stringify(profileData, null, 2));
+      
+      // TODO: When database is ready, save to Prisma:
+      // await prisma.skoolUser.upsert({
+      //   where: { skoolId: profileData.skoolId },
+      //   update: { lastSeen: profileData.lastSeen },
+      //   create: profileData
+      // });
+      
+    } catch (error) {
+      console.error('❌ Error storing user profile:', error);
     }
   }
 

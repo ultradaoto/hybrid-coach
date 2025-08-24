@@ -43,6 +43,14 @@ router.get('/user-info', async (req, res) => {
                 skoolId: 'User_1755927657570',
                 goals: ['vagus_nerve_training', 'stress_reduction'],
                 sessions: 1
+            },
+            'sterling-cooley': {
+                firstName: 'Sterling',
+                lastName: 'Cooley',
+                fullName: 'Sterling Cooley',
+                skoolId: 'sterling-cooley',
+                goals: ['vagus_nerve_stimulation', 'breathing_techniques', 'stress_management'],
+                sessions: 5
             }
         };
         
