@@ -426,9 +426,102 @@
     "timestamp": "2025-08-22T07:24:35.394Z"
   },
   "profile-link": {
-    "selector": "img",
-    "description": "🔗 Profile Link - marked via right-click menu",
-    "timestamp": "2025-08-22T07:00:33.052Z"
+    "selector": {
+      "selector": "img",
+      "alternativeSelectors": [],
+      "description": "🔗 Profile Link - marked via right-click menu",
+      "timestamp": "2025-08-24T02:56:57.992Z",
+      "analysis": {
+        "basic": {
+          "tagName": "IMG",
+          "id": "none",
+          "className": "none",
+          "textContent": "none",
+          "innerHTML": "none"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 661,
+            "y": 284,
+            "width": 40,
+            "height": 40,
+            "top": 284,
+            "right": 701,
+            "bottom": 324,
+            "left": 661
+          },
+          "offsetParent": "SPAN",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 40,
+            "height": 40
+          }
+        },
+        "attributes": {
+          "src": "https://assets.skool.com/f/44a8d5f5699d4347907b8392238bc926/ae4a148d0252496589b4b7dbdeec7198ff2371399b9145e5be02f8956f9b3abc-sm.jpg",
+          "alt": "Sterling Cooley",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgba(0, 0, 0, 0)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "SPAN",
+          "parentClass": "styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 107,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 33,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            },
+            {
+              "distance": 107,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T02:56:57.996Z"
   },
   "mail-icon-normal": {
     "selector": {
@@ -1678,28 +1771,28 @@
       "alternativeSelectors": [
         ".styled__UserHandle-sc-1gipnml-6",
         ".gmAjKD",
-        "text=\"@kira-morin-1676\"",
-        ":has-text(\"@kira-morin-1676\")"
+        "text=\"@sterling-cooley\"",
+        ":has-text(\"@sterling-cooley\")"
       ],
       "description": "🆔 Profile Skool ID (e.g., \"@sterling-cooley\") - marked via right-click menu",
-      "timestamp": "2025-08-24T02:49:11.688Z",
+      "timestamp": "2025-08-24T02:57:51.137Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
           "className": "styled__UserHandle-sc-1gipnml-6 gmAjKD",
-          "textContent": "@kira-morin-1676",
-          "innerHTML": "@kira-morin-1676"
+          "textContent": "@sterling-cooley",
+          "innerHTML": "@sterling-cooley"
         },
         "position": {
           "boundingRect": {
             "x": 1239,
-            "y": 445.015625,
+            "y": 403.5,
             "width": 239,
             "height": 21,
-            "top": 445.015625,
+            "top": 403.5,
             "right": 1478,
-            "bottom": 466.015625,
+            "bottom": 424.5,
             "left": 1239
           },
           "offsetParent": "DIV",
@@ -1737,22 +1830,14 @@
               "tag": "DIV",
               "class": "styled__BoxWrapper-sc-esqoz3-0 fiJfKc Row-sc-dwrxl6-0 kfVcuA",
               "id": "",
-              "text": "Kira Morin"
+              "text": "Sterling Cooley"
             }
           ]
         },
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [
-            {
-              "distance": 123,
-              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            }
-          ],
+          "nearbyButtons": [],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -1768,36 +1853,34 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T02:49:11.689Z"
+    "timestamp": "2025-08-24T02:57:51.140Z"
   },
   "profile-bio-description": {
     "selector": {
       "selector": ".styled__Bio-sc-1gipnml-9",
       "alternativeSelectors": [
         ".styled__Bio-sc-1gipnml-9",
-        ".hGQpgW",
-        "text=\"Neuro and data nerd, MECFS/Long Covid warrior\"",
-        ":has-text(\"Neuro and data nerd, MECFS/Long Covid warrior\")"
+        ".hGQpgW"
       ],
       "description": "📄 Profile Bio/Description (e.g., \"Neuro and data nerd...\") - marked via right-click menu",
-      "timestamp": "2025-08-24T02:49:22.481Z",
+      "timestamp": "2025-08-24T02:57:56.362Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
           "className": "styled__Bio-sc-1gipnml-9 hGQpgW",
-          "textContent": "Neuro and data nerd, MECFS/Long Covid warrior",
-          "innerHTML": "Neuro and data nerd, MECFS/Long Covid warrior"
+          "textContent": "Vagus Nerve Stimulation Specialist\nAdmin of Ultra School",
+          "innerHTML": "Vagus Nerve Stimulation Specialist\nAdmin of Ultra School"
         },
         "position": {
           "boundingRect": {
             "x": 1239,
-            "y": 474.015625,
+            "y": 432.5,
             "width": 239,
             "height": 48,
-            "top": 474.015625,
+            "top": 432.5,
             "right": 1478,
-            "bottom": 522.015625,
+            "bottom": 480.5,
             "left": 1239
           },
           "offsetParent": "DIV",
@@ -1835,28 +1918,20 @@
               "tag": "DIV",
               "class": "styled__ProgressWrapper-sc-1gipnml-0 cfFHpM",
               "id": "",
-              "text": "2Level 29points to level up"
+              "text": ""
             },
             {
               "tag": "DIV",
               "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 duwkcK",
               "id": "",
-              "text": "Kira Morin@kira-morin-1676"
+              "text": "Sterling Cooley@sterling-coole"
             }
           ]
         },
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [
-            {
-              "distance": 108,
-              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            }
-          ],
+          "nearbyButtons": [],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -1872,34 +1947,34 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T02:49:22.484Z"
+    "timestamp": "2025-08-24T02:57:56.363Z"
   },
   "profile-real-name": {
     "selector": {
-      "selector": "text=\"Kira Morin\"",
+      "selector": "text=\"Sterling Cooley\"",
       "alternativeSelectors": [
-        "text=\"Kira Morin\"",
-        ":has-text(\"Kira Morin\")"
+        "text=\"Sterling Cooley\"",
+        ":has-text(\"Sterling Cooley\")"
       ],
       "description": "👤 Profile Real Name (e.g., \"Sterling Cooley\") - marked via right-click menu",
-      "timestamp": "2025-08-24T02:49:29.405Z",
+      "timestamp": "2025-08-24T02:57:46.183Z",
       "analysis": {
         "basic": {
           "tagName": "SPAN",
           "id": "none",
           "className": "none",
-          "textContent": "Kira Morin",
-          "innerHTML": "Kira&nbsp;Morin"
+          "textContent": "Sterling Cooley",
+          "innerHTML": "Sterling&nbsp;Cooley"
         },
         "position": {
           "boundingRect": {
             "x": 1239,
-            "y": 413.515625,
-            "width": 107.328125,
+            "y": 372,
+            "width": 157.6875,
             "height": 28,
-            "top": 413.515625,
-            "right": 1346.328125,
-            "bottom": 441.515625,
+            "top": 372,
+            "right": 1396.6875,
+            "bottom": 400,
             "left": 1239
           },
           "offsetParent": "DIV",
@@ -1936,15 +2011,7 @@
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [
-            {
-              "distance": 144,
-              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            }
-          ],
+          "nearbyButtons": [],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -1960,6 +2027,6 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T02:49:29.407Z"
+    "timestamp": "2025-08-24T02:57:46.185Z"
   }
 }

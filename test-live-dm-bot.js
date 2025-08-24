@@ -715,7 +715,8 @@ class LiveDMBot {
       // 1. PRIORITY: Look for profile URL in avatar links (e.g. https://www.skool.com/@sterling-cooley)
       const avatarSelectors = [
         'a[href*="@"]', // Profile links starting with @
-        'img[src*="profile"]', // Profile images
+        'img[src*="profile"]', // Profile images (tagged in chat)
+        'img', // Tagged profile link selector
         '.avatar a', // Avatar wrapper links
         '.user-avatar a', // User avatar links
         '[class*="avatar"] a', // Any avatar class with link
@@ -726,16 +727,35 @@ class LiveDMBot {
         try {
           const elements = await this.browserService.page.$$(selector);
           for (const element of elements) {
-            const href = await element.getAttribute('href');
-            if (href && href.includes('@') && !href.includes('my-ultra-coach')) {
-              // Extract Skool ID from URL like https://www.skool.com/@sterling-cooley
-              const match = href.match(/@([a-zA-Z0-9-]+)/);
-              if (match) {
-                realSkoolId = match[1]; // e.g., "sterling-cooley"
-                profileUrl = href;
-                console.log(`🎯 Found REAL Skool ID from profile URL: ${realSkoolId}`);
-                console.log(`🔗 Profile URL: ${profileUrl}`);
-                break;
+            // For img elements, look for parent links or nearby links
+            if (selector === 'img') {
+              // Check if img is inside a link
+              const parentLink = await element.evaluateHandle(el => el.closest('a[href*="@"]'));
+              if (parentLink) {
+                const href = await parentLink.getAttribute('href');
+                if (href && href.includes('@') && !href.includes('my-ultra-coach')) {
+                  const match = href.match(/@([a-zA-Z0-9-]+)/);
+                  if (match) {
+                    realSkoolId = match[1];
+                    profileUrl = href;
+                    console.log(`🎯 Found REAL Skool ID from img parent link: ${realSkoolId}`);
+                    console.log(`🔗 Profile URL: ${profileUrl}`);
+                    break;
+                  }
+                }
+              }
+            } else {
+              // For link elements, check href directly
+              const href = await element.getAttribute('href');
+              if (href && href.includes('@') && !href.includes('my-ultra-coach')) {
+                const match = href.match(/@([a-zA-Z0-9-]+)/);
+                if (match) {
+                  realSkoolId = match[1];
+                  profileUrl = href;
+                  console.log(`🎯 Found REAL Skool ID from profile URL: ${realSkoolId}`);
+                  console.log(`🔗 Profile URL: ${profileUrl}`);
+                  break;
+                }
               }
             }
           }
@@ -885,6 +905,10 @@ class LiveDMBot {
       console.log(`🔍 Opening new tab for profile: ${profileUrl}`);
       
       // Open profile page in new tab
+      if (!this.browserService.context) {
+        console.log('❌ Browser context not available');
+        return null;
+      }
       profilePage = await this.browserService.context.newPage();
       
       // Get current page URL to extract group context
