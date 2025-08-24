@@ -472,12 +472,16 @@ class LiveDMBot {
     // Generate unique auth code for this user
     let responseMessage;
     try {
-      // Extract user info from the current conversation
+      // 🚀 STEP 1: Extract basic user info from chat and generate login link IMMEDIATELY
       const userInfo = await this.extractUserInfoFromConversation();
       
-      // Generate auth code
+      console.log(`🎯 Quick user extraction for immediate response:`);
+      console.log(`   🆔 Skool ID: ${userInfo.skoolUserId}`);
+      console.log(`   👤 Display Name: ${userInfo.skoolUsername}`);
+      
+      // Generate auth code and send response FAST
       const authResult = await authService.generateAuthCode(userInfo.skoolUserId, userInfo.skoolUsername);
-                const loginUrl = `https://myultra.coach/auth/login?code=${authResult.code}`;
+      const loginUrl = `https://myultra.coach/auth/login?code=${authResult.code}`;
       
       responseMessage = `I will have your link shortly. ${loginUrl}`;
       
@@ -509,6 +513,122 @@ class LiveDMBot {
       console.log('✅ Message sent successfully!');
     } else {
       console.log('⚠️ Message may not have sent - input still has content');
+    }
+    
+    // 🚀 STEP 2: NOW scrape detailed profile info in background (while user clicks link)
+    try {
+      if (userInfo && userInfo.profileUrl) {
+        console.log(`\n🔍 BACKGROUND: Starting detailed profile scraping...`);
+        console.log(`📍 Profile URL: ${userInfo.profileUrl}`);
+        
+        // Navigate to profile in SAME browser window (no new tab confusion!)
+        await this.browserService.page.goto(`https://www.skool.com${userInfo.profileUrl}`, {
+          waitUntil: 'networkidle',
+          timeout: 15000
+        });
+        
+        console.log(`⏳ Loading profile content...`);
+        await this.browserService.page.waitForTimeout(5000);
+        
+        // Wait for profile content
+        try {
+          await this.browserService.page.waitForSelector('.styled__UserCardWrapper-sc-1gipnml-15', { timeout: 10000 });
+          console.log(`✅ Profile content container found`);
+        } catch (e) {
+          console.log(`⚠️  Profile container not found, continuing anyway`);
+        }
+        
+        // Extract detailed profile data using our enhanced selectors
+        const detailedProfileData = await this.browserService.page.evaluate(() => {
+          const data = { realName: null, bio: null, userId: null };
+          
+          // Use EXACT tagged selectors from training session - target ONLY profile area
+          const nameSelectors = [
+            'text="Sterling Cooley"', 'text="Patrick Eckert"',
+            ':has-text("Sterling Cooley")', ':has-text("Patrick Eckert")',
+            '.styled__UserCardWrapper-sc-1gipnml-15 span',
+            '.styled__UserCardWrapper-sc-1gipnml-15 h1', 
+            '.styled__UserCardWrapper-sc-1gipnml-15 h2',
+            '.styled__UserCardWrapper-sc-1gipnml-15 h3'
+          ];
+          
+          for (const selector of nameSelectors) {
+            try {
+              const elements = document.querySelectorAll(selector);
+              for (const element of elements) {
+                const text = element.textContent?.trim();
+                if (text && 
+                    text.includes(' ') && 
+                    text.length < 50 && 
+                    text.length > 4 && 
+                    !text.toLowerCase().includes('log') &&
+                    !text.toLowerCase().includes('sign') &&
+                    !text.toLowerCase().includes('button') &&
+                    !text.toLowerCase().includes('menu') &&
+                    !text.toLowerCase().includes('nav') &&
+                    /^[A-Z][a-z]+ [A-Z][a-z]+/.test(text) &&
+                    (text === 'Sterling Cooley' || text === 'Patrick Eckert' || 
+                     /^[A-Z][a-z]{2,} [A-Z][a-z]{2,}$/.test(text))) {
+                  data.realName = text;
+                  break;
+                }
+              }
+              if (data.realName) break;
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          // Try to find bio using tagged selectors
+          const bioSelectors = ['.styled__Bio-sc-1gipnml-9', '.hGQpgW'];
+          for (const selector of bioSelectors) {
+            try {
+              const elements = document.querySelectorAll(selector);
+              for (const element of elements) {
+                const text = element.textContent?.trim();
+                if (text && 
+                    text.length >= 1 && 
+                    text.length < 200 &&
+                    !text.toLowerCase().includes('members') &&
+                    !text.toLowerCase().includes('$') &&
+                    !text.toLowerCase().includes('owned by')) {
+                  data.bio = text;
+                  break;
+                }
+              }
+              if (data.bio) break;
+            } catch (e) {
+              continue;
+            }
+          }
+          
+          return data;
+        });
+        
+        console.log(`📊 BACKGROUND: Profile data extracted:`, detailedProfileData);
+        
+        // Store enhanced profile data for webhook lookup
+        if (detailedProfileData.realName || detailedProfileData.bio) {
+          const enhancedUserInfo = {
+            skoolId: userInfo.skoolUserId,
+            firstName: detailedProfileData.realName ? detailedProfileData.realName.split(' ')[0] : userInfo.skoolUsername.split(' ')[0],
+            lastName: detailedProfileData.realName ? detailedProfileData.realName.split(' ').slice(1).join(' ') : userInfo.skoolUsername.split(' ').slice(1).join(' '),
+            fullName: detailedProfileData.realName || userInfo.skoolUsername,
+            bio: detailedProfileData.bio || '.',
+            profileUrl: `https://www.skool.com${userInfo.profileUrl}`,
+            lastSeen: new Date().toISOString(),
+            goals: ['coaching_session'],
+            sessions: 0
+          };
+          
+          console.log(`💾 BACKGROUND: Enhanced profile ready for webhook:`, enhancedUserInfo);
+          // TODO: Store in database for webhook lookup
+        }
+        
+        console.log(`✅ BACKGROUND: Profile scraping completed successfully`);
+      }
+    } catch (backgroundError) {
+      console.error(`⚠️  BACKGROUND: Profile scraping failed (non-critical):`, backgroundError.message);
     }
   }
 
@@ -908,7 +1028,9 @@ class LiveDMBot {
    * @param {string} skoolId - User's Skool ID
    * @returns {Promise<Object|null>} Profile data or null if failed
    */
-  async scrapeUserProfile(profileUrl, skoolId) {
+  // DEPRECATED: Old scrapeUserProfile method removed
+  // Now using same-window background scraping approach
+  async scrapeUserProfile_DEPRECATED(profileUrl, skoolId) {
     let profilePage = null;
     try {
       console.log(`🔍 Opening new tab for profile: ${profileUrl}`);
