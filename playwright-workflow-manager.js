@@ -90,36 +90,63 @@ class SkoolWorkflowManager {
       // Global state
       window.markedElements = {};
       window.botWorkflow = [
-        { id: 1, type: 'click', target: 'mail-icon', description: 'Click mail icon to open conversation list', selector: '.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', status: 'pending' },
-        { id: 2, type: 'wait', target: 'conversation-list', description: 'Wait for conversation list to load', delay: 2000, status: 'pending' },
-        { id: 3, type: 'click', target: 'sterling-conversation', description: 'Click Sterling Cooley conversation', selector: 'text="Sterling Cooley"', status: 'pending' },
-        { id: 4, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 3000, status: 'pending' },
-        { id: 5, type: 'type', target: 'message-input', description: 'Type login message', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly...', status: 'pending' },
-        { id: 6, type: 'click', target: 'send-button', description: 'Send the message', selector: 'button[type="submit"]', status: 'pending' }
+        { id: 1, type: 'check', target: 'mail-icon-unread', description: 'Check if mail icon has unread indicator', selector: '.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', condition: 'has_unread_badge', status: 'pending' },
+        { id: 2, type: 'click', target: 'mail-icon', description: 'Click mail icon to open conversation list', selector: '.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', status: 'pending' },
+        { id: 3, type: 'wait', target: 'conversation-list', description: 'Wait for conversation list to load', delay: 2000, status: 'pending' },
+        { id: 4, type: 'find', target: 'blue-radio-unread', description: 'Find conversation with blue unread indicator', selector: '.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ', condition: 'first_unread', status: 'pending' },
+        { id: 5, type: 'click', target: 'unread-conversation', description: 'Click the conversation with unread messages', selector: 'auto-detected', dynamic: true, status: 'pending' },
+        { id: 6, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 3000, status: 'pending' },
+        { id: 7, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
+        { id: 8, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
+        { id: 9, type: 'click', target: 'send-button', description: 'Send the message', selector: 'button[type="submit"]', status: 'pending' },
+        { id: 10, type: 'check', target: 'profile-scraped', description: 'Check if user profile already scraped', condition: 'database_check', status: 'pending' },
+        { id: 11, type: 'conditional', target: 'profile-scraping', description: 'IF not scraped: Click profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', condition: 'if_not_scraped', status: 'pending' },
+        { id: 12, type: 'extract', target: 'profile-data', description: 'Extract name, bio, skoolId from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15', condition: 'if_profile_opened', status: 'pending' },
+        { id: 13, type: 'save', target: 'database', description: 'Save user data to Prisma database', condition: 'if_profile_scraped', status: 'pending' },
+        { id: 14, type: 'navigate', target: 'return-monitoring', description: 'Return to MyUltra Coach profile for monitoring', selector: 'https://www.skool.com/@my-ultra-coach-6588', status: 'pending' },
+        { id: 15, type: 'loop', target: 'monitoring', description: 'Continue monitoring for next unread message', delay: 5000, status: 'pending' }
       ];
 
       let draggedItem = null;
       let currentElement = null;
       let customMenu = null;
 
-      // Element types for tagging
+      // Element types for tagging - ENHANCED for smart bot workflow
       const ELEMENT_TYPES = {
-        'mail-icon-normal': '📧 Mail Icon (Normal)',
-        'mail-icon-unread': '🔴 Mail Icon (Unread)',
-        'conversation-item': '📄 Conversation List Item',
-        'conversation-sterling-cooley': '👤 Sterling Cooley Conversation',
-        'conversation-jie-lu': '👤 Jie Lu Conversation',
+        // Mail Detection
+        'mail-icon-normal': '📧 Mail Icon (Normal - No Unread)',
+        'mail-icon-unread': '🔴 Mail Icon (With Unread Badge)',
+        'mail-unread-badge': '🔴 Mail Unread Count Badge',
+        
+        // Conversation Detection  
+        'blue-radio-button': '🔵 Blue Radio Button (UNREAD Indicator)',
+        'conversation-unread-any': '🔴 ANY Unread Conversation Item',
+        'conversation-read-any': '✅ ANY Read Conversation Item',
+        'conversation-list-container': '📋 Conversation List Container',
+        'conversation-preview-text': '👁️ Conversation Preview Text',
+        
+        // Chat Interface
         'message-input': '📝 Message Input Field',
-        'send-button': '📤 Send Button',
+        'send-button': '📤 Send Message Button',
+        'chat-window': '🪟 Chat Window Container',
         'chat-close-button': '❌ Chat Close Button',
-        'profile-link': '🔗 Profile Link',
-        'username-them': '👤 Username (Other Person)',
-        'timestamp-time': '🕐 Message Timestamp',
-        'message-bubble': '💬 Message Bubble',
-        'green-radio-button': '🟢 Green Radio Button (UNREAD)',
-        'blue-radio-button': '🔵 Blue Radio Button (UNREAD)',
-        'conversation-unread': '🔴 Unread Conversation Item',
-        'conversation-read': '✅ Read Conversation Item'
+        
+        // User Profile Elements
+        'profile-link': '🔗 User Profile Link (clickable)',
+        'username-display': '👤 Username Display Text',
+        'profile-container': '📦 Profile Information Container',
+        'profile-real-name': '🏷️ Profile Real Name',
+        'profile-skool-id': '🆔 Profile Skool ID',
+        'profile-bio': '📄 Profile Bio/Description',
+        
+        // Message Elements
+        'our-message': '🟦 Our Sent Message',
+        'their-message': '⬜ Their Received Message',
+        'message-timestamp': '🕐 Message Timestamp',
+        
+        // Navigation
+        'return-to-profile': '🏠 Return to MyUltra Coach Profile',
+        'close-modal': '❌ Close Any Modal/Popup'
       };
 
       // Create workflow manager panel
@@ -183,21 +210,35 @@ class SkoolWorkflowManager {
         const container = document.getElementById('workflow-steps');
         if (!container) return;
 
-        container.innerHTML = window.botWorkflow.map((step, index) => `
+        container.innerHTML = window.botWorkflow.map((step, index) => {
+          const typeColors = {
+            'check': '#17a2b8',
+            'find': '#6f42c1', 
+            'conditional': '#fd7e14',
+            'extract': '#20c997',
+            'save': '#28a745',
+            'loop': '#6c757d'
+          };
+          const typeColor = typeColors[step.type] || '#007bff';
+          
+          return `
           <div class="workflow-step" data-step-id="${step.id}" style="
             margin-bottom: 8px; 
             padding: 8px; 
             background: ${step.status === 'completed' ? '#d4edda' : step.status === 'running' ? '#fff3cd' : '#f8f9fa'}; 
             border: 1px solid ${step.status === 'completed' ? '#c3e6cb' : step.status === 'running' ? '#ffeaa7' : '#dee2e6'}; 
+            border-left: 4px solid ${typeColor};
             border-radius: 4px; 
             cursor: grab;
             user-select: none;
           ">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div style="flex: 1;">
-                <strong style="color: #333;">${index + 1}. ${step.type.toUpperCase()}</strong>
+                <strong style="color: #333; color: ${typeColor};">${index + 1}. ${step.type.toUpperCase()}</strong>
                 <div style="color: #666; font-size: 10px; margin-top: 2px;">${step.description}</div>
-                ${step.selector ? `<div style="color: #007bff; font-size: 9px; font-family: monospace; margin-top: 2px;">${step.selector}</div>` : ''}
+                ${step.condition ? `<div style="color: #e83e8c; font-size: 9px; font-style: italic; margin-top: 1px;">Condition: ${step.condition}</div>` : ''}
+                ${step.selector && step.selector !== 'auto-detected' ? `<div style="color: #007bff; font-size: 9px; font-family: monospace; margin-top: 2px;">${step.selector}</div>` : ''}
+                ${step.dynamic ? `<div style="color: #28a745; font-size: 8px; margin-top: 1px;">🤖 Dynamic Detection</div>` : ''}
               </div>
               <div>
                 <button onclick="editWorkflowStep(${step.id})" style="background: #17a2b8; border: none; color: white; padding: 2px 4px; border-radius: 2px; cursor: pointer; font-size: 9px; margin-right: 2px;">✏️</button>
@@ -205,7 +246,8 @@ class SkoolWorkflowManager {
               </div>
             </div>
           </div>
-        `).join('');
+        `;
+        }).join('');
 
         // Add drag and drop
         const steps = container.querySelectorAll('.workflow-step');
