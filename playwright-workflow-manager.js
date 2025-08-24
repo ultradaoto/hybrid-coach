@@ -41,14 +41,27 @@ class SkoolWorkflowManager {
       ]
     });
 
-    this.context = await this.browser.newContext({
+    // Load existing authentication if available
+    let contextOptions = {
       viewport: { width: 1920, height: 1080 },
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       recordVideo: {
         dir: './playwright-videos/',
         size: { width: 1920, height: 1080 }
       }
-    });
+    };
+
+    // Try to use existing session
+    try {
+      const authPath = './skool-auth.json';
+      await fs.access(authPath);
+      contextOptions.storageState = authPath;
+      console.log('🔐 Using existing Skool authentication');
+    } catch {
+      console.log('🆕 No existing auth found - you may need to login');
+    }
+
+    this.context = await this.browser.newContext(contextOptions);
 
     this.page = await this.context.newPage();
 
@@ -58,15 +71,18 @@ class SkoolWorkflowManager {
     // Inject enhanced workflow manager
     await this.injectWorkflowManager();
 
-    console.log('🎬 Opening Skool.com...');
-    await this.page.goto('https://www.skool.com/login');
+    console.log('🎬 Opening My Ultra Coach profile...');
+    await this.page.goto('https://www.skool.com/@my-ultra-coach-6588');
     
     console.log('✅ Workflow Manager ready!');
     console.log('📋 Use the bottom-left panel to build your bot workflow');
     console.log('🎯 Ctrl + Right-click elements to tag them');
+    console.log('🔍 Browser should be open - interact with the page');
     
-    // Keep the page open for interaction
-    await this.page.pause();
+    // Keep the page open for interaction - use a promise that never resolves
+    await new Promise(() => {
+      console.log('⏸️ Workflow Manager is running... Press Ctrl+C to exit');
+    });
   }
 
   async injectWorkflowManager() {
@@ -473,15 +489,18 @@ class SkoolWorkflowManager {
 
 // Main execution
 async function main() {
+  console.log('🚀 Starting main function...');
   const manager = new SkoolWorkflowManager();
   
   try {
+    console.log('🔧 Initializing manager...');
     await manager.initialize();
+    console.log('✅ Manager initialized successfully');
   } catch (error) {
-    console.error('❌ Error:', error);
-  } finally {
-    await manager.cleanup();
+    console.error('❌ Error during initialization:', error);
+    console.error('Stack trace:', error.stack);
   }
+  // Don't cleanup automatically - let it stay open for interaction
 }
 
 // Handle cleanup on exit
@@ -490,6 +509,5 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main();
-}
+// Run the main function
+main().catch(console.error);
