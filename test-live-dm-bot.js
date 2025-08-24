@@ -523,56 +523,19 @@ class LiveDMBot {
         console.log(`\n🔍 BACKGROUND: Navigating to profile by clicking profile image...`);
         console.log(`📍 Target Profile: ${userInfo.profileUrl}`);
         
-        // Find and click the user's profile image/avatar in the chat
+        // Navigate directly to profile URL (avoid new tab issues from clicking profile images)
+        console.log(`🌐 Navigating directly to profile: https://www.skool.com${userInfo.profileUrl}`);
+        
         try {
-          // Look for profile images/avatars that link to this user's profile
-          const profileImageSelectors = [
-            `a[href="${userInfo.profileUrl}"]`, // Direct profile link
-            `a[href*="${userInfo.skoolUserId}"]`, // Link containing Skool ID
-            `img[alt*="${userInfo.skoolUserId}"]`, // Avatar with Skool ID in alt
-            `.message-author img`, // Message author avatar
-            `.user-avatar img`, // User avatar image
-            `[data-testid="avatar"]` // Avatar with test ID
-          ];
-          
-          console.log(`🔍 Looking for profile image with multiple selectors...`);
-          let profileImageElement = null;
-          
-          for (const selector of profileImageSelectors) {
-            try {
-              profileImageElement = await this.browserService.page.$(selector);
-              if (profileImageElement) {
-                console.log(`✅ Found profile element with selector: ${selector}`);
-                break;
-              }
-            } catch (e) {
-              continue;
-            }
-          }
-          if (profileImageElement) {
-            console.log(`🖱️  Clicking on profile image to navigate...`);
-            await profileImageElement.click();
-            
-            // Wait for navigation to profile page
-            await this.browserService.page.waitForLoadState('networkidle', { timeout: 15000 });
-            console.log(`⏳ Profile page loaded, waiting for content...`);
-            await this.browserService.page.waitForTimeout(3000);
-          } else {
-            // Fallback: Navigate directly to profile URL
-            console.log(`⚠️  Profile image not found, navigating directly to: ${userInfo.profileUrl}`);
-            await this.browserService.page.goto(`https://www.skool.com${userInfo.profileUrl}`, {
-              waitUntil: 'networkidle',
-              timeout: 15000
-            });
-            await this.browserService.page.waitForTimeout(3000);
-          }
-        } catch (clickError) {
-          console.log(`⚠️  Click failed, using direct navigation: ${clickError.message}`);
           await this.browserService.page.goto(`https://www.skool.com${userInfo.profileUrl}`, {
             waitUntil: 'networkidle',
             timeout: 15000
           });
+          console.log(`✅ Successfully navigated to profile page`);
           await this.browserService.page.waitForTimeout(3000);
+        } catch (navError) {
+          console.log(`❌ Direct navigation failed: ${navError.message}`);
+          throw navError;
         }
         
         // Wait for profile content
@@ -651,6 +614,26 @@ class LiveDMBot {
         });
         
         console.log(`📊 BACKGROUND: Profile data extracted:`, detailedProfileData);
+        
+        // Debug: Log what elements were found on the page
+        const debugInfo = await this.browserService.page.evaluate(() => {
+          const spanElements = document.querySelectorAll('span');
+          const h1Elements = document.querySelectorAll('h1');
+          const h2Elements = document.querySelectorAll('h2');
+          const profileContainer = document.querySelector('.styled__UserCardWrapper-sc-1gipnml-15');
+          
+          return {
+            totalSpans: spanElements.length,
+            totalH1s: h1Elements.length,
+            totalH2s: h2Elements.length,
+            hasProfileContainer: !!profileContainer,
+            profileContainerText: profileContainer?.textContent?.substring(0, 200) || 'Not found',
+            pageTitle: document.title,
+            currentUrl: window.location.href
+          };
+        });
+        
+        console.log(`🐛 DEBUG: Page analysis:`, debugInfo);
         
         // Store enhanced profile data for webhook lookup
         if (detailedProfileData.realName || detailedProfileData.bio) {
