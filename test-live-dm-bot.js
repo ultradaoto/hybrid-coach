@@ -427,10 +427,42 @@ class LiveDMBot {
           // Ensure element is visible and clickable
           const isVisible = await mailElement.isVisible();
           if (isVisible) {
-            await mailElement.click();
-            await this.browserService.page.waitForTimeout(2000);
-            mailClicked = true;
-            break;
+            try {
+              // Try multiple click methods for robustness
+              await mailElement.click();
+              await this.browserService.page.waitForTimeout(2000);
+              mailClicked = true;
+              break;
+            } catch (clickError) {
+              console.log(`⚠️ Standard click failed for ${selector}, trying coordinate click...`);
+              
+              try {
+                const boundingBox = await mailElement.boundingBox();
+                if (boundingBox) {
+                  await this.browserService.page.mouse.click(
+                    boundingBox.x + boundingBox.width/2, 
+                    boundingBox.y + boundingBox.height/2
+                  );
+                  await this.browserService.page.waitForTimeout(2000);
+                  mailClicked = true;
+                  break;
+                }
+              } catch (coordError) {
+                console.log(`⚠️ Coordinate click failed for ${selector}, trying JavaScript click...`);
+                
+                try {
+                  await this.browserService.page.evaluate((element) => {
+                    element.click();
+                  }, mailElement);
+                  await this.browserService.page.waitForTimeout(2000);
+                  mailClicked = true;
+                  break;
+                } catch (jsError) {
+                  console.log(`❌ All click methods failed for ${selector}: ${jsError.message}`);
+                  // Continue to next selector
+                }
+              }
+            }
           } else {
             console.log(`⚠️ Mail element not visible: ${selector}`);
           }
@@ -456,6 +488,23 @@ class LiveDMBot {
   async openLatestConversation() {
     console.log('🎯 Using TRAINED SELECTORS to find UNREAD conversations...');
     
+    // Step 1: Dismiss any overlays that might block clicks
+    try {
+      console.log('🧹 Clearing any blocking overlays...');
+      await this.browserService.page.keyboard.press('Escape');
+      await this.browserService.page.waitForTimeout(500);
+      
+      // Check for and close any dropdown backgrounds
+      const dropdownOverlays = await this.browserService.page.$$('.styled__DropdownBackground-sc-13jov82-11');
+      if (dropdownOverlays.length > 0) {
+        console.log(`📦 Found ${dropdownOverlays.length} dropdown overlays - dismissing...`);
+        await this.browserService.page.click('body'); // Click outside to dismiss
+        await this.browserService.page.waitForTimeout(500);
+      }
+    } catch (error) {
+      console.log('⚠️ Overlay dismissal failed, continuing...');
+    }
+    
     // Method 1: Use trained green radio button selectors (MOST RELIABLE)
     const enhancedConversationDetection = await this.browserService.page.evaluate(() => {
       // Trained selectors from Playwright tagging
@@ -474,24 +523,91 @@ class LiveDMBot {
     
     console.log(`📊 ENHANCED: ${enhancedConversationDetection.greenRadioCount} green radios, ${enhancedConversationDetection.unreadRowCount} unread rows`);
     
-    // Priority 1: Click on green radio button (unread indicator)
+    // Priority 1: Click on green radio button (unread indicator) with enhanced clicking
     const greenRadioElement = await this.browserService.page.$('.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ');
     if (greenRadioElement) {
-      console.log('🟢 Clicking GREEN RADIO BUTTON for unread conversation...');
-      await greenRadioElement.click();
-      await this.browserService.page.waitForTimeout(3000);
-      console.log('✅ Opened UNREAD conversation via green radio button');
-      return;
+      console.log('🟢 Attempting enhanced GREEN RADIO BUTTON click...');
+      
+      try {
+        // Method A: Force click with coordinate-based approach
+        const boundingBox = await greenRadioElement.boundingBox();
+        if (boundingBox) {
+          console.log(`📍 Clicking at coordinates: ${boundingBox.x + boundingBox.width/2}, ${boundingBox.y + boundingBox.height/2}`);
+          await this.browserService.page.mouse.click(
+            boundingBox.x + boundingBox.width/2, 
+            boundingBox.y + boundingBox.height/2
+          );
+          await this.browserService.page.waitForTimeout(3000);
+          console.log('✅ Opened UNREAD conversation via coordinate click');
+          return;
+        }
+      } catch (coordError) {
+        console.log('⚠️ Coordinate click failed, trying force click...');
+        
+        try {
+          // Method B: Force click (bypasses intercepting elements)
+          await greenRadioElement.click({ force: true });
+          await this.browserService.page.waitForTimeout(3000);
+          console.log('✅ Opened UNREAD conversation via force click');
+          return;
+        } catch (forceError) {
+          console.log('⚠️ Force click failed, trying JavaScript click...');
+          
+          try {
+            // Method C: JavaScript click (bypasses all UI blocking)
+            await this.browserService.page.evaluate((element) => {
+              element.click();
+            }, greenRadioElement);
+            await this.browserService.page.waitForTimeout(3000);
+            console.log('✅ Opened UNREAD conversation via JavaScript click');
+            return;
+          } catch (jsError) {
+            console.log('❌ All green radio click methods failed, trying parent container...');
+          }
+        }
+      }
     }
     
-    // Priority 2: Click on unread notification row
+    // Priority 2: Click on unread notification row with robust clicking
     const unreadRow = await this.browserService.page.$('.styled__NotificationRow-sc-5xhq84-2.hpcoAn');
     if (unreadRow) {
-      console.log('🔴 Clicking UNREAD NOTIFICATION ROW...');
-      await unreadRow.click();
-      await this.browserService.page.waitForTimeout(3000);
-      console.log('✅ Opened UNREAD conversation via notification row');
-      return;
+      console.log('🔴 Attempting robust UNREAD NOTIFICATION ROW click...');
+      
+      try {
+        // Try coordinate click first
+        const boundingBox = await unreadRow.boundingBox();
+        if (boundingBox) {
+          await this.browserService.page.mouse.click(
+            boundingBox.x + boundingBox.width/2, 
+            boundingBox.y + boundingBox.height/2
+          );
+          await this.browserService.page.waitForTimeout(3000);
+          console.log('✅ Opened UNREAD conversation via notification row coordinate click');
+          return;
+        }
+      } catch (error) {
+        console.log('⚠️ Notification row coordinate click failed, trying force click...');
+        
+        try {
+          await unreadRow.click({ force: true });
+          await this.browserService.page.waitForTimeout(3000);
+          console.log('✅ Opened UNREAD conversation via notification row force click');
+          return;
+        } catch (forceError) {
+          console.log('⚠️ Notification row force click failed, trying JavaScript click...');
+          
+          try {
+            await this.browserService.page.evaluate((element) => {
+              element.click();
+            }, unreadRow);
+            await this.browserService.page.waitForTimeout(3000);
+            console.log('✅ Opened UNREAD conversation via notification row JavaScript click');
+            return;
+          } catch (jsError) {
+            console.log('❌ All notification row click methods failed');
+          }
+        }
+      }
     }
     
     // Fallback: Original method
