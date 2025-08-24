@@ -337,16 +337,47 @@ class SkoolWorkflowManager {
                 const blueRadios = document.querySelectorAll(step.selector);
                 let foundUnread = false;
                 
-                // Check if any blue radios are actually "filled" (indicating unread)
+                // ENHANCED: Check if any radios are actually "filled" with blue content
                 for (const radio of blueRadios) {
-                  const styles = getComputedStyle(radio);
                   const parent = radio.closest('.styled__NotificationRow-sc-5xhq84-2');
                   
-                  // Check if this radio indicates an unread message
-                  if (parent && (radio.offsetWidth > 0 && radio.offsetHeight > 0)) {
-                    console.log('🔵 FOUND: Blue unread indicator detected!');
-                    foundUnread = true;
-                    break;
+                  if (parent) {
+                    // Method 1: Check for SVG content with blue fills
+                    const svgs = radio.querySelectorAll('svg');
+                    const hasBlueContent = Array.from(svgs).some(svg => {
+                      const paths = svg.querySelectorAll('path, circle, rect');
+                      return Array.from(paths).some(path => {
+                        const fill = path.getAttribute('fill') || getComputedStyle(path).fill;
+                        return fill && (
+                          fill.includes('#') || 
+                          fill.includes('rgb') || 
+                          fill.includes('blue') ||
+                          fill !== 'none' && fill !== 'transparent'
+                        );
+                      });
+                    });
+                    
+                    // Method 2: Check background color of radio itself
+                    const radioStyles = getComputedStyle(radio);
+                    const hasBackground = radioStyles.backgroundColor !== 'rgba(0, 0, 0, 0)' && 
+                                        radioStyles.backgroundColor !== 'transparent';
+                    
+                    // Method 3: Check for child elements with visible content
+                    const hasVisibleChildren = Array.from(radio.children).some(child => {
+                      const childStyles = getComputedStyle(child);
+                      return child.offsetWidth > 0 && child.offsetHeight > 0 && 
+                             (childStyles.backgroundColor !== 'rgba(0, 0, 0, 0)' ||
+                              childStyles.color !== 'rgba(0, 0, 0, 0)');
+                    });
+                    
+                    if (hasBlueContent || hasBackground || hasVisibleChildren) {
+                      console.log('🔵 FOUND: Blue unread indicator detected!');
+                      console.log(`  hasBlueContent: ${hasBlueContent}`);
+                      console.log(`  hasBackground: ${hasBackground}`);
+                      console.log(`  hasVisibleChildren: ${hasVisibleChildren}`);
+                      foundUnread = true;
+                      break;
+                    }
                   }
                 }
                 
@@ -582,9 +613,18 @@ class SkoolWorkflowManager {
             pathColors: radioState.pathColors,
             pathFills: radioState.pathFills
           });
+          
+          // Log the full SVG path data for analysis
+          if (radioState.svgPaths.length > 0) {
+            console.log(`🎨 SVG PATHS:`, radioState.svgPaths);
+          }
         }
         
-        console.log(`💾 Auto-saved to skool-selectors.json`);
+        // Output the complete selector data for manual saving
+        console.log(`📋 COMPLETE SELECTOR DATA FOR ${type}:`);
+        console.log(JSON.stringify({ [type]: selectorData }, null, 2));
+        
+        console.log(`💾 Save attempted (check console for data if auto-save failed)`);
       }
 
       // Generate alternative selectors
@@ -873,6 +913,29 @@ class SkoolWorkflowManager {
         // Panel controls
         document.getElementById('run-workflow')?.addEventListener('click', runWorkflow);
         document.getElementById('close-panel')?.addEventListener('click', () => panel.remove());
+        
+        // Add export button for manual data extraction
+        const exportBtn = document.createElement('button');
+        exportBtn.textContent = '📥 Export Tags';
+        exportBtn.style.cssText = 'background: #28a745; border: none; color: white; padding: 4px 8px; border-radius: 4px; cursor: pointer; margin-right: 8px; font-size: 11px;';
+        exportBtn.addEventListener('click', () => {
+          console.log('📋 ALL TAGGED ELEMENTS:');
+          console.log(JSON.stringify(window.markedElements, null, 2));
+          
+          // Also create a downloadable file
+          const dataStr = JSON.stringify(window.markedElements, null, 2);
+          const dataBlob = new Blob([dataStr], {type: 'application/json'});
+          const url = URL.createObjectURL(dataBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'tagged-elements-export.json';
+          link.click();
+          URL.revokeObjectURL(url);
+          
+          console.log('💾 Downloaded tagged-elements-export.json');
+        });
+        
+        document.getElementById('panel-header').appendChild(exportBtn);
         document.getElementById('minimize-panel')?.addEventListener('click', () => {
           const workflowPanel = document.getElementById('workflow-panel');
           const taggingPanel = document.getElementById('tagging-panel');
