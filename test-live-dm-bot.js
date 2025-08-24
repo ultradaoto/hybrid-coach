@@ -850,7 +850,7 @@ class LiveDMBot {
         console.log(`🆘 Using complete fallback: ${realSkoolId}`);
       }
 
-      const userInfo = {
+      let userInfo = {
         skoolUserId: realSkoolId, // REAL Skool ID (e.g., "sterling-cooley")
         skoolUsername: fullName || `${firstName} ${lastName}`, // Display name
         firstName,
@@ -932,11 +932,17 @@ class LiveDMBot {
       }
       
       // Navigate to profile page (preserving group context if available)
-      const fullProfileUrl = profileUrl.startsWith('http') 
+      let fullProfileUrl = profileUrl.startsWith('http') 
         ? profileUrl 
-        : `https://www.skool.com${profileUrl}${groupId ? `?g=${groupId}` : ''}`;
+        : `https://www.skool.com${profileUrl}`;
+        
+      // Add group context if available
+      if (groupId) {
+        fullProfileUrl += `?g=${groupId}`;
+      }
       
       console.log(`🌐 Navigating to: ${fullProfileUrl}`);
+      console.log(`🏷️ Group context: ${groupId || 'none'}`);
       await profilePage.goto(fullProfileUrl, { 
         waitUntil: 'domcontentloaded',
         timeout: 15000 
@@ -1041,9 +1047,17 @@ class LiveDMBot {
         lastName = '';
       }
       
-      // Close the profile tab
+      // Close the profile tab and ensure we return to original page
       await profilePage.close();
       console.log('✅ Profile tab closed');
+      
+      // Ensure we're back on the original page
+      try {
+        await this.browserService.page.bringToFront();
+        console.log('🔄 Returned to original chat page');
+      } catch (e) {
+        console.log('⚠️  Could not bring original page to front, but continuing...');
+      }
       
       return {
         skoolUserId: skoolId,
