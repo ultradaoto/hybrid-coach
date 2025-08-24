@@ -614,6 +614,7 @@ class LiveDMBot {
               continue;
             }
           }
+          } // Close the if (!data.realName) block
           
           // Try to find bio using tagged selectors
           const bioSelectors = ['.styled__Bio-sc-1gipnml-9', '.hGQpgW'];
