@@ -567,13 +567,17 @@ class LiveDMBot {
           const profileContainer = document.querySelector('.styled__UserCardWrapper-sc-1gipnml-15');
           if (profileContainer) {
             const containerText = profileContainer.textContent || '';
-            console.log('🔍 Profile container text:', containerText.substring(0, 100));
             
             // Extract name using regex - it's at the beginning before @username
             const nameMatch = containerText.match(/^([A-Z][a-z]+ [A-Z][a-z]+)@/);
             if (nameMatch) {
               data.realName = nameMatch[1];
-              console.log('✅ Extracted name from container:', data.realName);
+            } else {
+              // More flexible regex - try to find any "First Last" pattern before @
+              const flexibleMatch = containerText.match(/([A-Z][a-z]+\s+[A-Z][a-z]+)@/);
+              if (flexibleMatch) {
+                data.realName = flexibleMatch[1];
+              }
             }
           }
           
@@ -693,16 +697,16 @@ class LiveDMBot {
         
         console.log(`✅ BACKGROUND: Profile scraping completed successfully`);
         
-        // Return to messages page to continue monitoring
-        console.log(`🔄 BACKGROUND: Returning to messages page...`);
+        // Return to profile page to continue monitoring
+        console.log(`🔄 BACKGROUND: Returning to profile page to continue monitoring...`);
         try {
-          await this.browserService.page.goto('https://www.skool.com/messages', {
-            waitUntil: 'networkidle',
+          await this.browserService.page.goto('https://www.skool.com/@my-ultra-coach-6588', {
+            waitUntil: 'domcontentloaded',
             timeout: 15000
           });
-          console.log(`✅ BACKGROUND: Back to messages page, ready for next DM`);
+          console.log(`✅ BACKGROUND: Back to profile page, ready for next DM`);
         } catch (navError) {
-          console.log(`⚠️  Could not return to messages page: ${navError.message}`);
+          console.log(`⚠️  Could not return to profile page: ${navError.message}`);
         }
       }
     } catch (backgroundError) {
