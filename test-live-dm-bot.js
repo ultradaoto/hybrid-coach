@@ -944,11 +944,20 @@ class LiveDMBot {
       console.log(`🌐 Navigating to: ${fullProfileUrl}`);
       console.log(`🏷️ Group context: ${groupId || 'none'}`);
       await profilePage.goto(fullProfileUrl, { 
-        waitUntil: 'domcontentloaded',
+        waitUntil: 'networkidle',
         timeout: 15000 
       });
       
-      await profilePage.waitForTimeout(3000); // Let page load
+      console.log(`⏳ Waiting for profile content to load...`);
+      await profilePage.waitForTimeout(5000); // Longer wait for full content load
+      
+      // Wait for profile content specifically
+      try {
+        await profilePage.waitForSelector('.styled__UserCardWrapper-sc-1gipnml-15', { timeout: 10000 });
+        console.log(`✅ Profile content container found`);
+      } catch (e) {
+        console.log(`⚠️  Profile container not found, continuing anyway`);
+      }
       
       // Extract user information from profile page
       const profileData = await profilePage.evaluate(() => {
@@ -958,19 +967,16 @@ class LiveDMBot {
           userId: null
         };
         
-        // Try to find the real name using EXACT tagged selectors from multiple user profiles
+        // Use EXACT tagged selectors from your training session - NO GENERIC SELECTORS!
         const nameSelectors = [
-          // PRIORITY: SPAN elements with real names (from Patrick Eckert training)
-          'span', // Patrick's name was in a SPAN element
-          // Headings that might contain names
-          'h1', 'h2', 'h3',
-          // Specific user examples from training data
-          'text="Sterling Cooley"', 'text="Patrick Eckert"', // Exact matches
-          ':has-text("Sterling Cooley")', ':has-text("Patrick Eckert")', // Contains matches
-          // Generic patterns
-          '[class*="name"]', '[class*="Name"]',
-          '[class*="title"]', '[class*="Title"]',
-          '.profile-name', '.user-name', '.display-name'
+          // EXACT TEXT MATCHES from training (most reliable)
+          'text="Sterling Cooley"', 'text="Patrick Eckert"',
+          ':has-text("Sterling Cooley")', ':has-text("Patrick Eckert")',
+          // ONLY target profile area - exclude navigation/header
+          '.styled__UserCardWrapper-sc-1gipnml-15 span', // Profile box + span combo
+          '.styled__UserCardWrapper-sc-1gipnml-15 h1', 
+          '.styled__UserCardWrapper-sc-1gipnml-15 h2',
+          '.styled__UserCardWrapper-sc-1gipnml-15 h3'
         ];
         
         for (const selector of nameSelectors) {
@@ -978,11 +984,19 @@ class LiveDMBot {
             const elements = document.querySelectorAll(selector);
             for (const element of elements) {
               const text = element.textContent?.trim();
-              // Look for text that looks like a real person's name (exclude group/page info)
+              // STRICT filtering - exclude ALL navigation/UI elements
               if (text && 
                   text.includes(' ') && // Must be first + last name
                   text.length < 50 && 
                   text.length > 4 && // Minimum reasonable name length
+                  // EXCLUDE ALL UI/NAVIGATION TEXT
+                  !text.toLowerCase().includes('log') && // Exclude "Log In", "Log Out"
+                  !text.toLowerCase().includes('sign') && // Exclude "Sign Up", "Sign In"
+                  !text.toLowerCase().includes('button') &&
+                  !text.toLowerCase().includes('menu') &&
+                  !text.toLowerCase().includes('nav') &&
+                  !text.toLowerCase().includes('header') &&
+                  !text.toLowerCase().includes('footer') &&
                   !text.toLowerCase().includes('desci') &&
                   !text.toLowerCase().includes('decentralized') &&
                   !text.toLowerCase().includes('science') &&
@@ -993,13 +1007,15 @@ class LiveDMBot {
                   !text.toLowerCase().includes('ultra school') && // Exclude group names
                   !text.toLowerCase().includes('school') && // Exclude group references
                   // Must be reasonable name pattern
-                  /^[A-Za-z\s\-\.]+$/.test(text) &&
-                  // Common first names pattern (optional but helps)
-                  (text.includes('Sterling') || text.includes('Patrick') || 
-                   /^[A-Z][a-z]+ [A-Z][a-z]+/.test(text))) { // Standard "First Last" pattern
+                  /^[A-Z][a-z]+ [A-Z][a-z]+/.test(text) && // STRICT: First Last pattern only
+                  // Known valid names OR standard pattern
+                  (text === 'Sterling Cooley' || text === 'Patrick Eckert' || 
+                   /^[A-Z][a-z]{2,} [A-Z][a-z]{2,}$/.test(text))) { // At least 3 chars each name
                 data.realName = text;
-                console.log(`Found potential name: ${text}`);
+                console.log(`✅ Found REAL name: ${text}`);
                 break;
+              } else if (text) {
+                console.log(`❌ Rejected text: "${text}" (navigation/UI element)`);
               }
             }
             if (data.realName) break;
