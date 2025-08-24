@@ -512,8 +512,14 @@ class LiveDMBot {
     }
     
     // 🚀 STEP 2: Click on user's profile image to navigate to their profile
+    console.log(`🔍 STEP 2: Starting background profile scraping...`);
+    console.log(`📋 Available user info:`, this.lastExtractedUserInfo);
+    
     try {
-      if (userInfo && userInfo.profileUrl) {
+      // Make sure userInfo is accessible in this scope
+      if (this.lastExtractedUserInfo && this.lastExtractedUserInfo.profileUrl) {
+        const userInfo = this.lastExtractedUserInfo;
+        console.log(`✅ Found user info for background scraping`);
         console.log(`\n🔍 BACKGROUND: Navigating to profile by clicking profile image...`);
         console.log(`📍 Target Profile: ${userInfo.profileUrl}`);
         
@@ -650,9 +656,9 @@ class LiveDMBot {
         if (detailedProfileData.realName || detailedProfileData.bio) {
           const enhancedUserInfo = {
             skoolId: userInfo.skoolUserId,
-            firstName: detailedProfileData.realName ? detailedProfileData.realName.split(' ')[0] : userInfo.skoolUsername.split(' ')[0],
-            lastName: detailedProfileData.realName ? detailedProfileData.realName.split(' ').slice(1).join(' ') : userInfo.skoolUsername.split(' ').slice(1).join(' '),
-            fullName: detailedProfileData.realName || userInfo.skoolUsername,
+            firstName: detailedProfileData.realName ? detailedProfileData.realName.split(' ')[0] : userInfo.skoolUsername?.split(' ')[0] || 'Unknown',
+            lastName: detailedProfileData.realName ? detailedProfileData.realName.split(' ').slice(1).join(' ') : userInfo.skoolUsername?.split(' ').slice(1).join(' ') || 'User',
+            fullName: detailedProfileData.realName || userInfo.skoolUsername || 'Unknown User',
             bio: detailedProfileData.bio || '.',
             profileUrl: `https://www.skool.com${userInfo.profileUrl}`,
             lastSeen: new Date().toISOString(),
@@ -661,7 +667,16 @@ class LiveDMBot {
           };
           
           console.log(`💾 BACKGROUND: Enhanced profile ready for webhook:`, enhancedUserInfo);
-          // TODO: Store in database for webhook lookup
+          
+          // Update the stored webhook data with enhanced profile info
+          try {
+            await this.storeUserProfile(enhancedUserInfo);
+            console.log(`✅ BACKGROUND: Enhanced profile stored in database`);
+          } catch (storeError) {
+            console.log(`⚠️  BACKGROUND: Could not store enhanced profile: ${storeError.message}`);
+          }
+        } else {
+          console.log(`⚠️  BACKGROUND: No enhanced profile data found, keeping original data`);
         }
         
         console.log(`✅ BACKGROUND: Profile scraping completed successfully`);
@@ -1044,6 +1059,9 @@ class LiveDMBot {
 
       // Store this user in our webhook database
       await this.storeUserProfile(userInfo);
+      
+      // Store for background profile scraping
+      this.lastExtractedUserInfo = userInfo;
       
       return userInfo;
 
