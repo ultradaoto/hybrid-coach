@@ -72,6 +72,7 @@ router.get('/:roomId', requireSkoolAuth, async (req, res, next) => {
       user: {
         id: req.skoolUser.skoolUserId,
         displayName: req.skoolUser.skoolUsername,
+        skoolId: req.skoolUser.skoolUserId || 'dev-user-123', // Pass Skool ID for webhook
         email: req.skoolUser.skoolUserId + '@skool.user',
         role: 'client'
       },
@@ -117,6 +118,7 @@ router.get('/:roomId/fallback', requireSkoolAuth, async (req, res) => {
     user: {
       id: req.skoolUser.skoolUserId,
       displayName: req.skoolUser.skoolUsername,
+      skoolId: req.skoolUser.skoolUserId || 'dev-user-123', // Pass Skool ID for webhook
       email: req.skoolUser.skoolUserId + '@skool.user'
     }
   });

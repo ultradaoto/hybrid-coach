@@ -7,27 +7,58 @@ const router = Router();
  * Webhook endpoint for ElevenLabs to get user information
  * 
  * Query parameters:
- * - user_name: The user's name (passed from dynamic variables)
- * - session_id: Session identifier
- * - room_id: Room identifier
+ * - user_id: The user's Skool ID (e.g., "sterling-cooley" - safer than full name)
+ * - current_session: Session identifier (maps to session_id dynamic variable)
+ * - current_room: Room identifier (maps to room_id dynamic variable)
  */
 router.get('/user-info', async (req, res) => {
     try {
         console.log('[WEBHOOK] ElevenLabs requesting user info:', req.query);
         
-        const { user_name, session_id, room_id } = req.query;
+        const { user_id, current_session, current_room } = req.query;
         
-        // For now, return basic user info
-        // In the future, this could query database for user profile, history, etc.
+        // TODO: Query database for user profile by Skool ID
+        // For now, simulate user lookup by Skool ID
+        const userProfiles = {
+            'sterling-cooley': {
+                firstName: 'Sterling',
+                lastName: 'Cooley',
+                fullName: 'Sterling Cooley',
+                skoolId: 'sterling-cooley',
+                goals: ['stress_reduction', 'better_sleep'],
+                sessions: 3
+            },
+            'dev-user-123': {
+                firstName: 'Kirby',
+                lastName: 'Dev',
+                fullName: 'Kirby Dev',
+                skoolId: 'dev-user-123',
+                goals: ['testing', 'development'],
+                sessions: 0
+            }
+        };
+        
+        const userProfile = userProfiles[user_id] || {
+            firstName: 'New',
+            lastName: 'User',
+            fullName: 'New User',
+            skoolId: user_id,
+            goals: ['getting_started'],
+            sessions: 0
+        };
+        
         const userInfo = {
-            name: user_name || 'Kirby',
-            session_id: session_id,
-            room_id: room_id,
-            greeting: `Hello ${user_name || 'Kirby'}! Welcome to your coaching session.`,
+            name: userProfile.fullName,
+            firstName: userProfile.firstName,
+            lastName: userProfile.lastName,
+            skoolId: userProfile.skoolId,
+            session_id: current_session,
+            room_id: current_room,
+            greeting: `Hello ${userProfile.firstName}! Welcome to your coaching session.`,
             profile: {
                 coaching_style: 'supportive',
-                previous_sessions: 0,
-                current_goals: ['stress_reduction', 'better_sleep'],
+                previous_sessions: userProfile.sessions,
+                current_goals: userProfile.goals,
                 preferred_topics: ['vagus_nerve', 'breathing_exercises']
             },
             timestamp: new Date().toISOString()

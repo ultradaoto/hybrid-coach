@@ -324,7 +324,7 @@
                     <div class="ai-agent-container" id="aiAgentContainer">
                         <elevenlabs-convai 
                             agent-id="<%= elevenlabsAgentId || 'agent_01jy88zv6zfe1a9v9zdxt69abd' %>"
-                            dynamic-variables='{"user_name": "<%= user.displayName || "Kirby" %>", "session_id": "<%= sessionId %>", "room_id": "<%= roomId %>"}'
+                            dynamic-variables='{"user_name": "<%= user.skoolId || "dev-user-123" %>", "session_id": "<%= sessionId %>", "room_id": "<%= roomId %>"}'
                         ></elevenlabs-convai>
                     </div>
                     <div class="video-label">🤖 Ultra Coach AI</div>
