@@ -121,6 +121,7 @@ import aiRouter from './routes/ai.js';
 import sessionRouter from './routes/session.js';
 import debugRouter from './routes/debug.js';
 import widgetRouter from './routes/widget.js';
+import webhookRouter from './routes/webhooks.js';
 
 app.use('/', baseRouter);
 app.use('/healthz', healthRouter);
@@ -135,6 +136,7 @@ app.use('/api', apiRouter);
 app.use('/api/ai', aiRouter);
 app.use('/debug', debugRouter);
 app.use('/widget', widgetRouter);
+app.use('/api/webhooks', webhookRouter);
 
 // 404 handler
 app.use((req, res) => {

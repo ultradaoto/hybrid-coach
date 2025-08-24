@@ -1,0 +1,44 @@
+{
+  "type": "webhook",
+  "name": "get_user_info",
+  "description": "Get information about the current user including their name, preferences, and coaching history to personalize the conversation.",
+  "api_schema": {
+    "url": "https://myultra.coach/api/webhooks/user-info",
+    "method": "GET",
+    "path_params_schema": [],
+    "query_params_schema": [
+      {
+        "name": "user_name",
+        "type": "string",
+        "description": "The user's name",
+        "required": true
+      },
+      {
+        "name": "session_id", 
+        "type": "string",
+        "description": "Current session identifier",
+        "required": false
+      },
+      {
+        "name": "room_id",
+        "type": "string", 
+        "description": "Current room identifier",
+        "required": false
+      }
+    ],
+    "request_body_schema": null,
+    "request_headers": [],
+    "auth_connection": null
+  },
+  "response_timeout_secs": 20,
+  "dynamic_variables": {
+    "dynamic_variable_placeholders": {
+      "user_name": "{{user_name}}",
+      "session_id": "{{session_id}}",
+      "room_id": "{{room_id}}"
+    }
+  },
+  "assignments": [],
+  "disable_interruptions": false,
+  "force_pre_tool_speech": "auto"
+}
