@@ -16,10 +16,19 @@ class AuthService {
      */
     async generateAuthCode(skoolUserId, skoolUsername) {
         try {
-            // Check rate limiting first
-            const rateLimitCheck = await this.checkDailyLimit(skoolUserId);
-            if (!rateLimitCheck.allowed) {
-                throw new Error(`Daily limit exceeded. You can request ${rateLimitCheck.remaining} more codes. Resets in ${rateLimitCheck.resetHours} hours.`);
+            // Check if database is available (for local development)
+            let rateLimitCheck = { allowed: true, remaining: 5 };
+            try {
+                rateLimitCheck = await this.checkDailyLimit(skoolUserId);
+                if (!rateLimitCheck.allowed) {
+                    throw new Error(`Daily limit exceeded. You can request ${rateLimitCheck.remaining} more codes. Resets in ${rateLimitCheck.resetHours} hours.`);
+                }
+            } catch (dbError) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('🛠️ Database not available in development - using fallback rate limiting');
+                } else {
+                    throw dbError; // Re-throw in production
+                }
             }
 
             // Generate unique code: vgs-{timestamp}-{random}
@@ -30,18 +39,34 @@ class AuthService {
             // Set expiration (30 minutes from now)
             const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
-            // Store in database
-            const authCode = await prisma.authCode.create({
-                data: {
-                    code,
-                    skoolUserId,
-                    skoolUsername,
-                    expiresAt
-                }
-            });
+            // Store in database (with fallback for development)
+            let authCode = null;
+            try {
+                authCode = await prisma.authCode.create({
+                    data: {
+                        code,
+                        skoolUserId,
+                        skoolUsername,
+                        expiresAt
+                    }
+                });
 
-            // Update rate limiting
-            await this.incrementRequestCount(skoolUserId);
+                // Update rate limiting
+                await this.incrementRequestCount(skoolUserId);
+            } catch (dbError) {
+                if (process.env.NODE_ENV === 'development') {
+                    console.log('🛠️ Database not available - using in-memory auth code');
+                    authCode = {
+                        code,
+                        skoolUserId,
+                        skoolUsername,
+                        expiresAt,
+                        createdAt: new Date()
+                    };
+                } else {
+                    throw dbError; // Re-throw in production
+                }
+            }
 
             console.log(`🔑 Generated auth code for ${skoolUsername} (${skoolUserId}): ${code}`);
             
