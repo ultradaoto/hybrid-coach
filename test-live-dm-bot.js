@@ -835,6 +835,24 @@ class LiveDMBot {
       console.log(`   📝 First: ${firstName}, Last: ${lastName}`);
       console.log(`   🔗 Profile: ${userInfo.profileUrl}`);
       
+      // If we found a real Skool ID, scrape their profile page for accurate info
+      if (realSkoolId && profileUrl && !profileUrl.includes('fallback') && !profileUrl.includes('user-')) {
+        console.log('🌐 Opening profile page to get accurate user information...');
+        const profileData = await this.scrapeUserProfile(profileUrl, realSkoolId);
+        if (profileData) {
+          userInfo = {
+            ...userInfo,
+            ...profileData
+          };
+          console.log('✅ UPDATED USER INFO FROM PROFILE:');
+          console.log(`   🆔 Skool ID: ${userInfo.skoolUserId}`);
+          console.log(`   👤 Real Name: ${userInfo.skoolUsername}`);
+          console.log(`   📝 First: ${userInfo.firstName}, Last: ${userInfo.lastName}`);
+          console.log(`   📄 Bio: ${userInfo.bio || 'None'}`);
+          console.log(`   🏷️ Group: ${userInfo.groupId || 'Unknown'}`);
+        }
+      }
+
       // Store this user in our webhook database
       await this.storeUserProfile(userInfo);
       
@@ -855,6 +873,166 @@ class LiveDMBot {
     }
   }
   
+  /**
+   * Scrape user's profile page to get accurate information
+   * @param {string} profileUrl - User's profile URL (e.g., /@sterling-cooley)
+   * @param {string} skoolId - User's Skool ID
+   * @returns {Promise<Object|null>} Profile data or null if failed
+   */
+  async scrapeUserProfile(profileUrl, skoolId) {
+    let profilePage = null;
+    try {
+      console.log(`🔍 Opening new tab for profile: ${profileUrl}`);
+      
+      // Open profile page in new tab
+      profilePage = await this.browserService.context.newPage();
+      
+      // Get current page URL to extract group context
+      const currentUrl = this.browserService.page.url();
+      let groupId = null;
+      
+      // Extract group ID from current URL if it contains ?g=
+      const groupMatch = currentUrl.match(/[?&]g=([^&]+)/);
+      if (groupMatch) {
+        groupId = groupMatch[1];
+        console.log(`🏷️ Current group context: ${groupId}`);
+      }
+      
+      // Navigate to profile page (preserving group context if available)
+      const fullProfileUrl = profileUrl.startsWith('http') 
+        ? profileUrl 
+        : `https://www.skool.com${profileUrl}${groupId ? `?g=${groupId}` : ''}`;
+      
+      console.log(`🌐 Navigating to: ${fullProfileUrl}`);
+      await profilePage.goto(fullProfileUrl, { 
+        waitUntil: 'domcontentloaded',
+        timeout: 15000 
+      });
+      
+      await profilePage.waitForTimeout(3000); // Let page load
+      
+      // Extract user information from profile page
+      const profileData = await profilePage.evaluate(() => {
+        const data = {
+          realName: null,
+          bio: null,
+          userId: null
+        };
+        
+        // Try to find the real name - look for heading elements
+        const nameSelectors = [
+          'h1', 'h2', 'h3', // Main headings
+          '[class*="name"]', '[class*="Name"]', // Name classes
+          '[class*="title"]', '[class*="Title"]', // Title classes
+          '[class*="header"]', '[class*="Header"]', // Header classes
+          '.profile-name', '.user-name', '.display-name' // Common profile name classes
+        ];
+        
+        for (const selector of nameSelectors) {
+          try {
+            const elements = document.querySelectorAll(selector);
+            for (const element of elements) {
+              const text = element.textContent?.trim();
+              // Look for text that looks like a real name (2+ words, not group names)
+              if (text && 
+                  text.includes(' ') && 
+                  text.length < 50 && 
+                  !text.toLowerCase().includes('desci') &&
+                  !text.toLowerCase().includes('decentralized') &&
+                  !text.toLowerCase().includes('science') &&
+                  /^[A-Za-z\s\-\.]+$/.test(text)) {
+                data.realName = text;
+                console.log(`Found potential name: ${text}`);
+                break;
+              }
+            }
+            if (data.realName) break;
+          } catch (e) {
+            // Continue to next selector
+          }
+        }
+        
+        // Try to find bio/description
+        const bioSelectors = [
+          '[class*="bio"]', '[class*="Bio"]',
+          '[class*="description"]', '[class*="Description"]',
+          '[class*="about"]', '[class*="About"]',
+          '[class*="intro"]', '[class*="Intro"]',
+          'p', '.profile-description', '.user-bio'
+        ];
+        
+        for (const selector of bioSelectors) {
+          try {
+            const elements = document.querySelectorAll(selector);
+            for (const element of elements) {
+              const text = element.textContent?.trim();
+              // Look for bio-like text (longer, descriptive)
+              if (text && 
+                  text.length > 10 && 
+                  text.length < 200 &&
+                  !text.toLowerCase().includes('desci') &&
+                  !text.toLowerCase().includes('group') &&
+                  (text.includes('warrior') || text.includes('nerd') || text.includes('/') || text.includes(','))) {
+                data.bio = text;
+                console.log(`Found potential bio: ${text}`);
+                break;
+              }
+            }
+            if (data.bio) break;
+          } catch (e) {
+            // Continue to next selector
+          }
+        }
+        
+        return data;
+      });
+      
+      console.log('📊 Profile page data extracted:', profileData);
+      
+      // Parse the real name if found
+      let firstName = 'Unknown';
+      let lastName = 'User';
+      let fullName = profileData.realName || `User ${skoolId}`;
+      
+      if (profileData.realName && profileData.realName.includes(' ')) {
+        const nameParts = profileData.realName.split(' ');
+        firstName = nameParts[0];
+        lastName = nameParts.slice(1).join(' ');
+      } else if (profileData.realName) {
+        firstName = profileData.realName;
+        lastName = '';
+      }
+      
+      // Close the profile tab
+      await profilePage.close();
+      console.log('✅ Profile tab closed');
+      
+      return {
+        skoolUserId: skoolId,
+        skoolUsername: fullName,
+        firstName,
+        lastName,
+        bio: profileData.bio,
+        groupId: groupId,
+        profileUrl: fullProfileUrl
+      };
+      
+    } catch (error) {
+      console.error('❌ Error scraping profile page:', error);
+      
+      // Clean up profile page if it exists
+      if (profilePage) {
+        try {
+          await profilePage.close();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+      
+      return null;
+    }
+  }
+
   /**
    * Store user profile data for webhook usage
    * @param {Object} userInfo - User information extracted from Skool
