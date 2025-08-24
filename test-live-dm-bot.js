@@ -369,11 +369,7 @@ class LiveDMBot {
       console.log('📝 Step 3: Sending response message...');
       await this.sendResponse();
 
-      // Step 4: Close chat window
-      console.log('❌ Step 4: Closing chat window...');
-      await this.closeChatWindow();
-
-      console.log('✅ RESPONSE SEQUENCE COMPLETED! Resuming monitoring...\n');
+      console.log('✅ RESPONSE SEQUENCE COMPLETED! Continuing to monitor...\n');
 
     } catch (error) {
       console.error(`❌ Error handling unread message: ${error.message}`);
@@ -515,20 +511,63 @@ class LiveDMBot {
       console.log('⚠️ Message may not have sent - input still has content');
     }
     
-    // 🚀 STEP 2: NOW scrape detailed profile info in background (while user clicks link)
+    // 🚀 STEP 2: Click on user's profile image to navigate to their profile
     try {
       if (userInfo && userInfo.profileUrl) {
-        console.log(`\n🔍 BACKGROUND: Starting detailed profile scraping...`);
-        console.log(`📍 Profile URL: ${userInfo.profileUrl}`);
+        console.log(`\n🔍 BACKGROUND: Navigating to profile by clicking profile image...`);
+        console.log(`📍 Target Profile: ${userInfo.profileUrl}`);
         
-        // Navigate to profile in SAME browser window (no new tab confusion!)
-        await this.browserService.page.goto(`https://www.skool.com${userInfo.profileUrl}`, {
-          waitUntil: 'networkidle',
-          timeout: 15000
-        });
-        
-        console.log(`⏳ Loading profile content...`);
-        await this.browserService.page.waitForTimeout(5000);
+        // Find and click the user's profile image/avatar in the chat
+        try {
+          // Look for profile images/avatars that link to this user's profile
+          const profileImageSelectors = [
+            `a[href="${userInfo.profileUrl}"]`, // Direct profile link
+            `a[href*="${userInfo.skoolUserId}"]`, // Link containing Skool ID
+            `img[alt*="${userInfo.skoolUserId}"]`, // Avatar with Skool ID in alt
+            `.message-author img`, // Message author avatar
+            `.user-avatar img`, // User avatar image
+            `[data-testid="avatar"]` // Avatar with test ID
+          ];
+          
+          console.log(`🔍 Looking for profile image with multiple selectors...`);
+          let profileImageElement = null;
+          
+          for (const selector of profileImageSelectors) {
+            try {
+              profileImageElement = await this.browserService.page.$(selector);
+              if (profileImageElement) {
+                console.log(`✅ Found profile element with selector: ${selector}`);
+                break;
+              }
+            } catch (e) {
+              continue;
+            }
+          }
+          if (profileImageElement) {
+            console.log(`🖱️  Clicking on profile image to navigate...`);
+            await profileImageElement.click();
+            
+            // Wait for navigation to profile page
+            await this.browserService.page.waitForLoadState('networkidle', { timeout: 15000 });
+            console.log(`⏳ Profile page loaded, waiting for content...`);
+            await this.browserService.page.waitForTimeout(3000);
+          } else {
+            // Fallback: Navigate directly to profile URL
+            console.log(`⚠️  Profile image not found, navigating directly to: ${userInfo.profileUrl}`);
+            await this.browserService.page.goto(`https://www.skool.com${userInfo.profileUrl}`, {
+              waitUntil: 'networkidle',
+              timeout: 15000
+            });
+            await this.browserService.page.waitForTimeout(3000);
+          }
+        } catch (clickError) {
+          console.log(`⚠️  Click failed, using direct navigation: ${clickError.message}`);
+          await this.browserService.page.goto(`https://www.skool.com${userInfo.profileUrl}`, {
+            waitUntil: 'networkidle',
+            timeout: 15000
+          });
+          await this.browserService.page.waitForTimeout(3000);
+        }
         
         // Wait for profile content
         try {
@@ -626,6 +665,18 @@ class LiveDMBot {
         }
         
         console.log(`✅ BACKGROUND: Profile scraping completed successfully`);
+        
+        // Return to messages page to continue monitoring
+        console.log(`🔄 BACKGROUND: Returning to messages page...`);
+        try {
+          await this.browserService.page.goto('https://www.skool.com/messages', {
+            waitUntil: 'networkidle',
+            timeout: 15000
+          });
+          console.log(`✅ BACKGROUND: Back to messages page, ready for next DM`);
+        } catch (navError) {
+          console.log(`⚠️  Could not return to messages page: ${navError.message}`);
+        }
       }
     } catch (backgroundError) {
       console.error(`⚠️  BACKGROUND: Profile scraping failed (non-critical):`, backgroundError.message);
@@ -984,22 +1035,11 @@ class LiveDMBot {
       console.log(`   📝 First: ${firstName}, Last: ${lastName}`);
       console.log(`   🔗 Profile: ${userInfo.profileUrl}`);
       
-      // If we found a real Skool ID, scrape their profile page for accurate info
+      // Store profile info for background scraping (after sending message)
       if (realSkoolId && profileUrl && !profileUrl.includes('fallback') && !profileUrl.includes('user-')) {
-        console.log('🌐 Opening profile page to get accurate user information...');
-        const profileData = await this.scrapeUserProfile(profileUrl, realSkoolId);
-        if (profileData) {
-          userInfo = {
-            ...userInfo,
-            ...profileData
-          };
-          console.log('✅ UPDATED USER INFO FROM PROFILE:');
-          console.log(`   🆔 Skool ID: ${userInfo.skoolUserId}`);
-          console.log(`   👤 Real Name: ${userInfo.skoolUsername}`);
-          console.log(`   📝 First: ${userInfo.firstName}, Last: ${userInfo.lastName}`);
-          console.log(`   📄 Bio: ${userInfo.bio || 'None'}`);
-          console.log(`   🏷️ Group: ${userInfo.groupId || 'Unknown'}`);
-        }
+        userInfo.profileUrl = profileUrl;
+        userInfo.skoolUserId = realSkoolId;
+        console.log(`📍 Profile info ready for background scraping: ${profileUrl}`);
       }
 
       // Store this user in our webhook database
