@@ -21,6 +21,7 @@
     "record-flow": "node record-skool-flow.js",
     "codegen": "npx playwright codegen --save-storage=skool-auth.json skool.com",
     "live-dm-bot": "node test-live-dm-bot.js",
+    "workflow-manager": "node playwright-workflow-manager.js",
     "check-db": "node check-database.js",
     "debug-login": "node test-login-debug.js",
     "start-virtual-gpu": "node virtual-gpu-server.js",
