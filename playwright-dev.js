@@ -152,12 +152,21 @@ class SkoolPlaywrightDev {
         'message-bubble': '💬 Message Bubble Container',
         'message-header': '📋 Message Header (name + time)',
         
-        // Conversation List States
-        'conversation-item': '📄 Conversation List Item',
+        // Conversation List States (CRITICAL for bot logic)
+        'conversation-item': '📄 Conversation List Item (general)',
         'conversation-preview': '👁️ Conversation Preview Text',
-        'conversation-unread': '🔴 Unread Conversation Item',
-        'conversation-read': '✅ Read Conversation Item',
+        'conversation-unread': '🔴 Unread Conversation Item (with green radio)',
+        'conversation-read': '✅ Read Conversation Item (no green radio)',
         'unread-indicator': '🔴 Unread Message Indicator',
+        'green-radio-button': '🟢 Green Radio Button (UNREAD indicator)',
+        'conversation-sterling-cooley': '👤 Sterling Cooley Conversation',
+        'conversation-jie-lu': '👤 Jie Lu Conversation', 
+        'conversation-name-sterling': '🏷️ Sterling Cooley Name in Conversation',
+        'conversation-name-jie': '🏷️ Jie Lu Name in Conversation',
+        'conversation-unread-sterling': '🔴 UNREAD Sterling Cooley Conversation',
+        'conversation-unread-jie': '🔴 UNREAD Jie Lu Conversation',
+        'conversation-read-sterling': '✅ READ Sterling Cooley Conversation',
+        'conversation-read-jie': '✅ READ Jie Lu Conversation',
         
         // User Elements
         'user-avatar-us': '👤 My Ultra Coach Avatar',

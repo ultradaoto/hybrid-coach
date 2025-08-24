@@ -674,14 +674,18 @@ class LiveDMBot {
           let firstName = 'Unknown';
           let lastName = 'User';
           
-          if (detailedProfileData.realName) {
+          if (detailedProfileData.realName && detailedProfileData.realName !== 'Unknown User') {
             const nameParts = detailedProfileData.realName.trim().split(' ');
             firstName = nameParts[0] || 'Unknown';
             lastName = nameParts.slice(1).join(' ') || 'User';
-          } else if (userInfo.skoolUsername) {
+            console.log(`✅ PARSING: "${detailedProfileData.realName}" → First: "${firstName}", Last: "${lastName}"`);
+          } else if (userInfo.skoolUsername && userInfo.skoolUsername !== 'Unknown User') {
             const nameParts = userInfo.skoolUsername.trim().split(' ');
             firstName = nameParts[0] || 'Unknown';
             lastName = nameParts.slice(1).join(' ') || 'User';
+            console.log(`✅ FALLBACK: "${userInfo.skoolUsername}" → First: "${firstName}", Last: "${lastName}"`);
+          } else {
+            console.log(`❌ NO VALID NAME: realName="${detailedProfileData.realName}", skoolUsername="${userInfo.skoolUsername}"`);
           }
           
           const enhancedUserInfo = {
@@ -708,7 +712,7 @@ class LiveDMBot {
         } else {
           console.log(`⚠️  BACKGROUND: No enhanced profile data found, keeping original data`);
         }
-        
+            
         console.log(`✅ BACKGROUND: Profile scraping completed successfully`);
         
         // Return to profile page to continue monitoring
