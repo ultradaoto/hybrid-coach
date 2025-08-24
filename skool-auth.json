@@ -2,80 +2,80 @@
   "cookies": [
     {
       "name": "client_id",
-      "value": "e5bb38a821b1450b8a1abf4c9aaec365",
+      "value": "3f8b36ccdf2747f380690b89559801f6",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1787540197,
+      "expires": 1787541732,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Lax"
     },
     {
       "name": "auth_token",
-      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODc1NDAxOTgsImlhdCI6MTc1NjAwNDE5OCwidXNlcl9pZCI6IjlmYmE1ZjE1N2NjMDRhM2Y4MGZmNGI1ZTBlNjNkNjQ1In0.-aV-GyZhRY2zjDS2_4C73EZL67htq-ogPMxhd1qsdJA",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODc1NDE3MzQsImlhdCI6MTc1NjAwNTczNCwidXNlcl9pZCI6IjlmYmE1ZjE1N2NjMDRhM2Y4MGZmNGI1ZTBlNjNkNjQ1In0.Du3Yyai1GYGuoCCmZAF2s3Y8ggT_0dmsAudvFXsIeio",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1787540199.948394,
+      "expires": 1787541735.23435,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"
     },
     {
-      "name": "m",
-      "value": "0a710502-88d3-4ead-8302-0f5f23d5b8bc91ed59",
-      "domain": "m.stripe.com",
-      "path": "/",
-      "expires": 1790564201.040003,
-      "httpOnly": true,
-      "secure": true,
-      "sameSite": "None"
-    },
-    {
-      "name": "__stripe_mid",
-      "value": "5cfa7aa6-c1ec-4418-8ac4-0f96249ce717df34d9",
-      "domain": ".www.skool.com",
-      "path": "/",
-      "expires": 1787540201,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "Strict"
-    },
-    {
-      "name": "__stripe_sid",
-      "value": "e499a369-b25f-4a36-9fad-2f03fd1439a78f3e44",
-      "domain": ".www.skool.com",
-      "path": "/",
-      "expires": 1756006001,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "Strict"
-    },
-    {
       "name": "AWSALB",
-      "value": "opmpcghQZ5MHUwxfkShtnqQDYQvOcqZcBEY0R2ziZFRFgn6zJ+Ew1exf+KYtvvPj9hjsyqxNDzskxriRnOi08YmzadtA180aDlM/IlMai/itojgjiVq4+aoE9HaK",
+      "value": "O/7WST65Ap/sPBIKdlNl/E6zDAI+lcBVo5OK7lsMEjUDaM1ZmCxC9iOUef/66u3HPuu+GN6x5wzKjyMKPiU6k8ODVRFPMChzg9+KzIItrX6/ExRhE2uNIYdPc6KW",
       "domain": "www.skool.com",
       "path": "/",
-      "expires": 1756609000.078776,
+      "expires": 1756610535.386809,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "AWSALBCORS",
-      "value": "opmpcghQZ5MHUwxfkShtnqQDYQvOcqZcBEY0R2ziZFRFgn6zJ+Ew1exf+KYtvvPj9hjsyqxNDzskxriRnOi08YmzadtA180aDlM/IlMai/itojgjiVq4+aoE9HaK",
+      "value": "O/7WST65Ap/sPBIKdlNl/E6zDAI+lcBVo5OK7lsMEjUDaM1ZmCxC9iOUef/66u3HPuu+GN6x5wzKjyMKPiU6k8ODVRFPMChzg9+KzIItrX6/ExRhE2uNIYdPc6KW",
       "domain": "www.skool.com",
       "path": "/",
-      "expires": 1756609000.078857,
+      "expires": 1756610535.386982,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
     },
     {
+      "name": "m",
+      "value": "a5009118-f469-4c53-beed-e9c66e88cbc10b6d52",
+      "domain": "m.stripe.com",
+      "path": "/",
+      "expires": 1790565736.3372,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__stripe_mid",
+      "value": "cd7388e7-41c6-4702-842f-c9420576911b031bd7",
+      "domain": ".www.skool.com",
+      "path": "/",
+      "expires": 1787541736,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Strict"
+    },
+    {
+      "name": "__stripe_sid",
+      "value": "f016b4aa-1491-48f2-8512-3ed7a07b1d38b322e7",
+      "domain": ".www.skool.com",
+      "path": "/",
+      "expires": 1756007536,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Strict"
+    },
+    {
       "name": "aws-waf-token",
-      "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAucIT5NAeAAAA:KbNqwloNqjLmb19zeTbN7Njn4rorNyuLoe/dU+shRYS3qKoMXKsVzHwzL2ZOTzEhYGW0BVDINrUAB2K92NFzSyZKH6oLqsXrEESbGrVbb8JMEV+WwQwvHaBmVYysO1M/jj2WbRtCv7uzLdzXGgFVU4g+LMgWxZpdpeYIOgAH2wEa6Vh+OlJjlBK+yOW7FQrb6s91xJIZo3HB6jkDME0JYQCO4KUdtH8QvJMeAaI9GTSeeVNbhYBsS/UhETa6BiapYvB9TQ==",
+      "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAZJMXYpUlAAAA:tTYgxBHfk6IqwS9Ck1Al2eU4fu0JvA9wiY2aBZz8BEf8Y573I/0OLtPI+hXj65PIR7TH/CSUb063cufl+g49IaoXcUrR38E8cj41g2cRRowBA4LniXOX0iEPOz7fjUtQ2I4z3qptQ+Jxe+3Z5JNKUGcsxVx47rwHxSRXsfMftwTrt4FYRg3hINY88ow55p58RoPdkFBH6clYvSYLB0Y1iHwFrj2CYGu3hO1j4prmwEDo3XF11Q6qYSetgfuPvGkgwBaxpQ==",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1756349801,
+      "expires": 1756351336,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Lax"
@@ -87,7 +87,7 @@
       "localStorage": [
         {
           "name": "awswaf_token_refresh_timestamp",
-          "value": "1756004197501"
+          "value": "1756005732895"
         },
         {
           "name": "last-group",
@@ -95,7 +95,7 @@
         },
         {
           "name": "awswaf_session_storage",
-          "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAucIT5NEeAAAA:p4kAH4xwgwUw5GxqsYs1qG93ju8Mcp/vvpz0GkNroCqHnXN1GCAOWL28VmSRzIs0iLK+4H4/f9FgEPFKv9M4r/scYve19huOvjLCdRcP2Dbs1xvz+3aWpeASq86Lye0Is/39JTV/e+N0tKNCNfFP51niTfWPpWvfRWQxM4+8Cfu6PylOYHHHnGzhXi9gtGo8sY3UpuzOuzU6AB0pAcUz2rvnYLj+SUPCLdG9d7+6rk5Q9QKN20Hwmoj59E8kFGT6CWWJ5jXksgkdBpsXNDAespOPSNbedkn+hH0XnRNkQWVBF0xRWQy//6n3MnHi6+h/5a/hujITGUV+LtDCzkxRZhMuswkaoMfkkN+ZBspJBlevC90Ye2EirhRImNrePivfRM9m6y+7nWI+kXIqZDsQi/NEFkldvybOYCcuUCG06rVBGsyzW+tz8/tpWqacqgnurVv6FTPkKOWM3dd456nIv9zKzPLaX596QuKJaLm4YHkpPtMHQQuSnhkigMzYtTd/pw=="
+          "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAZJMXYpYlAAAA:zudSz7EpfYOWHxiQd1YMqtaOwTkRiH1WFdAn/54+qDOz12XQQxChStuWClci66GDIEGXU6c6MMdLNPnpi3OBy2jPpa2l5SxRo7essz3/IhjE4jsHbtaMXKMFqahj3mZzAa/4u9NmQrZ49+PwtciealnVkrEbgx9S9pMaSHrMG+Z0M+vL/bXWgT3eh6ehqB2U+lwy5KG647Fvb5D2dMCydVpnCEkgg6OvBm4fZ4nFCAs++SO2c3ZuRVHVTsCWod48SFw1xKIR9eNC6bnhipd2b+nIKcI7GMleCJ+UeTbrjZd7u7H/r9z+0+oRTc5XutbSwB4ZUh6U3hR0VGhXmQ2YmzA2NYJNFeBZQlEIxRZUz92IB36XvrJcrfheyK2INyNT5PD3pTt5+bRq8WxpVupDPElS94IJTdRMVg04YeXzdMtNCZKUEIk36rJbSZFlTyhqsm5bX2s9Eo4zKUjulnpUKP0I8vWGaRCbuoDCNP3eYx+9VDykowIADTb4DcTK40DzNg=="
         },
         {
           "name": "se",

@@ -1771,28 +1771,28 @@
       "alternativeSelectors": [
         ".styled__UserHandle-sc-1gipnml-6",
         ".gmAjKD",
-        "text=\"@sterling-cooley\"",
-        ":has-text(\"@sterling-cooley\")"
+        "text=\"@patrick-eckert-7291\"",
+        ":has-text(\"@patrick-eckert-7291\")"
       ],
       "description": "🆔 Profile Skool ID (e.g., \"@sterling-cooley\") - marked via right-click menu",
-      "timestamp": "2025-08-24T02:57:51.137Z",
+      "timestamp": "2025-08-24T03:24:33.824Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
           "className": "styled__UserHandle-sc-1gipnml-6 gmAjKD",
-          "textContent": "@sterling-cooley",
-          "innerHTML": "@sterling-cooley"
+          "textContent": "@patrick-eckert-7291",
+          "innerHTML": "@patrick-eckert-7291"
         },
         "position": {
           "boundingRect": {
             "x": 1239,
-            "y": 403.5,
+            "y": 445.015625,
             "width": 239,
             "height": 21,
-            "top": 403.5,
+            "top": 445.015625,
             "right": 1478,
-            "bottom": 424.5,
+            "bottom": 466.015625,
             "left": 1239
           },
           "offsetParent": "DIV",
@@ -1830,14 +1830,22 @@
               "tag": "DIV",
               "class": "styled__BoxWrapper-sc-esqoz3-0 fiJfKc Row-sc-dwrxl6-0 kfVcuA",
               "id": "",
-              "text": "Sterling Cooley"
+              "text": "Patrick Eckert"
             }
           ]
         },
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [],
+          "nearbyButtons": [
+            {
+              "distance": 123,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -1853,34 +1861,36 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T02:57:51.140Z"
+    "timestamp": "2025-08-24T03:24:33.826Z"
   },
   "profile-bio-description": {
     "selector": {
       "selector": ".styled__Bio-sc-1gipnml-9",
       "alternativeSelectors": [
         ".styled__Bio-sc-1gipnml-9",
-        ".hGQpgW"
+        ".hGQpgW",
+        "text=\".\"",
+        ":has-text(\".\")"
       ],
       "description": "📄 Profile Bio/Description (e.g., \"Neuro and data nerd...\") - marked via right-click menu",
-      "timestamp": "2025-08-24T02:57:56.362Z",
+      "timestamp": "2025-08-24T03:24:37.881Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
           "className": "styled__Bio-sc-1gipnml-9 hGQpgW",
-          "textContent": "Vagus Nerve Stimulation Specialist\nAdmin of Ultra School",
-          "innerHTML": "Vagus Nerve Stimulation Specialist\nAdmin of Ultra School"
+          "textContent": ".",
+          "innerHTML": "."
         },
         "position": {
           "boundingRect": {
             "x": 1239,
-            "y": 432.5,
+            "y": 474.015625,
             "width": 239,
-            "height": 48,
-            "top": 432.5,
+            "height": 24,
+            "top": 474.015625,
             "right": 1478,
-            "bottom": 480.5,
+            "bottom": 498.015625,
             "left": 1239
           },
           "offsetParent": "DIV",
@@ -1890,7 +1900,7 @@
           },
           "clientSize": {
             "width": 239,
-            "height": 48
+            "height": 24
           }
         },
         "attributes": {
@@ -1918,20 +1928,28 @@
               "tag": "DIV",
               "class": "styled__ProgressWrapper-sc-1gipnml-0 cfFHpM",
               "id": "",
-              "text": ""
+              "text": "2Level 212points to level up"
             },
             {
               "tag": "DIV",
               "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 duwkcK",
               "id": "",
-              "text": "Sterling Cooley@sterling-coole"
+              "text": "Patrick Eckert@patrick-eckert-"
             }
           ]
         },
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [],
+          "nearbyButtons": [
+            {
+              "distance": 108,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -1947,34 +1965,34 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T02:57:56.363Z"
+    "timestamp": "2025-08-24T03:24:37.883Z"
   },
   "profile-real-name": {
     "selector": {
-      "selector": "text=\"Sterling Cooley\"",
+      "selector": "text=\"Patrick Eckert\"",
       "alternativeSelectors": [
-        "text=\"Sterling Cooley\"",
-        ":has-text(\"Sterling Cooley\")"
+        "text=\"Patrick Eckert\"",
+        ":has-text(\"Patrick Eckert\")"
       ],
       "description": "👤 Profile Real Name (e.g., \"Sterling Cooley\") - marked via right-click menu",
-      "timestamp": "2025-08-24T02:57:46.183Z",
+      "timestamp": "2025-08-24T03:24:29.725Z",
       "analysis": {
         "basic": {
           "tagName": "SPAN",
           "id": "none",
           "className": "none",
-          "textContent": "Sterling Cooley",
-          "innerHTML": "Sterling&nbsp;Cooley"
+          "textContent": "Patrick Eckert",
+          "innerHTML": "Patrick&nbsp;Eckert"
         },
         "position": {
           "boundingRect": {
             "x": 1239,
-            "y": 372,
-            "width": 157.6875,
+            "y": 413.515625,
+            "width": 145.265625,
             "height": 28,
-            "top": 372,
-            "right": 1396.6875,
-            "bottom": 400,
+            "top": 413.515625,
+            "right": 1384.265625,
+            "bottom": 441.515625,
             "left": 1239
           },
           "offsetParent": "DIV",
@@ -2011,7 +2029,15 @@
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [],
+          "nearbyButtons": [
+            {
+              "distance": 144,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -2027,6 +2053,109 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T02:57:46.185Z"
+    "timestamp": "2025-08-24T03:24:29.726Z"
+  },
+  "profile-box": {
+    "selector": {
+      "selector": ".styled__UserCardWrapper-sc-1gipnml-15",
+      "alternativeSelectors": [
+        ".styled__UserCardWrapper-sc-1gipnml-15",
+        ".bBAztC"
+      ],
+      "description": "📦 Profile Information Box/Container (entire profile section) - marked via right-click menu",
+      "timestamp": "2025-08-24T03:24:23.235Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__UserCardWrapper-sc-1gipnml-15 bBAztC",
+          "textContent": "2Level 212points to level upPatrick Eckert@patrick-eckert-7291.Active 4d agoJoined Aug 3, 20253Contr",
+          "innerHTML": "<div class=\"styled__BoxWrapper-sc-esqoz3-0 hChSku Column-sc-1h1w9fe-0 duwkcK\"><div class=\"styled__DropdownWrapper-sc-1gipnml-5 dGIUDc\"><div><div class=\"styled__DropdownWrapper-sc-13jov82-0 dnxlIH\"><bu"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1223,
+            "y": 97,
+            "width": 271,
+            "height": 716.015625,
+            "top": 97,
+            "right": 1494,
+            "bottom": 813.015625,
+            "left": 1223
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 271,
+            "height": 716
+          }
+        },
+        "attributes": {
+          "class": "styled__UserCardWrapper-sc-1gipnml-15 bBAztC",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__CardWrapper-sc-jrheml-0 hesuCC styled__AsideUserProfileCard-sc-1qg8wku-4 jsteGc",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 fPOhhm Column-sc-1h1w9fe-0 duwkcK",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 hChSku Column-sc-1h1w9fe-0 duwkcK",
+              "id": "",
+              "text": "2Level 212points to "
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 57,
+              "src": "https://assets.skool.com/f/35cc04db2d3c473e951963e",
+              "alt": "Patrick Eckert",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 143,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T03:24:23.237Z"
   }
 }

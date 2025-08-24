@@ -958,14 +958,16 @@ class LiveDMBot {
           userId: null
         };
         
-        // Try to find the real name using EXACT tagged selectors from Playwright session
+        // Try to find the real name using EXACT tagged selectors from multiple user profiles
         const nameSelectors = [
-          // PRIORITY: Main headings likely to contain real name
+          // PRIORITY: SPAN elements with real names (from Patrick Eckert training)
+          'span', // Patrick's name was in a SPAN element
+          // Headings that might contain names
           'h1', 'h2', 'h3',
-          // TAGGED: Exact selectors from your tagging session
-          'text="Sterling Cooley"', // Exact text match from tagging
-          ':has-text("Sterling Cooley")', // Contains text match
-          // Generic fallbacks for other users
+          // Specific user examples from training data
+          'text="Sterling Cooley"', 'text="Patrick Eckert"', // Exact matches
+          ':has-text("Sterling Cooley")', ':has-text("Patrick Eckert")', // Contains matches
+          // Generic patterns
           '[class*="name"]', '[class*="Name"]',
           '[class*="title"]', '[class*="Title"]',
           '.profile-name', '.user-name', '.display-name'
@@ -976,17 +978,25 @@ class LiveDMBot {
             const elements = document.querySelectorAll(selector);
             for (const element of elements) {
               const text = element.textContent?.trim();
-              // Look for text that looks like a real name (exclude group/page info)
+              // Look for text that looks like a real person's name (exclude group/page info)
               if (text && 
-                  text.includes(' ') && 
+                  text.includes(' ') && // Must be first + last name
                   text.length < 50 && 
+                  text.length > 4 && // Minimum reasonable name length
                   !text.toLowerCase().includes('desci') &&
                   !text.toLowerCase().includes('decentralized') &&
                   !text.toLowerCase().includes('science') &&
                   !text.toLowerCase().includes('owned by') && // Exclude "Owned by Sterling"
                   !text.toLowerCase().includes('members') && // Exclude "193 members"
                   !text.toLowerCase().includes('$') && // Exclude pricing "$7/m"
-                  /^[A-Za-z\s\-\.]+$/.test(text)) {
+                  !text.toLowerCase().includes('vagus school') && // Exclude group names
+                  !text.toLowerCase().includes('ultra school') && // Exclude group names
+                  !text.toLowerCase().includes('school') && // Exclude group references
+                  // Must be reasonable name pattern
+                  /^[A-Za-z\s\-\.]+$/.test(text) &&
+                  // Common first names pattern (optional but helps)
+                  (text.includes('Sterling') || text.includes('Patrick') || 
+                   /^[A-Z][a-z]+ [A-Z][a-z]+/.test(text))) { // Standard "First Last" pattern
                 data.realName = text;
                 console.log(`Found potential name: ${text}`);
                 break;
@@ -1015,19 +1025,23 @@ class LiveDMBot {
             const elements = document.querySelectorAll(selector);
             for (const element of elements) {
               const text = element.textContent?.trim();
-              // Look for bio-like text (exclude group/membership info)
+              // Look for personal bio text (exclude group/membership info)
               if (text && 
-                  text.length > 10 && 
+                  text.length >= 1 && // Patrick had just "." - valid minimal bio
                   text.length < 200 &&
                   !text.toLowerCase().includes('desci') &&
                   !text.toLowerCase().includes('group') &&
                   !text.toLowerCase().includes('members') && // Exclude "193 members"
                   !text.toLowerCase().includes('$') && // Exclude pricing
-                  !text.toLowerCase().includes('owned by') &&
-                  // Look for personal bio indicators
-                  (text.includes('warrior') || text.includes('nerd') || text.includes('coach') || 
+                  !text.toLowerCase().includes('owned by') && // Exclude admin group text
+                  !text.toLowerCase().includes('vagus school') && // Exclude group names
+                  !text.toLowerCase().includes('ultra school') && // Exclude group names
+                  // Accept bio if it's personal content OR minimal (like ".")
+                  (text === '.' || // Minimal bio is valid
+                   text.includes('warrior') || text.includes('nerd') || text.includes('coach') || 
                    text.includes('developer') || text.includes('founder') || text.includes(',') || 
-                   text.includes('/') || text.includes('love') || text.includes('passion'))) {
+                   text.includes('/') || text.includes('love') || text.includes('passion') ||
+                   text.includes('I') || text.includes('my') || text.includes('me'))) { // Personal pronouns
                 data.bio = text;
                 console.log(`Found potential bio: ${text}`);
                 break;

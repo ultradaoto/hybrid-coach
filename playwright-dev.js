@@ -167,6 +167,7 @@ class SkoolPlaywrightDev {
         'profile-link': '🔗 Profile Link',
         
         // Profile Page Elements (for scraping user data)
+        'profile-box': '📦 Profile Information Box/Container (entire profile section)',
         'profile-real-name': '👤 Profile Real Name (e.g., "Sterling Cooley")',
         'profile-skool-id': '🆔 Profile Skool ID (e.g., "@sterling-cooley")',
         'profile-bio-description': '📄 Profile Bio/Description (e.g., "Neuro and data nerd...")',
@@ -175,6 +176,16 @@ class SkoolPlaywrightDev {
         'profile-about-section': '📖 Profile About/Bio Section',
         'profile-header': '📄 Profile Header Area',
         'profile-main-content': '📝 Profile Main Content Area',
+        'profile-avatar': '🖼️ Profile Avatar/Picture',
+        'profile-title-heading': '🎯 Profile Title/Main Heading (h1, h2)',
+        'profile-subtitle': '📝 Profile Subtitle (secondary text)',
+        'profile-metadata': '📊 Profile Metadata (joined date, stats, etc.)',
+        'profile-admin-badge': '⭐ Admin Badge/Special Status Indicator',
+        'profile-group-admin-info': '👑 Group Admin Information (admin-specific)',
+        'profile-regular-user-info': '👥 Regular User Information (non-admin)',
+        'profile-personal-bio': '💬 Personal Bio Text (not group description)',
+        'profile-group-description': '🏢 Group Description Text (admin profiles)',
+        'profile-stats-section': '📈 Profile Stats Section (followers, posts, etc.)',
         
         // Timestamp Types (Important Distinction)
         'timestamp-date': '📅 Date Timestamp (e.g., "Dec 25, 2024")',
