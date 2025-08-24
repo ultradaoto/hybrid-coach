@@ -4,6 +4,8 @@ import { chromium } from 'playwright';
 import fs from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
+import http from 'http';
+import url from 'url';
 
 dotenv.config();
 
@@ -28,6 +30,9 @@ class SkoolWorkflowManager {
   async initialize() {
     console.log('🤖 Starting Enhanced Workflow Manager...');
     console.log('🎯 Visual workflow builder with drag & drop controls');
+    
+    // Start save server
+    await this.startSaveServer();
     
     // Launch browser with development settings
     this.browser = await chromium.launch({
@@ -90,11 +95,11 @@ class SkoolWorkflowManager {
       // Global state
       window.markedElements = {};
       window.botWorkflow = [
-        { id: 1, type: 'check', target: 'mail-icon-unread', description: 'Check if mail icon has unread indicator', selector: '.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', condition: 'has_unread_badge', status: 'pending' },
-        { id: 2, type: 'click', target: 'mail-icon', description: 'Click mail icon to open conversation list', selector: '.styled__ButtonWrapper-sc-1crx28g-1.GvgtH', status: 'pending' },
+        { id: 1, type: 'check', target: 'mail-icon-unread', description: 'Check if mail icon has red unread badge', selector: '.styled__ButtonWrapper-sc-1crx28g-1', condition: 'has_unread_badge', status: 'pending' },
+        { id: 2, type: 'click', target: 'mail-icon', description: 'Click mail icon to open conversation list', selector: '.styled__ButtonWrapper-sc-1crx28g-1', status: 'pending' },
         { id: 3, type: 'wait', target: 'conversation-list', description: 'Wait for conversation list to load', delay: 2000, status: 'pending' },
         { id: 4, type: 'find', target: 'blue-radio-unread', description: 'Find conversation with blue unread indicator', selector: '.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ', condition: 'first_unread', status: 'pending' },
-        { id: 5, type: 'click', target: 'unread-conversation', description: 'Click the conversation with unread messages', selector: 'auto-detected', dynamic: true, status: 'pending' },
+        { id: 5, type: 'click', target: 'conversation-preview', description: 'Click the conversation preview text to open chat', selector: '.styled__MessageContent-sc-5xhq84-9', dynamic: true, status: 'pending' },
         { id: 6, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 3000, status: 'pending' },
         { id: 7, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
         { id: 8, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
@@ -302,20 +307,71 @@ class SkoolWorkflowManager {
         }
       };
 
-      // Run workflow
+      // Enhanced workflow execution with your tagged elements
       window.runWorkflow = async function() {
+        console.log('🚀 Starting enhanced workflow with your tagged elements...');
+        
         for (const step of window.botWorkflow) {
           step.status = 'running';
           renderWorkflow();
           
           try {
-            if (step.type === 'click') {
-              const element = document.querySelector(step.selector);
-              if (element) {
-                element.click();
-                console.log(`✅ Clicked: ${step.description}`);
+            if (step.type === 'check') {
+              if (step.condition === 'has_unread_badge') {
+                // Check for red unread badge using your tagged selector
+                const unreadBadge = document.querySelector('path[d*="M"]'); // Red circle path
+                const mailIcon = document.querySelector(step.selector);
+                if (unreadBadge && mailIcon) {
+                  console.log('🔴 DETECTED: Mail icon has unread badge (red circle)');
+                } else {
+                  console.log('📧 No unread badge detected - skipping workflow');
+                  return;
+                }
+              }
+            } else if (step.type === 'find') {
+              if (step.condition === 'first_unread') {
+                // Find blue radio button using your tagged selector
+                const blueRadios = document.querySelectorAll(step.selector);
+                console.log(`🔵 Found ${blueRadios.length} blue radio indicators`);
+                if (blueRadios.length === 0) {
+                  console.log('❌ No blue unread indicators found');
+                  return;
+                }
+              }
+            } else if (step.type === 'click') {
+              if (step.target === 'conversation-preview') {
+                // Use your tagged conversation preview selector
+                const previews = document.querySelectorAll(step.selector);
+                if (previews.length > 0) {
+                  // Find the preview that has an unread indicator nearby
+                  let targetPreview = null;
+                  for (const preview of previews) {
+                    const parent = preview.closest('.styled__NotificationRow-sc-5xhq84-2');
+                    if (parent && parent.querySelector('.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ')) {
+                      targetPreview = preview;
+                      break;
+                    }
+                  }
+                  
+                  if (targetPreview) {
+                    targetPreview.click();
+                    console.log(`✅ Clicked conversation preview with unread indicator`);
+                  } else {
+                    previews[0].click(); // Fallback to first preview
+                    console.log(`✅ Clicked first conversation preview (fallback)`);
+                  }
+                } else {
+                  console.error(`❌ No conversation previews found: ${step.selector}`);
+                }
               } else {
-                console.error(`❌ Element not found: ${step.selector}`);
+                // Standard click
+                const element = document.querySelector(step.selector);
+                if (element) {
+                  element.click();
+                  console.log(`✅ Clicked: ${step.description}`);
+                } else {
+                  console.error(`❌ Element not found: ${step.selector}`);
+                }
               }
             } else if (step.type === 'wait') {
               await new Promise(resolve => setTimeout(resolve, step.delay || 1000));
@@ -327,11 +383,21 @@ class SkoolWorkflowManager {
                 element.dispatchEvent(new Event('input', { bubbles: true }));
                 console.log(`📝 Typed: "${step.text}"`);
               }
+            } else if (step.type === 'extract') {
+              console.log(`🔍 Extract step: ${step.description} (simulation)`);
+            } else if (step.type === 'conditional') {
+              console.log(`🔀 Conditional step: ${step.description} (simulation)`);
+            } else if (step.type === 'save') {
+              console.log(`💾 Save step: ${step.description} (simulation)`);
+            } else if (step.type === 'navigate') {
+              console.log(`🧭 Navigate step: ${step.description} (simulation)`);
+            } else if (step.type === 'loop') {
+              console.log(`🔄 Loop step: ${step.description} (simulation)`);
             }
             
             step.status = 'completed';
             renderWorkflow();
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 800));
           } catch (error) {
             console.error(`❌ Step failed: ${step.description}`, error);
             step.status = 'pending';
@@ -339,6 +405,8 @@ class SkoolWorkflowManager {
             break;
           }
         }
+        
+        console.log('🎉 Workflow completed!');
       };
 
       // Enhanced right-click menu
@@ -393,19 +461,127 @@ class SkoolWorkflowManager {
         document.body.appendChild(customMenu);
       }
 
-      // Mark element function
+      // Enhanced mark element function with auto-save
       function markElement(element, type, description) {
         const selector = generateSelector(element);
         
-        window.markedElements[type] = {
-          selector: { selector },
-          description,
-          timestamp: new Date().toISOString(),
-          element: element
+        // Create enhanced selector data matching existing format
+        const selectorData = {
+          selector: {
+            selector: selector,
+            alternativeSelectors: generateAlternativeSelectors(element),
+            description: description,
+            timestamp: new Date().toISOString(),
+            analysis: generateElementAnalysis(element)
+          },
+          description: description,
+          timestamp: new Date().toISOString()
         };
-
+        
+        window.markedElements[type] = selectorData;
+        
+        // Save to file automatically
+        saveSelectorsToFile();
+        
         updateElementDisplay();
         console.log(`🎯 Marked ${type}: ${selector}`);
+        console.log(`💾 Auto-saved to skool-selectors.json`);
+      }
+
+      // Generate alternative selectors
+      function generateAlternativeSelectors(element) {
+        const alternatives = [];
+        
+        if (element.id) alternatives.push(`#${element.id}`);
+        if (element.className) {
+          const classes = element.className.split(' ').filter(c => c.length > 0);
+          classes.forEach(cls => alternatives.push(`.${cls}`));
+        }
+        if (element.tagName) alternatives.push(element.tagName.toLowerCase());
+        if (element.textContent && element.textContent.trim()) {
+          const text = element.textContent.trim();
+          if (text.length < 50) {
+            alternatives.push(`text="${text}"`);
+            alternatives.push(`:has-text("${text}")`);
+          }
+        }
+        
+        return alternatives;
+      }
+
+      // Generate element analysis
+      function generateElementAnalysis(element) {
+        const rect = element.getBoundingClientRect();
+        const styles = getComputedStyle(element);
+        
+        return {
+          basic: {
+            tagName: element.tagName.toLowerCase(),
+            id: element.id || 'none',
+            className: element.className || 'none',
+            textContent: element.textContent ? element.textContent.trim().substring(0, 100) : 'none'
+          },
+          position: {
+            boundingRect: {
+              x: Math.round(rect.x),
+              y: Math.round(rect.y),
+              width: Math.round(rect.width),
+              height: Math.round(rect.height)
+            },
+            scrollPosition: {
+              x: window.scrollX,
+              y: window.scrollY
+            },
+            clientSize: {
+              width: document.documentElement.clientWidth,
+              height: document.documentElement.clientHeight
+            }
+          },
+          attributes: {
+            type: element.type || 'none',
+            role: element.getAttribute('role') || 'none',
+            ariaLabel: element.getAttribute('aria-label') || 'none'
+          },
+          styling: {
+            backgroundColor: styles.backgroundColor,
+            color: styles.color,
+            display: styles.display,
+            position: styles.position,
+            zIndex: styles.zIndex,
+            cursor: styles.cursor,
+            visibility: styles.visibility
+          }
+        };
+      }
+
+      // Save selectors to file via fetch
+      async function saveSelectorsToFile() {
+        try {
+          // Send the marked elements to the save server
+          const response = await fetch('http://localhost:3001/api/save-selectors', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              selectors: window.markedElements,
+              timestamp: new Date().toISOString()
+            })
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Selectors saved successfully to skool-selectors.json');
+            console.log(`📊 ${result.message}`);
+          } else {
+            console.error('❌ Failed to save selectors:', response.statusText);
+          }
+        } catch (error) {
+          console.error('❌ Error saving selectors:', error);
+          // Fallback: save to localStorage
+          localStorage.setItem('skool-selectors-backup', JSON.stringify(window.markedElements));
+          console.log('💾 Saved to localStorage as backup');
+        }
       }
 
       // Generate selector
@@ -519,6 +695,66 @@ class SkoolWorkflowManager {
     } catch (error) {
       console.log('📂 No existing selectors found, starting fresh');
       this.selectors = {};
+    }
+  }
+
+  async startSaveServer() {
+    const server = http.createServer(async (req, res) => {
+      // Enable CORS
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+      
+      const parsedUrl = url.parse(req.url, true);
+      
+      if (req.method === 'POST' && parsedUrl.pathname === '/api/save-selectors') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+          try {
+            const { selectors } = JSON.parse(body);
+            const success = await this.saveSelectors(selectors);
+            
+            res.writeHead(success ? 200 : 500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success, message: success ? 'Saved successfully' : 'Save failed' }));
+          } catch (error) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: error.message }));
+          }
+        });
+      } else {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+    
+    server.listen(3001, () => {
+      console.log('🗄️ Save server running on http://localhost:3001');
+    });
+  }
+
+  async saveSelectors(newSelectors) {
+    try {
+      // Merge new selectors with existing ones
+      const allSelectors = { ...this.selectors, ...newSelectors };
+      
+      const selectorsPath = path.join(process.cwd(), 'skool-selectors.json');
+      await fs.writeFile(selectorsPath, JSON.stringify(allSelectors, null, 2), 'utf8');
+      
+      this.selectors = allSelectors;
+      console.log(`💾 Saved ${Object.keys(newSelectors).length} new selectors to file`);
+      console.log(`📊 Total selectors: ${Object.keys(allSelectors).length}`);
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to save selectors:', error);
+      return false;
     }
   }
 
