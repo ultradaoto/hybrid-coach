@@ -35,6 +35,14 @@ router.get('/user-info', async (req, res) => {
                 skoolId: 'dev-user-123',
                 goals: ['testing', 'development'],
                 sessions: 0
+            },
+            'User_1755927657570': {
+                firstName: 'Test',
+                lastName: 'User',
+                fullName: 'Test User',
+                skoolId: 'User_1755927657570',
+                goals: ['vagus_nerve_training', 'stress_reduction'],
+                sessions: 1
             }
         };
         
