@@ -49,6 +49,7 @@ router.get('/user-info', async (req, res) => {
                 lastName: 'Cooley',
                 fullName: 'Sterling Cooley',
                 skoolId: 'sterling-cooley',
+                bio: 'Vagus Nerve Stimulation Specialist, Admin of Ultra School',
                 goals: ['vagus_nerve_stimulation', 'breathing_techniques', 'stress_management'],
                 sessions: 5
             }

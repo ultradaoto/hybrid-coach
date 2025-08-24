@@ -670,10 +670,24 @@ class LiveDMBot {
         
         // Store enhanced profile data for webhook lookup
         if (detailedProfileData.realName || detailedProfileData.bio) {
+          // Properly parse first and last name
+          let firstName = 'Unknown';
+          let lastName = 'User';
+          
+          if (detailedProfileData.realName) {
+            const nameParts = detailedProfileData.realName.trim().split(' ');
+            firstName = nameParts[0] || 'Unknown';
+            lastName = nameParts.slice(1).join(' ') || 'User';
+          } else if (userInfo.skoolUsername) {
+            const nameParts = userInfo.skoolUsername.trim().split(' ');
+            firstName = nameParts[0] || 'Unknown';
+            lastName = nameParts.slice(1).join(' ') || 'User';
+          }
+          
           const enhancedUserInfo = {
             skoolId: userInfo.skoolUserId,
-            firstName: detailedProfileData.realName ? detailedProfileData.realName.split(' ')[0] : userInfo.skoolUsername?.split(' ')[0] || 'Unknown',
-            lastName: detailedProfileData.realName ? detailedProfileData.realName.split(' ').slice(1).join(' ') : userInfo.skoolUsername?.split(' ').slice(1).join(' ') || 'User',
+            firstName: firstName,
+            lastName: lastName,
             fullName: detailedProfileData.realName || userInfo.skoolUsername || 'Unknown User',
             bio: detailedProfileData.bio || '.',
             profileUrl: `https://www.skool.com${userInfo.profileUrl}`,

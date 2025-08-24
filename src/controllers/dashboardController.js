@@ -14,11 +14,29 @@ async function index(req, res, next) {
       // Skool authentication - simplified dashboard
       console.log(`📊 Loading dashboard for Skool user: ${req.skoolUser.skoolUsername}`);
       
+      // Try to get enhanced profile data from database
+      let displayName = req.skoolUser.skoolUsername;
+      let userEmail = req.skoolUser.skoolUserId + '@skool.user';
+      
+      try {
+        // Look for stored profile data from bot scraping
+        const storedProfile = await prisma.userProfile.findUnique({
+          where: { skoolId: req.skoolUser.skoolUserId }
+        });
+        
+        if (storedProfile && storedProfile.firstName && storedProfile.firstName !== 'Unknown') {
+          displayName = storedProfile.firstName; // Just first name for welcome message!
+          console.log(`✅ Using stored profile name: ${displayName}`);
+        }
+      } catch (dbError) {
+        console.log(`⚠️ Could not fetch stored profile, using default: ${dbError.message}`);
+      }
+      
       res.render('dashboard', {
         title: 'Dashboard - MyUltra.Coach',
         user: {
-          displayName: req.skoolUser.skoolUsername,
-          email: req.skoolUser.skoolUserId + '@skool.user',
+          displayName: displayName,
+          email: userEmail,
           role: 'client', // Skool users are clients
           isAvailable: false // Not applicable for Skool users
         },
