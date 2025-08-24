@@ -95,21 +95,21 @@ class SkoolWorkflowManager {
       // Global state
       window.markedElements = {};
       window.botWorkflow = [
-        { id: 1, type: 'check', target: 'mail-icon-unread', description: 'Check if mail icon has red unread badge', selector: '.styled__ButtonWrapper-sc-1crx28g-1', condition: 'has_unread_badge', status: 'pending' },
-        { id: 2, type: 'click', target: 'mail-icon', description: 'Click mail icon to open conversation list', selector: '.styled__ButtonWrapper-sc-1crx28g-1', status: 'pending' },
-        { id: 3, type: 'wait', target: 'conversation-list', description: 'Wait for conversation list to load', delay: 2000, status: 'pending' },
-        { id: 4, type: 'find', target: 'blue-radio-unread', description: 'Find conversation with blue unread indicator', selector: '.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ', condition: 'first_unread', status: 'pending' },
-        { id: 5, type: 'click', target: 'conversation-preview', description: 'Click the conversation preview text to open chat', selector: '.styled__MessageContent-sc-5xhq84-9', dynamic: true, status: 'pending' },
-        { id: 6, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 3000, status: 'pending' },
-        { id: 7, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
-        { id: 8, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
-        { id: 9, type: 'click', target: 'send-button', description: 'Send the message', selector: 'button[type="submit"]', status: 'pending' },
+        { id: 1, type: 'monitor', target: 'blue-radio-polling', description: 'Monitor for blue unread indicators (poll every 10s)', selector: '.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ', condition: 'wait_for_blue', status: 'pending', polling: true, interval: 10000 },
+        { id: 2, type: 'find', target: 'blue-radio-unread', description: 'Find conversation with blue unread indicator', selector: '.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ', condition: 'first_blue_unread', status: 'pending' },
+        { id: 3, type: 'click', target: 'conversation-preview', description: 'Click preview text of conversation with blue indicator', selector: '.styled__MessageContent-sc-5xhq84-9', dynamic: true, status: 'pending' },
+        { id: 4, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 2000, status: 'pending' },
+        { id: 5, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
+        { id: 6, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
+        { id: 7, type: 'click', target: 'send-button', description: 'Send the message', selector: 'button[type="submit"]', status: 'pending' },
+        { id: 8, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 1000, status: 'pending' },
+        { id: 9, type: 'close', target: 'chat-window', description: 'Close chat window', selector: '.styled__CloseButton-sc-1w5xk2o-0, button[aria-label*="close"], .close-button', status: 'pending' },
         { id: 10, type: 'check', target: 'profile-scraped', description: 'Check if user profile already scraped', condition: 'database_check', status: 'pending' },
         { id: 11, type: 'conditional', target: 'profile-scraping', description: 'IF not scraped: Click profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', condition: 'if_not_scraped', status: 'pending' },
         { id: 12, type: 'extract', target: 'profile-data', description: 'Extract name, bio, skoolId from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15', condition: 'if_profile_opened', status: 'pending' },
         { id: 13, type: 'save', target: 'database', description: 'Save user data to Prisma database', condition: 'if_profile_scraped', status: 'pending' },
         { id: 14, type: 'navigate', target: 'return-monitoring', description: 'Return to MyUltra Coach profile for monitoring', selector: 'https://www.skool.com/@my-ultra-coach-6588', status: 'pending' },
-        { id: 15, type: 'loop', target: 'monitoring', description: 'Continue monitoring for next unread message', delay: 5000, status: 'pending' }
+        { id: 15, type: 'loop', target: 'monitoring', description: 'Return to step 1 - Continue monitoring', delay: 2000, status: 'pending', loop_to: 1 }
       ];
 
       let draggedItem = null;
@@ -217,11 +217,13 @@ class SkoolWorkflowManager {
 
         container.innerHTML = window.botWorkflow.map((step, index) => {
           const typeColors = {
+            'monitor': '#e83e8c', // Pink for monitoring
             'check': '#17a2b8',
             'find': '#6f42c1', 
             'conditional': '#fd7e14',
             'extract': '#20c997',
             'save': '#28a745',
+            'close': '#dc3545', // Red for close
             'loop': '#6c757d'
           };
           const typeColor = typeColors[step.type] || '#007bff';
@@ -307,35 +309,68 @@ class SkoolWorkflowManager {
         }
       };
 
-      // Enhanced workflow execution with your tagged elements
+      // Enhanced workflow execution with smart blue radio detection
       window.runWorkflow = async function() {
-        console.log('🚀 Starting enhanced workflow with your tagged elements...');
+        console.log('🚀 Starting smart monitoring workflow...');
+        let currentStepIndex = 0;
         
-        for (const step of window.botWorkflow) {
+        while (currentStepIndex < window.botWorkflow.length) {
+          const step = window.botWorkflow[currentStepIndex];
           step.status = 'running';
           renderWorkflow();
           
           try {
-            if (step.type === 'check') {
-              if (step.condition === 'has_unread_badge') {
-                // Check for red unread badge using your tagged selector
-                const unreadBadge = document.querySelector('path[d*="M"]'); // Red circle path
-                const mailIcon = document.querySelector(step.selector);
-                if (unreadBadge && mailIcon) {
-                  console.log('🔴 DETECTED: Mail icon has unread badge (red circle)');
+            if (step.type === 'monitor') {
+              if (step.condition === 'wait_for_blue') {
+                console.log('👁️ MONITORING: Checking for blue unread indicators...');
+                
+                // Check for blue radio buttons
+                const blueRadios = document.querySelectorAll(step.selector);
+                let foundUnread = false;
+                
+                // Check if any blue radios are actually "filled" (indicating unread)
+                for (const radio of blueRadios) {
+                  const styles = getComputedStyle(radio);
+                  const parent = radio.closest('.styled__NotificationRow-sc-5xhq84-2');
+                  
+                  // Check if this radio indicates an unread message
+                  if (parent && (radio.offsetWidth > 0 && radio.offsetHeight > 0)) {
+                    console.log('🔵 FOUND: Blue unread indicator detected!');
+                    foundUnread = true;
+                    break;
+                  }
+                }
+                
+                if (!foundUnread) {
+                  console.log(`⏳ No unread messages found. Waiting ${step.interval / 1000} seconds...`);
+                  await new Promise(resolve => setTimeout(resolve, step.interval));
+                  step.status = 'pending';
+                  renderWorkflow();
+                  continue; // Stay on this step
                 } else {
-                  console.log('📧 No unread badge detected - skipping workflow');
-                  return;
+                  console.log('✅ Unread message detected! Proceeding to next step...');
                 }
               }
             } else if (step.type === 'find') {
-              if (step.condition === 'first_unread') {
-                // Find blue radio button using your tagged selector
+              if (step.condition === 'first_blue_unread') {
+                // Find the specific conversation with blue unread indicator
                 const blueRadios = document.querySelectorAll(step.selector);
-                console.log(`🔵 Found ${blueRadios.length} blue radio indicators`);
-                if (blueRadios.length === 0) {
-                  console.log('❌ No blue unread indicators found');
-                  return;
+                console.log(`🔍 Searching through ${blueRadios.length} potential unread indicators...`);
+                
+                let foundUnreadConversation = false;
+                for (const radio of blueRadios) {
+                  const parent = radio.closest('.styled__NotificationRow-sc-5xhq84-2');
+                  if (parent && radio.offsetWidth > 0) {
+                    console.log('🎯 Found conversation with blue unread indicator');
+                    foundUnreadConversation = true;
+                    break;
+                  }
+                }
+                
+                if (!foundUnreadConversation) {
+                  console.log('❌ No unread conversations found - returning to monitoring');
+                  currentStepIndex = 0; // Go back to monitoring
+                  continue;
                 }
               }
             } else if (step.type === 'click') {
@@ -383,6 +418,26 @@ class SkoolWorkflowManager {
                 element.dispatchEvent(new Event('input', { bubbles: true }));
                 console.log(`📝 Typed: "${step.text}"`);
               }
+            } else if (step.type === 'close') {
+              // Close chat window using multiple possible selectors
+              const closeSelectors = step.selector.split(', ');
+              let closed = false;
+              
+              for (const closeSelector of closeSelectors) {
+                const closeButton = document.querySelector(closeSelector.trim());
+                if (closeButton) {
+                  closeButton.click();
+                  console.log(`✅ Closed chat window using: ${closeSelector}`);
+                  closed = true;
+                  break;
+                }
+              }
+              
+              if (!closed) {
+                // Fallback: try pressing Escape
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+                console.log(`✅ Closed chat window using Escape key (fallback)`);
+              }
             } else if (step.type === 'extract') {
               console.log(`🔍 Extract step: ${step.description} (simulation)`);
             } else if (step.type === 'conditional') {
@@ -392,21 +447,41 @@ class SkoolWorkflowManager {
             } else if (step.type === 'navigate') {
               console.log(`🧭 Navigate step: ${step.description} (simulation)`);
             } else if (step.type === 'loop') {
-              console.log(`🔄 Loop step: ${step.description} (simulation)`);
+              if (step.loop_to) {
+                console.log(`🔄 Looping back to step ${step.loop_to}...`);
+                currentStepIndex = step.loop_to - 1; // -1 because we'll increment at the end
+                step.status = 'completed';
+                renderWorkflow();
+                await new Promise(resolve => setTimeout(resolve, step.delay || 2000));
+                currentStepIndex++; // This will be decremented by the continue, so we end up at loop_to
+                continue;
+              } else {
+                console.log(`🔄 Loop step: ${step.description} (simulation)`);
+              }
             }
             
             step.status = 'completed';
             renderWorkflow();
+            
+            // Move to next step
+            currentStepIndex++;
             await new Promise(resolve => setTimeout(resolve, 800));
+            
           } catch (error) {
             console.error(`❌ Step failed: ${step.description}`, error);
             step.status = 'pending';
             renderWorkflow();
-            break;
+            
+            // On error, go back to monitoring
+            console.log('🔄 Error occurred - returning to monitoring mode');
+            currentStepIndex = 0;
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
         }
         
-        console.log('🎉 Workflow completed!');
+        console.log('🎉 Workflow completed! Restarting monitoring...');
+        // Restart the workflow
+        setTimeout(() => window.runWorkflow(), 3000);
       };
 
       // Enhanced right-click menu
