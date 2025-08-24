@@ -484,6 +484,9 @@ class LiveDMBot {
       console.log(`🔑 Generated unique code for ${userInfo.skoolUsername}: ${authResult.code}`);
       console.log(`🔗 Login URL: ${loginUrl}`);
       
+      // NOTE: If auth codes are failing on server, check database sync between local/production
+      console.log(`⚠️  NOTE: Auth code generated in ${process.env.NODE_ENV || 'development'} mode`);
+      
     } catch (error) {
       console.error('❌ Error generating auth code:', error);
       // Fallback to generic message
@@ -532,6 +535,16 @@ class LiveDMBot {
             timeout: 15000
           });
           console.log(`✅ Successfully navigated to profile page`);
+          
+          // CRITICAL: Disable all clicking to prevent navigation away from profile
+          await this.browserService.page.addStyleTag({
+            content: `
+              * { pointer-events: none !important; }
+              body { pointer-events: none !important; }
+            `
+          });
+          console.log(`🔒 Disabled all clicking to prevent accidental navigation`);
+          
           await this.browserService.page.waitForTimeout(3000);
         } catch (navError) {
           console.log(`❌ Direct navigation failed: ${navError.message}`);
@@ -550,15 +563,30 @@ class LiveDMBot {
         const detailedProfileData = await this.browserService.page.evaluate(() => {
           const data = { realName: null, bio: null, userId: null };
           
-          // Use EXACT tagged selectors from training session - target ONLY profile area
-          const nameSelectors = [
-            'text="Sterling Cooley"', 'text="Patrick Eckert"',
-            ':has-text("Sterling Cooley")', ':has-text("Patrick Eckert")',
-            '.styled__UserCardWrapper-sc-1gipnml-15 span',
-            '.styled__UserCardWrapper-sc-1gipnml-15 h1', 
-            '.styled__UserCardWrapper-sc-1gipnml-15 h2',
-            '.styled__UserCardWrapper-sc-1gipnml-15 h3'
-          ];
+          // PRIORITY: Extract name from profile container text (we know it's there!)
+          const profileContainer = document.querySelector('.styled__UserCardWrapper-sc-1gipnml-15');
+          if (profileContainer) {
+            const containerText = profileContainer.textContent || '';
+            console.log('🔍 Profile container text:', containerText.substring(0, 100));
+            
+            // Extract name using regex - it's at the beginning before @username
+            const nameMatch = containerText.match(/^([A-Z][a-z]+ [A-Z][a-z]+)@/);
+            if (nameMatch) {
+              data.realName = nameMatch[1];
+              console.log('✅ Extracted name from container:', data.realName);
+            }
+          }
+          
+          // Fallback: Use EXACT tagged selectors from training session
+          if (!data.realName) {
+            const nameSelectors = [
+              'text="Sterling Cooley"', 'text="Patrick Eckert"',
+              ':has-text("Sterling Cooley")', ':has-text("Patrick Eckert")',
+              '.styled__UserCardWrapper-sc-1gipnml-15 span',
+              '.styled__UserCardWrapper-sc-1gipnml-15 h1', 
+              '.styled__UserCardWrapper-sc-1gipnml-15 h2',
+              '.styled__UserCardWrapper-sc-1gipnml-15 h3'
+            ];
           
           for (const selector of nameSelectors) {
             try {
