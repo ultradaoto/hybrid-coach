@@ -958,15 +958,17 @@ class LiveDMBot {
           userId: null
         };
         
-        // Try to find the real name using tagged selectors
+        // Try to find the real name using EXACT tagged selectors from Playwright session
         const nameSelectors = [
-          // REAL selectors from Playwright tagging session
-          'h1', 'h2', 'h3', // Main headings first
-          '.styled__UserHandle-sc-1gipnml-6', // Skool ID selector (tagged)
-          '[class*="name"]', '[class*="Name"]', // Name classes
-          '[class*="title"]', '[class*="Title"]', // Title classes
-          '[class*="header"]', '[class*="Header"]', // Header classes
-          '.profile-name', '.user-name', '.display-name' // Common profile name classes
+          // PRIORITY: Main headings likely to contain real name
+          'h1', 'h2', 'h3',
+          // TAGGED: Exact selectors from your tagging session
+          'text="Sterling Cooley"', // Exact text match from tagging
+          ':has-text("Sterling Cooley")', // Contains text match
+          // Generic fallbacks for other users
+          '[class*="name"]', '[class*="Name"]',
+          '[class*="title"]', '[class*="Title"]',
+          '.profile-name', '.user-name', '.display-name'
         ];
         
         for (const selector of nameSelectors) {
@@ -974,13 +976,16 @@ class LiveDMBot {
             const elements = document.querySelectorAll(selector);
             for (const element of elements) {
               const text = element.textContent?.trim();
-              // Look for text that looks like a real name (2+ words, not group names)
+              // Look for text that looks like a real name (exclude group/page info)
               if (text && 
                   text.includes(' ') && 
                   text.length < 50 && 
                   !text.toLowerCase().includes('desci') &&
                   !text.toLowerCase().includes('decentralized') &&
                   !text.toLowerCase().includes('science') &&
+                  !text.toLowerCase().includes('owned by') && // Exclude "Owned by Sterling"
+                  !text.toLowerCase().includes('members') && // Exclude "193 members"
+                  !text.toLowerCase().includes('$') && // Exclude pricing "$7/m"
                   /^[A-Za-z\s\-\.]+$/.test(text)) {
                 data.realName = text;
                 console.log(`Found potential name: ${text}`);
@@ -993,15 +998,15 @@ class LiveDMBot {
           }
         }
         
-        // Try to find bio/description using tagged selectors
+        // Try to find bio/description using EXACT tagged selectors
         const bioSelectors = [
-          // REAL selectors from Playwright tagging session
-          '.styled__Bio-sc-1gipnml-9', // Bio selector (tagged)
+          // PRIORITY: Tagged selectors from your Playwright session
+          '.styled__Bio-sc-1gipnml-9', // Primary bio selector (tagged)
           '.hGQpgW', // Alternative bio selector (tagged)
+          // Generic fallbacks for other users
           '[class*="bio"]', '[class*="Bio"]',
           '[class*="description"]', '[class*="Description"]',
           '[class*="about"]', '[class*="About"]',
-          '[class*="intro"]', '[class*="Intro"]',
           'p', '.profile-description', '.user-bio'
         ];
         
@@ -1010,13 +1015,19 @@ class LiveDMBot {
             const elements = document.querySelectorAll(selector);
             for (const element of elements) {
               const text = element.textContent?.trim();
-              // Look for bio-like text (longer, descriptive)
+              // Look for bio-like text (exclude group/membership info)
               if (text && 
                   text.length > 10 && 
                   text.length < 200 &&
                   !text.toLowerCase().includes('desci') &&
                   !text.toLowerCase().includes('group') &&
-                  (text.includes('warrior') || text.includes('nerd') || text.includes('/') || text.includes(','))) {
+                  !text.toLowerCase().includes('members') && // Exclude "193 members"
+                  !text.toLowerCase().includes('$') && // Exclude pricing
+                  !text.toLowerCase().includes('owned by') &&
+                  // Look for personal bio indicators
+                  (text.includes('warrior') || text.includes('nerd') || text.includes('coach') || 
+                   text.includes('developer') || text.includes('founder') || text.includes(',') || 
+                   text.includes('/') || text.includes('love') || text.includes('passion'))) {
                 data.bio = text;
                 console.log(`Found potential bio: ${text}`);
                 break;
