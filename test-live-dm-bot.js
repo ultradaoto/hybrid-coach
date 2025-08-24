@@ -300,10 +300,31 @@ class LiveDMBot {
         return;
       }
       
-      // Method 2: Look for red badge path elements (more specific)
+      // Method 2: ENHANCED - Check for green radio buttons (MOST RELIABLE from training)
+      const enhancedDetection = await this.browserService.page.evaluate(() => {
+        // Trained selectors from Playwright tagging session
+        const greenRadioButtons = document.querySelectorAll('.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ');
+        const unreadConversations = document.querySelectorAll('.styled__NotificationRow-sc-5xhq84-2.hpcoAn');
+        
+        return {
+          greenRadioCount: greenRadioButtons.length,
+          unreadConversationsCount: unreadConversations.length
+        };
+      });
+      
+      console.log(`🟢 Enhanced Detection: ${enhancedDetection.greenRadioCount} green radio buttons, ${enhancedDetection.unreadConversationsCount} unread conversations`);
+      
+      // PRIORITY CHECK: Green radio buttons (most reliable)
+      if (enhancedDetection.greenRadioCount > 0) {
+        console.log('🟢 UNREAD DETECTED via GREEN RADIO BUTTON! Starting response sequence...');
+        await this.handleUnreadMessage();
+        return;
+      }
+      
+      // Method 3: Look for red badge path elements (more specific)
       const redBadgePaths = await this.browserService.page.$$('path');
       
-      // Method 3: Count path elements (baseline vs unread comparison)
+      // Method 4: Count path elements (baseline vs unread comparison)
       const pathCount = redBadgePaths.length;
       console.log(`📊 Current path count: ${pathCount} (baseline: ~2, unread: ~3+)`);
       
@@ -433,20 +454,61 @@ class LiveDMBot {
   }
 
   async openLatestConversation() {
-    // Look for unread conversations using discovered selector
-    const unreadConversations = await this.browserService.page.$$('.styled__ReadButton-sc-5xhq84-1, .styled__MessageContent-sc-5xhq84-9');
+    console.log('🎯 Using TRAINED SELECTORS to find UNREAD conversations...');
     
-    if (unreadConversations.length === 0) {
-      throw new Error('No conversations found in popup');
+    // Method 1: Use trained green radio button selectors (MOST RELIABLE)
+    const enhancedConversationDetection = await this.browserService.page.evaluate(() => {
+      // Trained selectors from Playwright tagging
+      const greenRadioButtons = document.querySelectorAll('.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ');
+      const unreadNotificationRows = document.querySelectorAll('.styled__NotificationRow-sc-5xhq84-2.hpcoAn');
+      
+      console.log(`🟢 Found ${greenRadioButtons.length} green radio buttons`);
+      console.log(`🔴 Found ${unreadNotificationRows.length} unread notification rows`);
+      
+      return {
+        greenRadioCount: greenRadioButtons.length,
+        unreadRowCount: unreadNotificationRows.length,
+        hasUnreadConversations: greenRadioButtons.length > 0 || unreadNotificationRows.length > 0
+      };
+    });
+    
+    console.log(`📊 ENHANCED: ${enhancedConversationDetection.greenRadioCount} green radios, ${enhancedConversationDetection.unreadRowCount} unread rows`);
+    
+    // Priority 1: Click on green radio button (unread indicator)
+    const greenRadioElement = await this.browserService.page.$('.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ');
+    if (greenRadioElement) {
+      console.log('🟢 Clicking GREEN RADIO BUTTON for unread conversation...');
+      await greenRadioElement.click();
+      await this.browserService.page.waitForTimeout(3000);
+      console.log('✅ Opened UNREAD conversation via green radio button');
+      return;
+    }
+    
+    // Priority 2: Click on unread notification row
+    const unreadRow = await this.browserService.page.$('.styled__NotificationRow-sc-5xhq84-2.hpcoAn');
+    if (unreadRow) {
+      console.log('🔴 Clicking UNREAD NOTIFICATION ROW...');
+      await unreadRow.click();
+      await this.browserService.page.waitForTimeout(3000);
+      console.log('✅ Opened UNREAD conversation via notification row');
+      return;
+    }
+    
+    // Fallback: Original method
+    console.log('⚠️ Using FALLBACK method - no trained selectors found unread conversations');
+    const fallbackConversations = await this.browserService.page.$$('.styled__ReadButton-sc-5xhq84-1, .styled__MessageContent-sc-5xhq84-9');
+    
+    if (fallbackConversations.length === 0) {
+      throw new Error('No conversations found with any method - all messages may be read');
     }
 
-    console.log(`📊 Found ${unreadConversations.length} conversation(s)`);
+    console.log(`📊 FALLBACK: Found ${fallbackConversations.length} conversation(s)`);
     
     // Click the first (latest) conversation
-    await unreadConversations[0].click();
+    await fallbackConversations[0].click();
     await this.browserService.page.waitForTimeout(3000);
 
-    console.log('✅ Opened latest conversation');
+    console.log('✅ Opened conversation using fallback method');
   }
 
   async sendResponse() {

@@ -2,80 +2,80 @@
   "cookies": [
     {
       "name": "client_id",
-      "value": "3f8b36ccdf2747f380690b89559801f6",
+      "value": "1f91f13e2e2c4053a5e87785a92308cb",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1787541732,
+      "expires": 1787606686,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Lax"
     },
     {
       "name": "auth_token",
-      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODc1NDE3MzQsImlhdCI6MTc1NjAwNTczNCwidXNlcl9pZCI6IjlmYmE1ZjE1N2NjMDRhM2Y4MGZmNGI1ZTBlNjNkNjQ1In0.Du3Yyai1GYGuoCCmZAF2s3Y8ggT_0dmsAudvFXsIeio",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODc2MDY2ODYsImlhdCI6MTc1NjA3MDY4NiwidXNlcl9pZCI6IjlmYmE1ZjE1N2NjMDRhM2Y4MGZmNGI1ZTBlNjNkNjQ1In0.XRD5ItMWRquWJ_juBXr_NRWEAo3z9OLAhjPoCIYpu0o",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1787541735.23435,
+      "expires": 1787606688.812542,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"
     },
     {
-      "name": "AWSALB",
-      "value": "O/7WST65Ap/sPBIKdlNl/E6zDAI+lcBVo5OK7lsMEjUDaM1ZmCxC9iOUef/66u3HPuu+GN6x5wzKjyMKPiU6k8ODVRFPMChzg9+KzIItrX6/ExRhE2uNIYdPc6KW",
-      "domain": "www.skool.com",
-      "path": "/",
-      "expires": 1756610535.386809,
-      "httpOnly": false,
-      "secure": false,
-      "sameSite": "Lax"
-    },
-    {
-      "name": "AWSALBCORS",
-      "value": "O/7WST65Ap/sPBIKdlNl/E6zDAI+lcBVo5OK7lsMEjUDaM1ZmCxC9iOUef/66u3HPuu+GN6x5wzKjyMKPiU6k8ODVRFPMChzg9+KzIItrX6/ExRhE2uNIYdPc6KW",
-      "domain": "www.skool.com",
-      "path": "/",
-      "expires": 1756610535.386982,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "None"
-    },
-    {
       "name": "m",
-      "value": "a5009118-f469-4c53-beed-e9c66e88cbc10b6d52",
+      "value": "a5b49009-5849-4826-a594-f986821ce7e8423b54",
       "domain": "m.stripe.com",
       "path": "/",
-      "expires": 1790565736.3372,
+      "expires": 1790630691.428267,
       "httpOnly": true,
       "secure": true,
       "sameSite": "None"
     },
     {
       "name": "__stripe_mid",
-      "value": "cd7388e7-41c6-4702-842f-c9420576911b031bd7",
+      "value": "8bca4c22-777d-40cc-a97b-cb6ba1b6584798f569",
       "domain": ".www.skool.com",
       "path": "/",
-      "expires": 1787541736,
+      "expires": 1787606689,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Strict"
     },
     {
       "name": "__stripe_sid",
-      "value": "f016b4aa-1491-48f2-8512-3ed7a07b1d38b322e7",
+      "value": "543a888f-87e4-4091-9b50-d607242e7291ccea56",
       "domain": ".www.skool.com",
       "path": "/",
-      "expires": 1756007536,
+      "expires": 1756072489,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Strict"
     },
     {
+      "name": "AWSALB",
+      "value": "XcEmaztcjRF6UF3uQYvkHarS6ZSPQTxHXLbeow8GCyHTzawmph7umkQfjRj1vfbak4Q4w+ka9ymd6qBfkaLxti8pp5ulkfvKCAlJt0zUwvpKoPlRyJ/BzUDDcoNC",
+      "domain": "www.skool.com",
+      "path": "/",
+      "expires": 1756675488.953161,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "AWSALBCORS",
+      "value": "XcEmaztcjRF6UF3uQYvkHarS6ZSPQTxHXLbeow8GCyHTzawmph7umkQfjRj1vfbak4Q4w+ka9ymd6qBfkaLxti8pp5ulkfvKCAlJt0zUwvpKoPlRyJ/BzUDDcoNC",
+      "domain": "www.skool.com",
+      "path": "/",
+      "expires": 1756675488.953226,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
       "name": "aws-waf-token",
-      "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAZJMXYpUlAAAA:tTYgxBHfk6IqwS9Ck1Al2eU4fu0JvA9wiY2aBZz8BEf8Y573I/0OLtPI+hXj65PIR7TH/CSUb063cufl+g49IaoXcUrR38E8cj41g2cRRowBA4LniXOX0iEPOz7fjUtQ2I4z3qptQ+Jxe+3Z5JNKUGcsxVx47rwHxSRXsfMftwTrt4FYRg3hINY88ow55p58RoPdkFBH6clYvSYLB0Y1iHwFrj2CYGu3hO1j4prmwEDo3XF11Q6qYSetgfuPvGkgwBaxpQ==",
+      "value": "cc14b5b7-2299-4ebb-af24-bb91aedf1dbf:FAoAcyOVegNYAAAA:tva5i1TQKbzt2C+lncZbkruNqosNNcrKXgs0RtclRDZehwK8PvQZZK4TGwlJEqT3M+76b0N6SfPPvyNsqYia/WhyDZy2uGMDJOXOb0cVLKgmmSW04O/1KB2Q+cFLPsltTLf+rtaeCbVM0q1rIaQodeLCQX5FnKWncUe16Y0U65FQ6vM845PQq3rkwDiIxcqITCgeuKR8YIyurRsYmhMp0QO7tkioLWEZOVtPaqjO/qRqPCDq5e6uoNS1RCfX1cPrX21sYg==",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1756351336,
+      "expires": 1756416289,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Lax"
@@ -87,7 +87,7 @@
       "localStorage": [
         {
           "name": "awswaf_token_refresh_timestamp",
-          "value": "1756005732895"
+          "value": "1756070686774"
         },
         {
           "name": "last-group",
@@ -95,7 +95,7 @@
         },
         {
           "name": "awswaf_session_storage",
-          "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAZJMXYpYlAAAA:zudSz7EpfYOWHxiQd1YMqtaOwTkRiH1WFdAn/54+qDOz12XQQxChStuWClci66GDIEGXU6c6MMdLNPnpi3OBy2jPpa2l5SxRo7essz3/IhjE4jsHbtaMXKMFqahj3mZzAa/4u9NmQrZ49+PwtciealnVkrEbgx9S9pMaSHrMG+Z0M+vL/bXWgT3eh6ehqB2U+lwy5KG647Fvb5D2dMCydVpnCEkgg6OvBm4fZ4nFCAs++SO2c3ZuRVHVTsCWod48SFw1xKIR9eNC6bnhipd2b+nIKcI7GMleCJ+UeTbrjZd7u7H/r9z+0+oRTc5XutbSwB4ZUh6U3hR0VGhXmQ2YmzA2NYJNFeBZQlEIxRZUz92IB36XvrJcrfheyK2INyNT5PD3pTt5+bRq8WxpVupDPElS94IJTdRMVg04YeXzdMtNCZKUEIk36rJbSZFlTyhqsm5bX2s9Eo4zKUjulnpUKP0I8vWGaRCbuoDCNP3eYx+9VDykowIADTb4DcTK40DzNg=="
+          "value": "cc14b5b7-2299-4ebb-af24-bb91aedf1dbf:FAoAcyOVegRYAAAA:/hF6AR90A7OeDBWVZkEZ7a4D7K1FFVS37cx4ZzHnPHyOyx85VVHctu+U8fEtZCebMm+NaJYt0a4PU9q++Fmw/LjcFSaa/c7Vqu8hdAhOpfmmCJoa+H+AJFiDajt6Ngx5nkFhREdoe+M9hKj1DS1+2wSZrGkrt/2oqCs6nBHSDPTMqqPTgmiCWLkU2tYSrOKKmnSdVZ6GAhVxHwk2ltx7tnuZ9mC7J6qJFm+FN38ee5URU3kRqrk+b+RmzKnadOKicQltVxKlbMGO3IcU4oH1qH4lhtaOJ4wipRGcmZJ+rirlmJEVcPXKuJV6z7ZFX8PXLbLIMZLjLVSTK464R0+bu2wQcGA5Fh63Aatup057lD8y3xnppramK7uTp/ZitlqP/Xgs+S8EI6zMw+yNJpcPeQQ8oXofJnkdtaJQ7KL5knziU3gi9cR2+Zzk7Qt+N/l1hFk4U73s60Uv+IQQqOcCQR1JUGcuvzm1l+6RyoHafV2oHaqbVbSFAmttzIbdsbDhGg=="
         },
         {
           "name": "se",

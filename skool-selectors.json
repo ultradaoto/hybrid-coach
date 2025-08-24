@@ -148,32 +148,135 @@
   },
   "chat-close-button": {
     "selector": {
-      "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
-      "alternativeSelectors": [
-        ".styled__ButtonWrapper-sc-1crx28g-1",
-        ".bwaWQm",
-        "[type=\"button\"]"
-      ],
+      "selector": "path",
+      "alternativeSelectors": [],
       "description": "❌ Chat Close Button (X in top-right corner) - marked via right-click menu",
-      "timestamp": "2025-08-23T04:34:56.762Z",
+      "timestamp": "2025-08-24T21:33:25.450Z",
       "analysis": {
         "basic": {
-          "tagName": "BUTTON",
+          "tagName": "path",
           "id": "none",
-          "className": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+          "className": {},
           "textContent": "none",
-          "innerHTML": "<div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"height: 14px; width: 14px; padding: 0px; flex-shrink: 0;\"><svg viewBox=\"0 0 40 40\" fill=\"currentColor\" xmlns=\"http://www.w3.org/2000/svg\"><pa"
+          "innerHTML": "none"
         },
         "position": {
           "boundingRect": {
-            "x": 1378,
-            "y": 169,
-            "width": 40,
-            "height": 40,
-            "top": 169,
-            "right": 1418,
-            "bottom": 209,
-            "left": 1378
+            "x": 1232,
+            "y": 297,
+            "width": 14,
+            "height": 14,
+            "top": 297,
+            "right": 1246,
+            "bottom": 311,
+            "left": 1232
+          },
+          "offsetParent": "none",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
+          "d": "M40 4.02857L35.9714 0L20 15.9714L4.02857 0L0 4.02857L15.9714 20L0 35.9714L4.02857 40L20 24.0286L35.9714 40L40 35.9714L24.0286 20L40 4.02857Z",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "inline",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "svg",
+          "parentClass": {},
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 94,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 55,
+              "class": "styled__DropdownButton-sc-13jov82-9 ekCnSs",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 18,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:33:25.450Z"
+  },
+  "conversation-item": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__NotificationRow-sc-5xhq84-2",
+        ".kfVcuA",
+        ".hpcoAn"
+      ],
+      "description": "📄 Conversation List Item (general) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:25:58.377Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "textContent": "Sterling Cooley• 8mI will have your link shortly. https://myultra.coach/auth/login?code=vgs-17560702",
+          "innerHTML": "<div class=\"styled__AvatarWrapper-sc-5xhq84-3 hdUXSh\"><div class=\"styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm\"><span title=\"Sterling Cooley\" class=\"styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR\"><img src=\"h"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1003,
+            "y": 173,
+            "width": 500,
+            "height": 72,
+            "top": 173,
+            "right": 1503,
+            "bottom": 245,
+            "left": 1003
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -181,48 +284,170 @@
             "left": 0
           },
           "clientSize": {
-            "width": 40,
-            "height": 40
+            "width": 500,
+            "height": 71
           }
         },
         "attributes": {
-          "type": "button",
-          "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
           "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
         },
         "styling": {
           "backgroundColor": "rgba(0, 0, 0, 0)",
-          "color": "rgb(144, 144, 144)",
+          "color": "rgb(32, 33, 36)",
           "display": "flex",
-          "position": "relative",
+          "position": "static",
           "zIndex": "auto",
           "cursor": "pointer",
           "visibility": "visible"
         },
         "hierarchy": {
-          "parentTag": "DIV",
-          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 kfVcuA",
+          "parentTag": "A",
+          "parentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
           "parentId": "none",
           "grandparentTag": "DIV",
-          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 hDWNvB Row-sc-dwrxl6-0 kfVcuA",
+          "grandparentClass": "none",
           "children": [
             {
               "tag": "DIV",
-              "class": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
-              "id": "",
-              "text": ""
-            }
-          ],
-          "siblings": [
-            {
-              "tag": "BUTTON",
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "class": "styled__AvatarWrapper-sc-5xhq84-3 hdUXSh",
               "id": "",
               "text": ""
             },
             {
               "tag": "DIV",
-              "class": "",
+              "class": "styled__Overlay-sc-5xhq84-6 gdcsYb",
+              "id": "",
+              "text": "Sterling Cooley• 8mI"
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 22,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 89,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:25:58.378Z"
+  },
+  "username": {
+    "selector": "text=\"Sterling Cooley\"",
+    "description": "🏷️ Username Text - marked via right-click menu",
+    "timestamp": "2025-08-22T07:00:22.078Z"
+  },
+  "user-avatar": {
+    "selector": "img",
+    "description": "👤 User Avatar Image - marked via right-click menu",
+    "timestamp": "2025-08-22T07:00:29.704Z"
+  },
+  "message-input": {
+    "selector": {
+      "selector": ".styled__MultiLineInput-sc-1saiqqb-2",
+      "alternativeSelectors": [
+        ".styled__MultiLineInput-sc-1saiqqb-2",
+        ".hzlEzI",
+        "[data-testid=\"input-component\"]",
+        "[placeholder=\"Message Jie\"]"
+      ],
+      "description": "📝 Message Input Field - marked via right-click menu",
+      "timestamp": "2025-08-24T21:28:39.079Z",
+      "analysis": {
+        "basic": {
+          "tagName": "TEXTAREA",
+          "id": "none",
+          "className": "styled__MultiLineInput-sc-1saiqqb-2 hzlEzI",
+          "textContent": "none",
+          "innerHTML": "none"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 661,
+            "y": 763.75,
+            "width": 478,
+            "height": 24,
+            "top": 763.75,
+            "right": 1139,
+            "bottom": 787.75,
+            "left": 661
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 478,
+            "height": 24
+          }
+        },
+        "attributes": {
+          "rows": "1",
+          "placeholder": "Message Jie",
+          "data-testid": "input-component",
+          "class": "styled__MultiLineInput-sc-1saiqqb-2 hzlEzI",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "text",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__InputWrapper-sc-1saiqqb-4 eoGvcU styled__ChatTextArea-sc-1w0nbeu-4 cRGbaH",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__InputContainer-sc-1saiqqb-5 jxyKwe",
+          "children": [],
+          "siblings": [
+            {
+              "tag": "TEXTAREA",
+              "class": "styled__HiddenTextArea-sc-1saiqqb-10 gsPBHU",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "LABEL",
+              "class": "styled__InputLabel-sc-1saiqqb-0 gSVvFC",
               "id": "",
               "text": ""
             }
@@ -232,22 +457,136 @@
           "nearbyText": "",
           "nearbyImages": [
             {
-              "distance": 116,
+              "distance": 127,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:28:39.080Z"
+  },
+  "chat-open-button": {
+    "selector": {
+      "selector": "svg",
+      "alternativeSelectors": [],
+      "description": "💬 Chat Open Button - marked via right-click menu",
+      "timestamp": "2025-08-24T21:30:48.485Z",
+      "analysis": {
+        "basic": {
+          "tagName": "svg",
+          "id": "none",
+          "className": {},
+          "textContent": "none",
+          "innerHTML": "<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M36.072 20.0398C36.4522 18.5322 36.5226 16.6598 36.5217 13.913C36.5226 11.1663 36.4522 9.29391 36.072 7.78619C35.7739 6.4101 35.6057 6.03388 34.7659 5."
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1355.25,
+            "y": 20.75,
+            "width": 22.5,
+            "height": 22.5,
+            "top": 20.75,
+            "right": 1377.75,
+            "bottom": 43.25,
+            "left": 1355.25
+          },
+          "offsetParent": "none",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 23,
+            "height": 23
+          }
+        },
+        "attributes": {
+          "viewBox": "0 0 40 34",
+          "fill": "currentColor",
+          "xmlns": "http://www.w3.org/2000/svg",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+          "parentId": "none",
+          "grandparentTag": "BUTTON",
+          "grandparentClass": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+          "children": [
+            {
+              "tag": "path",
+              "class": {},
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 107,
               "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
               "alt": "My Ultra Coach",
+              "class": ""
+            },
+            {
+              "distance": 147,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
               "class": ""
             }
           ],
           "nearbyButtons": [
             {
-              "distance": 80,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 bwaWQm",
+              "distance": 18,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
               "text": "",
               "type": "button",
               "ariaLabel": null
             },
             {
-              "distance": 40,
+              "distance": 45,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 100,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 128,
               "class": "styled__DropdownButton-sc-13jov82-9 ekCnSs",
               "text": "",
               "type": "button",
@@ -269,32 +608,7 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-23T04:34:56.763Z"
-  },
-  "conversation-item": {
-    "selector": ".styled__Paragraph-sc-y5pp90-3",
-    "description": "Conversation Item - marked via right-click menu",
-    "timestamp": "2025-08-22T06:35:04.962Z"
-  },
-  "username": {
-    "selector": "text=\"Sterling Cooley\"",
-    "description": "🏷️ Username Text - marked via right-click menu",
-    "timestamp": "2025-08-22T07:00:22.078Z"
-  },
-  "user-avatar": {
-    "selector": "img",
-    "description": "👤 User Avatar Image - marked via right-click menu",
-    "timestamp": "2025-08-22T07:00:29.704Z"
-  },
-  "message-input": {
-    "selector": ".styled__MultiLineInput-sc-1saiqqb-2",
-    "description": "📝 Message Input Field - marked via right-click menu",
-    "timestamp": "2025-08-22T07:24:09.723Z"
-  },
-  "chat-open-button": {
-    "selector": "svg",
-    "description": "💬 Chat Open Button - marked via right-click menu",
-    "timestamp": "2025-08-22T07:46:03.146Z"
+    "timestamp": "2025-08-24T21:30:48.486Z"
   },
   "chat-window": {
     "selector": ".styled__DropdownContent-sc-13jov82-1",
@@ -416,70 +730,177 @@
     "timestamp": "2025-08-22T06:59:15.861Z"
   },
   "message-bubble": {
-    "selector": ".styled__BoxWrapper-sc-esqoz3-0",
-    "description": "💬 Message Bubble Container - marked via right-click menu",
-    "timestamp": "2025-08-22T06:59:51.173Z"
-  },
-  "message-text": {
-    "selector": ".styled__MultiLineInput-sc-1saiqqb-2",
-    "description": "💭 Message Text Content - marked via right-click menu",
-    "timestamp": "2025-08-22T07:24:35.394Z"
-  },
-  "profile-link": {
     "selector": {
-      "selector": "img",
-      "alternativeSelectors": [],
-      "description": "🔗 Profile Link - marked via right-click menu",
-      "timestamp": "2025-08-24T02:56:57.992Z",
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Column-sc-1h1w9fe-0",
+        ".styled__ChatBubble-sc-cfaah3-8",
+        ".duwkcK",
+        ".hMgFWq",
+        "text=\"Jie Lu2:16pmACCESS\"",
+        ":has-text(\"Jie Lu2:16pmACCESS\")"
+      ],
+      "description": "💬 Message Bubble Container - marked via right-click menu",
+      "timestamp": "2025-08-24T21:27:56.007Z",
       "analysis": {
         "basic": {
-          "tagName": "IMG",
+          "tagName": "DIV",
           "id": "none",
-          "className": "none",
-          "textContent": "none",
-          "innerHTML": "none"
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK hMgFWq",
+          "textContent": "Jie Lu2:16pmACCESS",
+          "innerHTML": "<div class=\"styled__ChatMessageHeader-sc-cfaah3-12 bSTozG\"><div class=\"styled__UserNameWrapper-sc-24o0l3-0 eqcLoO\"><a href=\"/@jie-lu-3653\" class=\"styled__ChildrenLink-sc-1brgbbt-1 fQYQam\" style=\"overf"
         },
         "position": {
           "boundingRect": {
-            "x": 661,
-            "y": 284,
-            "width": 40,
-            "height": 40,
-            "top": 284,
-            "right": 701,
-            "bottom": 324,
-            "left": 661
+            "x": 709,
+            "y": 636.75,
+            "width": 535,
+            "height": 66,
+            "top": 636.75,
+            "right": 1244,
+            "bottom": 702.75,
+            "left": 709
           },
-          "offsetParent": "SPAN",
+          "offsetParent": "DIV",
           "scrollPosition": {
             "top": 0,
             "left": 0
           },
           "clientSize": {
-            "width": 40,
-            "height": 40
+            "width": 533,
+            "height": 64
           }
         },
         "attributes": {
-          "src": "https://assets.skool.com/f/44a8d5f5699d4347907b8392238bc926/ae4a148d0252496589b4b7dbdeec7198ff2371399b9145e5be02f8956f9b3abc-sm.jpg",
-          "alt": "Sterling Cooley",
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK hMgFWq",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgb(255, 255, 255)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 gOkcrL Row-sc-dwrxl6-0 kfVcuA",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__ChatMessageHeader-sc-cfaah3-12 bSTozG",
+              "id": "",
+              "text": "Jie Lu2:16pm"
+            },
+            {
+              "tag": "DIV",
+              "class": "",
+              "id": "",
+              "text": "ACCESS"
+            }
+          ],
+          "siblings": [
+            {
+              "tag": "A",
+              "class": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+              "id": "",
+              "text": ""
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 48,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:27:56.008Z"
+  },
+  "message-text": {
+    "selector": {
+      "selector": "text=\"ACCESS\"",
+      "alternativeSelectors": [
+        "text=\"ACCESS\"",
+        ":has-text(\"ACCESS\")"
+      ],
+      "description": "💭 Message Text Content - marked via right-click menu",
+      "timestamp": "2025-08-24T21:28:30.211Z",
+      "analysis": {
+        "basic": {
+          "tagName": "SPAN",
+          "id": "none",
+          "className": "none",
+          "textContent": "ACCESS",
+          "innerHTML": "ACCESS"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 723,
+            "y": 671.75,
+            "width": 59.28125,
+            "height": 19,
+            "top": 671.75,
+            "right": 782.28125,
+            "bottom": 690.75,
+            "left": 723
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
           "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
         },
         "styling": {
           "backgroundColor": "rgba(0, 0, 0, 0)",
-          "color": "rgba(0, 0, 0, 0)",
-          "display": "block",
+          "color": "rgb(32, 33, 36)",
+          "display": "inline",
           "position": "static",
           "zIndex": "auto",
-          "cursor": "pointer",
+          "cursor": "auto",
           "visibility": "visible"
         },
         "hierarchy": {
-          "parentTag": "SPAN",
-          "parentClass": "styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR",
+          "parentTag": "DIV",
+          "parentClass": "styled__Paragraph-sc-y5pp90-3 eHgPWw",
           "parentId": "none",
           "grandparentTag": "DIV",
-          "grandparentClass": "styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm",
+          "grandparentClass": "styled__Wrapper-sc-y5pp90-0 JeZEb",
           "children": [],
           "siblings": []
         },
@@ -487,21 +908,9 @@
           "nearbyText": "",
           "nearbyImages": [
             {
-              "distance": 107,
-              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
-              "alt": "Sterling Cooley",
-              "class": ""
-            },
-            {
-              "distance": 33,
-              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
-              "alt": "My Ultra Coach",
-              "class": ""
-            },
-            {
-              "distance": 107,
-              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
-              "alt": "Sterling Cooley",
+              "distance": 71,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
               "class": ""
             }
           ],
@@ -521,9 +930,233 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T02:56:57.996Z"
+    "timestamp": "2025-08-24T21:28:30.213Z"
+  },
+  "profile-link": {
+    "selector": {
+      "selector": ".styled__AvatarWrapper-sc-1o1lx2q-0",
+      "alternativeSelectors": [
+        ".styled__AvatarWrapper-sc-1o1lx2q-0",
+        ".eUHsSm"
+      ],
+      "description": "🔗 Profile Link - marked via right-click menu",
+      "timestamp": "2025-08-24T21:27:41.760Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm",
+          "textContent": "none",
+          "innerHTML": "<span title=\"Jie Lu\" class=\"styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR\"><img src=\"https://assets.skool.com/f/d9aa717ea57d481090586a68a3d1bc0c/ed3bf06b0bca43a09c91a6224bde789064585e70358745b7b9c3a71a057"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 661,
+            "y": 284,
+            "width": 40,
+            "height": 40,
+            "top": 284,
+            "right": 701,
+            "bottom": 324,
+            "left": 661
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 40,
+            "height": 40
+          }
+        },
+        "attributes": {
+          "class": "styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "relative",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "A",
+          "parentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "SPAN",
+              "class": "styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 0,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:27:41.763Z"
   },
   "mail-icon-normal": {
+    "selector": {
+      "selector": "svg",
+      "alternativeSelectors": [],
+      "description": "📧 Mail Icon (Normal - No Unread Messages) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:30:35.963Z",
+      "analysis": {
+        "basic": {
+          "tagName": "svg",
+          "id": "none",
+          "className": {},
+          "textContent": "none",
+          "innerHTML": "<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M36.072 20.0398C36.4522 18.5322 36.5226 16.6598 36.5217 13.913C36.5226 11.1663 36.4522 9.29391 36.072 7.78619C35.7739 6.4101 35.6057 6.03388 34.7659 5."
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1355.25,
+            "y": 20.75,
+            "width": 22.5,
+            "height": 22.5,
+            "top": 20.75,
+            "right": 1377.75,
+            "bottom": 43.25,
+            "left": 1355.25
+          },
+          "offsetParent": "none",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 23,
+            "height": 23
+          }
+        },
+        "attributes": {
+          "viewBox": "0 0 40 34",
+          "fill": "currentColor",
+          "xmlns": "http://www.w3.org/2000/svg",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__IconWrapper-sc-zxv7pb-0 bAPjFs",
+          "parentId": "none",
+          "grandparentTag": "BUTTON",
+          "grandparentClass": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+          "children": [
+            {
+              "tag": "path",
+              "class": {},
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 107,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            },
+            {
+              "distance": 147,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [
+            {
+              "distance": 18,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 45,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 100,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 128,
+              "class": "styled__DropdownButton-sc-13jov82-9 ekCnSs",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:30:35.964Z"
+  },
+  "mail-icon-unread": {
     "selector": {
       "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
       "alternativeSelectors": [
@@ -533,8 +1166,8 @@
         ".fOkxgW",
         "[type=\"button\"]"
       ],
-      "description": "📧 Mail Icon (Normal - No Unread Messages) - marked via right-click menu",
-      "timestamp": "2025-08-23T04:31:46.377Z",
+      "description": "🔴 Mail Icon (With Red Badge + Number) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:25:09.290Z",
       "analysis": {
         "basic": {
           "tagName": "BUTTON",
@@ -643,32 +1276,44 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-23T04:31:46.380Z"
+    "timestamp": "2025-08-24T21:25:09.291Z"
   },
-  "mail-icon-unread": {
+  "chat-popup": {
+    "selector": ".styled__DropdownContent-sc-13jov82-1",
+    "description": "📋 Chat Popup Container - marked via right-click menu",
+    "timestamp": "2025-08-22T07:22:17.576Z"
+  },
+  "conversation-unread": {
     "selector": {
-      "selector": "div",
-      "alternativeSelectors": [],
-      "description": "🔴 Mail Icon (With Red Badge + Number) - marked via right-click menu",
-      "timestamp": "2025-08-23T04:32:19.106Z",
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__NotificationRow-sc-5xhq84-2",
+        ".kfVcuA",
+        ".hpcoAn"
+      ],
+      "description": "🔴 Unread Conversation Item (with green radio) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:31:28.806Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
-          "className": "none",
-          "textContent": "none",
-          "innerHTML": "<button type=\"button\" class=\"styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW\" style=\"\"><div class=\"styled__IconWrapper-sc-zxv7pb-0 bAPjFs\" style=\"heigh"
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "textContent": "Sterling Cooley(1)• 13mI will have your link shortly. https://myultra.coach/auth/login?code=vgs-1756",
+          "innerHTML": "<div class=\"styled__AvatarWrapper-sc-5xhq84-3 lewlin\"><div class=\"styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm\"><span title=\"Sterling Cooley\" class=\"styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR\"><img src=\"h"
         },
         "position": {
           "boundingRect": {
-            "x": 1342.5,
-            "y": 8,
-            "width": 48,
-            "height": 48,
-            "top": 8,
-            "right": 1390.5,
-            "bottom": 56,
-            "left": 1342.5
+            "x": 1003,
+            "y": 173,
+            "width": 500,
+            "height": 72,
+            "top": 173,
+            "right": 1503,
+            "bottom": 245,
+            "left": 1003
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -676,32 +1321,45 @@
             "left": 0
           },
           "clientSize": {
-            "width": 48,
-            "height": 48
+            "width": 500,
+            "height": 71
           }
         },
         "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
           "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
         },
         "styling": {
           "backgroundColor": "rgba(0, 0, 0, 0)",
           "color": "rgb(32, 33, 36)",
-          "display": "block",
+          "display": "flex",
           "position": "static",
           "zIndex": "auto",
           "cursor": "pointer",
           "visibility": "visible"
         },
         "hierarchy": {
-          "parentTag": "DIV",
-          "parentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "parentTag": "A",
+          "parentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
           "parentId": "none",
           "grandparentTag": "DIV",
-          "grandparentClass": "styled__DropdownWrapper-sc-13jov82-0 dnxlIH",
+          "grandparentClass": "none",
           "children": [
             {
-              "tag": "BUTTON",
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "tag": "DIV",
+              "class": "styled__AvatarWrapper-sc-5xhq84-3 lewlin",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__Overlay-sc-5xhq84-6 fZBzqd",
+              "id": "",
+              "text": "Sterling Cooley(1)• "
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
               "id": "",
               "text": ""
             }
@@ -712,41 +1370,133 @@
           "nearbyText": "",
           "nearbyImages": [
             {
-              "distance": 120,
-              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
-              "alt": "My Ultra Coach",
+              "distance": 22,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
               "class": ""
             },
             {
-              "distance": 150,
-              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
-              "alt": "My Ultra Coach",
+              "distance": 89,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
               "class": ""
             }
           ],
-          "nearbyButtons": [
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:31:28.807Z"
+  },
+  "message-received-from-user": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".gOkcrL",
+        ".Row-sc-dwrxl6-0",
+        ".kfVcuA",
+        "text=\"Jie Lu2:16pmACCESS\"",
+        ":has-text(\"Jie Lu2:16pmACCESS\")"
+      ],
+      "description": "⬅️ Message Received FROM Other User - marked via right-click menu",
+      "timestamp": "2025-08-24T21:28:53.942Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 gOkcrL Row-sc-dwrxl6-0 kfVcuA",
+          "textContent": "Jie Lu2:16pmACCESS",
+          "innerHTML": "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"/@jie-lu-3653\" class=\"styled__ChildrenLink-sc-1brgbbt-1 fQYQam\" style=\"overflow: visible;\"><div class=\"styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm\"><sp"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 661,
+            "y": 636.75,
+            "width": 583,
+            "height": 66,
+            "top": 636.75,
+            "right": 1244,
+            "bottom": 702.75,
+            "left": 661
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 583,
+            "height": 66
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 gOkcrL Row-sc-dwrxl6-0 kfVcuA",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "none",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "A",
+              "class": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK hMgFWq",
+              "id": "",
+              "text": "Jie Lu2:16pmACCESS"
+            }
+          ],
+          "siblings": [
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 fNUBTU Row-sc-dwrxl6-0 kfVcuA",
+              "id": "",
+              "text": "Aug 24th 2025"
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
             {
               "distance": 0,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            },
-            {
-              "distance": 56,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 eEjdKj styled__NotificationsIconButton-sc-kvqul9-0 heKZyc",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            },
-            {
-              "distance": 112,
-              "class": "styled__ButtonWrapper-sc-1crx28g-1 fCsGpa",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
             }
           ],
+          "nearbyButtons": [],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -762,40 +1512,42 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-23T04:32:19.107Z"
+    "timestamp": "2025-08-24T21:28:53.943Z"
   },
-  "chat-popup": {
-    "selector": ".styled__DropdownContent-sc-13jov82-1",
-    "description": "📋 Chat Popup Container - marked via right-click menu",
-    "timestamp": "2025-08-22T07:22:17.576Z"
+  "message-sent-by-us": {
+    "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+    "description": "➡️ Message Sent BY My Ultra Coach - marked via right-click menu",
+    "timestamp": "2025-08-22T07:24:43.772Z"
   },
-  "conversation-unread": {
+  "timestamp-date": {
     "selector": {
-      "selector": ".styled__ReadButton-sc-5xhq84-1",
+      "selector": ".styled__TypographyWrapper-sc-70zmwu-0",
       "alternativeSelectors": [
-        ".styled__ReadButton-sc-5xhq84-1",
-        ".eXgJxH"
+        ".styled__TypographyWrapper-sc-70zmwu-0",
+        ".ttrfj",
+        "text=\"Aug 24th 2025\"",
+        ":has-text(\"Aug 24th 2025\")"
       ],
-      "description": "🔴 Unread Conversation Item - marked via right-click menu",
-      "timestamp": "2025-08-23T04:33:02.867Z",
+      "description": "📅 Date Timestamp (e.g., \"Dec 25, 2024\") - marked via right-click menu",
+      "timestamp": "2025-08-24T21:29:17.556Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
-          "className": "styled__ReadButton-sc-5xhq84-1 eXgJxH",
-          "textContent": "none",
-          "innerHTML": "none"
+          "className": "styled__TypographyWrapper-sc-70zmwu-0 ttrfj",
+          "textContent": "Aug 24th 2025",
+          "innerHTML": "Aug 24th 2025"
         },
         "position": {
           "boundingRect": {
-            "x": 1461,
-            "y": 202.5,
-            "width": 12,
-            "height": 12,
-            "top": 202.5,
-            "right": 1473,
-            "bottom": 214.5,
-            "left": 1461
+            "x": 906.953125,
+            "y": 602.75,
+            "width": 91.09375,
+            "height": 21,
+            "top": 602.75,
+            "right": 998.046875,
+            "bottom": 623.75,
+            "left": 906.953125
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -803,29 +1555,29 @@
             "left": 0
           },
           "clientSize": {
-            "width": 6,
-            "height": 6
+            "width": 91,
+            "height": 21
           }
         },
         "attributes": {
-          "class": "styled__ReadButton-sc-5xhq84-1 eXgJxH",
+          "class": "styled__TypographyWrapper-sc-70zmwu-0 ttrfj",
           "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
         },
         "styling": {
-          "backgroundColor": "rgb(46, 110, 245)",
-          "color": "rgb(32, 33, 36)",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
           "display": "block",
           "position": "static",
           "zIndex": "auto",
-          "cursor": "pointer",
+          "cursor": "auto",
           "visibility": "visible"
         },
         "hierarchy": {
           "parentTag": "DIV",
-          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hnblNR",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 fNUBTU Row-sc-dwrxl6-0 kfVcuA",
           "parentId": "none",
           "grandparentTag": "DIV",
-          "grandparentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "grandparentClass": "none",
           "children": [],
           "siblings": []
         },
@@ -834,9 +1586,9 @@
           "nearbyImages": [],
           "nearbyButtons": [
             {
-              "distance": 140,
-              "class": "styled__DropdownButton-sc-13jov82-9 jQBqny",
-              "text": "All",
+              "distance": 71,
+              "class": "styled__DropdownButton-sc-13jov82-9 bcnIda",
+              "text": "Select a group to se",
               "type": "button",
               "ariaLabel": null
             }
@@ -856,27 +1608,126 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-23T04:33:02.869Z"
-  },
-  "message-received-from-user": {
-    "selector": ".styled__BoxWrapper-sc-esqoz3-0",
-    "description": "⬅️ Message Received FROM Other User - marked via right-click menu",
-    "timestamp": "2025-08-22T07:23:18.723Z"
-  },
-  "message-sent-by-us": {
-    "selector": ".styled__BoxWrapper-sc-esqoz3-0",
-    "description": "➡️ Message Sent BY My Ultra Coach - marked via right-click menu",
-    "timestamp": "2025-08-22T07:24:43.772Z"
-  },
-  "timestamp-date": {
-    "selector": ".styled__TypographyWrapper-sc-70zmwu-0",
-    "description": "📅 Date Timestamp (e.g., \"Dec 25, 2024\") - marked via right-click menu",
-    "timestamp": "2025-08-22T07:23:26.873Z"
+    "timestamp": "2025-08-24T21:29:17.559Z"
   },
   "timestamp-time": {
-    "selector": ".styled__TypographyWrapper-sc-70zmwu-0",
-    "description": "🕐 Time Timestamp (e.g., \"10:30pm\") - marked via right-click menu",
-    "timestamp": "2025-08-22T07:23:56.915Z"
+    "selector": {
+      "selector": ".styled__TypographyWrapper-sc-70zmwu-0",
+      "alternativeSelectors": [
+        ".styled__TypographyWrapper-sc-70zmwu-0",
+        ".kHjwY",
+        "text=\"2:16pm\"",
+        ":has-text(\"2:16pm\")"
+      ],
+      "description": "🕐 Time Timestamp (e.g., \"10:30pm\") - marked via right-click menu",
+      "timestamp": "2025-08-24T21:29:09.105Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__TypographyWrapper-sc-70zmwu-0 kHjwY",
+          "textContent": "2:16pm",
+          "innerHTML": "2:16pm"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1186.21875,
+            "y": 645.75,
+            "width": 43.78125,
+            "height": 24,
+            "top": 645.75,
+            "right": 1230,
+            "bottom": 669.75,
+            "left": 1186.21875
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 44,
+            "height": 24
+          }
+        },
+        "attributes": {
+          "class": "styled__TypographyWrapper-sc-70zmwu-0 kHjwY",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__ChatMessageHeader-sc-cfaah3-12 bSTozG",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK hMgFWq",
+          "children": [],
+          "siblings": [
+            {
+              "tag": "DIV",
+              "class": "styled__UserNameWrapper-sc-24o0l3-0 eqcLoO",
+              "id": "",
+              "text": "Jie Lu"
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 116,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 92,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fxXppW styled__FullWidthButton-sc-1gipnml-10 bFzJBz",
+              "text": "Edit Profile",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 108,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 gAoxnb",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 115,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 fGvafc",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:29:09.108Z"
   },
   "user-avatar-us": {
     "selector": "text=\"My Ultra Coach\"",
@@ -894,9 +1745,91 @@
     "timestamp": "2025-08-22T07:25:11.749Z"
   },
   "username-them": {
-    "selector": "text=\"Sterling Cooley\"",
-    "description": "🏷️ Other User Username - marked via right-click menu",
-    "timestamp": "2025-08-22T07:25:20.177Z"
+    "selector": {
+      "selector": "text=\"Jie Lu\"",
+      "alternativeSelectors": [
+        "text=\"Jie Lu\"",
+        ":has-text(\"Jie Lu\")"
+      ],
+      "description": "🏷️ Other User Username - marked via right-click menu",
+      "timestamp": "2025-08-24T21:27:21.251Z",
+      "analysis": {
+        "basic": {
+          "tagName": "SPAN",
+          "id": "none",
+          "className": "none",
+          "textContent": "Jie Lu",
+          "innerHTML": "Jie&nbsp;Lu"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 709,
+            "y": 284.25,
+            "width": 42.828125,
+            "height": 19,
+            "top": 284.25,
+            "right": 751.828125,
+            "bottom": 303.25,
+            "left": 709
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "inline",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "SPAN",
+          "parentClass": "styled__UserNameText-sc-24o0l3-1 kXoxKY",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TypographyWrapper-sc-70zmwu-0 iOFoTZ",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 48,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:27:21.253Z"
   },
   "close-button": {
     "selector": ".styled__ButtonWrapper-sc-1crx28g-1",
@@ -1457,32 +2390,28 @@
       "selector": ".styled__BoxWrapper-sc-esqoz3-0",
       "alternativeSelectors": [
         ".styled__BoxWrapper-sc-esqoz3-0",
-        ".kxjOSJ",
-        ".Row-sc-dwrxl6-0",
-        ".styled__ButtonWrapper-sc-5xhq84-0",
-        ".kfVcuA",
-        ".hEDBlx"
+        ".eiexzt"
       ],
-      "description": "✅ Read Conversation Item - marked via right-click menu",
-      "timestamp": "2025-08-23T04:33:25.181Z",
+      "description": "✅ Read Conversation Item (no green radio) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:31:34.894Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
-          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hEDBlx",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
           "textContent": "none",
-          "innerHTML": "<div class=\"styled__ReadButton-sc-5xhq84-1 dduCXD\" style=\"\"></div>"
+          "innerHTML": "<div class=\"styled__TooltipWrapper-sc-7zjhea-0 lokaUz\"><div class=\"styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hEDBlx\"><div class=\"styled__ReadButton"
         },
         "position": {
           "boundingRect": {
-            "x": 1447,
-            "y": 188.5,
-            "width": 40,
+            "x": 1171.625,
+            "y": 260.5,
+            "width": 315.375,
             "height": 40,
-            "top": 188.5,
+            "top": 260.5,
             "right": 1487,
-            "bottom": 228.5,
-            "left": 1447
+            "bottom": 300.5,
+            "left": 1171.625
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -1490,12 +2419,12 @@
             "left": 0
           },
           "clientSize": {
-            "width": 40,
+            "width": 315,
             "height": 40
           }
         },
         "attributes": {
-          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hEDBlx",
+          "class": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
           "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
         },
         "styling": {
@@ -1505,36 +2434,41 @@
           "position": "static",
           "zIndex": "auto",
           "cursor": "pointer",
-          "visibility": "hidden"
+          "visibility": "visible"
         },
         "hierarchy": {
           "parentTag": "DIV",
-          "parentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
           "parentId": "none",
-          "grandparentTag": "DIV",
-          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+          "grandparentTag": "A",
+          "grandparentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
           "children": [
             {
               "tag": "DIV",
-              "class": "styled__ReadButton-sc-5xhq84-1 dduCXD",
+              "class": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
               "id": "",
               "text": ""
             }
           ],
-          "siblings": []
+          "siblings": [
+            {
+              "tag": "DIV",
+              "class": "styled__AvatarWrapper-sc-5xhq84-3 hdUXSh",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__Overlay-sc-5xhq84-6 gdcsYb",
+              "id": "",
+              "text": "Jie Lu• 15mACCESS"
+            }
+          ]
         },
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [
-            {
-              "distance": 123,
-              "class": "styled__DropdownButton-sc-13jov82-9 jQBqny",
-              "text": "All",
-              "type": "button",
-              "ariaLabel": null
-            }
-          ],
+          "nearbyButtons": [],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -1550,7 +2484,7 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-23T04:33:25.182Z"
+    "timestamp": "2025-08-24T21:31:34.895Z"
   },
   "chat-modal-close": {
     "selector": {
@@ -1561,7 +2495,7 @@
         "[type=\"button\"]"
       ],
       "description": "❌ Chat Modal Close Button (X button on modal) - marked via right-click menu",
-      "timestamp": "2025-08-23T04:34:50.109Z",
+      "timestamp": "2025-08-24T21:33:37.497Z",
       "analysis": {
         "basic": {
           "tagName": "BUTTON",
@@ -1572,14 +2506,14 @@
         },
         "position": {
           "boundingRect": {
-            "x": 1378,
-            "y": 169,
+            "x": 1219,
+            "y": 284,
             "width": 40,
             "height": 40,
-            "top": 169,
-            "right": 1418,
-            "bottom": 209,
-            "left": 1378
+            "top": 284,
+            "right": 1259,
+            "bottom": 324,
+            "left": 1219
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -1636,14 +2570,7 @@
         },
         "context": {
           "nearbyText": "",
-          "nearbyImages": [
-            {
-              "distance": 116,
-              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
-              "alt": "My Ultra Coach",
-              "class": ""
-            }
-          ],
+          "nearbyImages": [],
           "nearbyButtons": [
             {
               "distance": 80,
@@ -1675,7 +2602,7 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-23T04:34:50.111Z"
+    "timestamp": "2025-08-24T21:33:37.498Z"
   },
   "profile-display-name": {
     "selector": {
@@ -1771,29 +2698,29 @@
       "alternativeSelectors": [
         ".styled__UserHandle-sc-1gipnml-6",
         ".gmAjKD",
-        "text=\"@patrick-eckert-7291\"",
-        ":has-text(\"@patrick-eckert-7291\")"
+        "text=\"@jie-lu-3653\"",
+        ":has-text(\"@jie-lu-3653\")"
       ],
       "description": "🆔 Profile Skool ID (e.g., \"@sterling-cooley\") - marked via right-click menu",
-      "timestamp": "2025-08-24T03:24:33.824Z",
+      "timestamp": "2025-08-24T21:29:52.209Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
           "className": "styled__UserHandle-sc-1gipnml-6 gmAjKD",
-          "textContent": "@patrick-eckert-7291",
-          "innerHTML": "@patrick-eckert-7291"
+          "textContent": "@jie-lu-3653",
+          "innerHTML": "@jie-lu-3653"
         },
         "position": {
           "boundingRect": {
-            "x": 1239,
-            "y": 445.015625,
+            "x": 1246.5,
+            "y": 403.5,
             "width": 239,
             "height": 21,
-            "top": 445.015625,
-            "right": 1478,
-            "bottom": 466.015625,
-            "left": 1239
+            "top": 403.5,
+            "right": 1485.5,
+            "bottom": 424.5,
+            "left": 1246.5
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -1830,22 +2757,14 @@
               "tag": "DIV",
               "class": "styled__BoxWrapper-sc-esqoz3-0 fiJfKc Row-sc-dwrxl6-0 kfVcuA",
               "id": "",
-              "text": "Patrick Eckert"
+              "text": "Jie Lu"
             }
           ]
         },
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [
-            {
-              "distance": 123,
-              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            }
-          ],
+          "nearbyButtons": [],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -1861,7 +2780,7 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T03:24:33.826Z"
+    "timestamp": "2025-08-24T21:29:52.210Z"
   },
   "profile-bio-description": {
     "selector": {
@@ -1869,29 +2788,29 @@
       "alternativeSelectors": [
         ".styled__Bio-sc-1gipnml-9",
         ".hGQpgW",
-        "text=\".\"",
-        ":has-text(\".\")"
+        "text=\"Interested in learning about the Vagus Nerve!\"",
+        ":has-text(\"Interested in learning about the Vagus Nerve!\")"
       ],
       "description": "📄 Profile Bio/Description (e.g., \"Neuro and data nerd...\") - marked via right-click menu",
-      "timestamp": "2025-08-24T03:24:37.881Z",
+      "timestamp": "2025-08-24T21:29:58.438Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
           "className": "styled__Bio-sc-1gipnml-9 hGQpgW",
-          "textContent": ".",
-          "innerHTML": "."
+          "textContent": "Interested in learning about the Vagus Nerve!",
+          "innerHTML": "Interested in learning about the Vagus Nerve!"
         },
         "position": {
           "boundingRect": {
-            "x": 1239,
-            "y": 474.015625,
+            "x": 1246.5,
+            "y": 432.5,
             "width": 239,
-            "height": 24,
-            "top": 474.015625,
-            "right": 1478,
-            "bottom": 498.015625,
-            "left": 1239
+            "height": 48,
+            "top": 432.5,
+            "right": 1485.5,
+            "bottom": 480.5,
+            "left": 1246.5
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -1900,7 +2819,7 @@
           },
           "clientSize": {
             "width": 239,
-            "height": 24
+            "height": 48
           }
         },
         "attributes": {
@@ -1928,13 +2847,13 @@
               "tag": "DIV",
               "class": "styled__ProgressWrapper-sc-1gipnml-0 cfFHpM",
               "id": "",
-              "text": "2Level 212points to level up"
+              "text": ""
             },
             {
               "tag": "DIV",
               "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 duwkcK",
               "id": "",
-              "text": "Patrick Eckert@patrick-eckert-"
+              "text": "Jie Lu@jie-lu-3653"
             }
           ]
         },
@@ -1943,7 +2862,7 @@
           "nearbyImages": [],
           "nearbyButtons": [
             {
-              "distance": 108,
+              "distance": 143,
               "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
               "text": "",
               "type": "button",
@@ -1965,35 +2884,35 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T03:24:37.883Z"
+    "timestamp": "2025-08-24T21:29:58.440Z"
   },
   "profile-real-name": {
     "selector": {
-      "selector": "text=\"Patrick Eckert\"",
+      "selector": "text=\"Jie Lu\"",
       "alternativeSelectors": [
-        "text=\"Patrick Eckert\"",
-        ":has-text(\"Patrick Eckert\")"
+        "text=\"Jie Lu\"",
+        ":has-text(\"Jie Lu\")"
       ],
       "description": "👤 Profile Real Name (e.g., \"Sterling Cooley\") - marked via right-click menu",
-      "timestamp": "2025-08-24T03:24:29.725Z",
+      "timestamp": "2025-08-24T21:29:46.573Z",
       "analysis": {
         "basic": {
           "tagName": "SPAN",
           "id": "none",
           "className": "none",
-          "textContent": "Patrick Eckert",
-          "innerHTML": "Patrick&nbsp;Eckert"
+          "textContent": "Jie Lu",
+          "innerHTML": "Jie&nbsp;Lu"
         },
         "position": {
           "boundingRect": {
-            "x": 1239,
-            "y": 413.515625,
-            "width": 145.265625,
+            "x": 1246.5,
+            "y": 372,
+            "width": 62.140625,
             "height": 28,
-            "top": 413.515625,
-            "right": 1384.265625,
-            "bottom": 441.515625,
-            "left": 1239
+            "top": 372,
+            "right": 1308.640625,
+            "bottom": 400,
+            "left": 1246.5
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -2029,15 +2948,7 @@
         "context": {
           "nearbyText": "",
           "nearbyImages": [],
-          "nearbyButtons": [
-            {
-              "distance": 144,
-              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
-              "text": "",
-              "type": "button",
-              "ariaLabel": null
-            }
-          ],
+          "nearbyButtons": [],
           "nearbySvgs": [],
           "nearbyPaths": [],
           "containsNumbers": false,
@@ -2053,7 +2964,7 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T03:24:29.726Z"
+    "timestamp": "2025-08-24T21:29:46.574Z"
   },
   "profile-box": {
     "selector": {
@@ -2063,25 +2974,25 @@
         ".bBAztC"
       ],
       "description": "📦 Profile Information Box/Container (entire profile section) - marked via right-click menu",
-      "timestamp": "2025-08-24T03:24:23.235Z",
+      "timestamp": "2025-08-24T21:29:37.320Z",
       "analysis": {
         "basic": {
           "tagName": "DIV",
           "id": "none",
           "className": "styled__UserCardWrapper-sc-1gipnml-15 bBAztC",
-          "textContent": "2Level 212points to level upPatrick Eckert@patrick-eckert-7291.Active 4d agoJoined Aug 3, 20253Contr",
+          "textContent": "Jie Lu@jie-lu-3653Interested in learning about the Vagus Nerve!Active 7m agoJoined Jun 18, 20251Cont",
           "innerHTML": "<div class=\"styled__BoxWrapper-sc-esqoz3-0 hChSku Column-sc-1h1w9fe-0 duwkcK\"><div class=\"styled__DropdownWrapper-sc-1gipnml-5 dGIUDc\"><div><div class=\"styled__DropdownWrapper-sc-13jov82-0 dnxlIH\"><bu"
         },
         "position": {
           "boundingRect": {
-            "x": 1223,
+            "x": 1230.5,
             "y": 97,
             "width": 271,
-            "height": 716.015625,
+            "height": 578.5,
             "top": 97,
-            "right": 1494,
-            "bottom": 813.015625,
-            "left": 1223
+            "right": 1501.5,
+            "bottom": 675.5,
+            "left": 1230.5
           },
           "offsetParent": "DIV",
           "scrollPosition": {
@@ -2090,7 +3001,7 @@
           },
           "clientSize": {
             "width": 271,
-            "height": 716
+            "height": 579
           }
         },
         "attributes": {
@@ -2117,7 +3028,7 @@
               "tag": "DIV",
               "class": "styled__BoxWrapper-sc-esqoz3-0 hChSku Column-sc-1h1w9fe-0 duwkcK",
               "id": "",
-              "text": "2Level 212points to "
+              "text": "Jie Lu@jie-lu-3653In"
             }
           ],
           "siblings": []
@@ -2126,9 +3037,9 @@
           "nearbyText": "",
           "nearbyImages": [
             {
-              "distance": 57,
-              "src": "https://assets.skool.com/f/35cc04db2d3c473e951963e",
-              "alt": "Patrick Eckert",
+              "distance": 53,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
               "class": ""
             }
           ],
@@ -2156,6 +3067,1108 @@
       }
     },
     "description": "",
-    "timestamp": "2025-08-24T03:24:23.237Z"
+    "timestamp": "2025-08-24T21:29:37.323Z"
+  },
+  "green-radio-button": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__ButtonWrapper-sc-5xhq84-0",
+        ".kfVcuA",
+        ".hnblNR"
+      ],
+      "description": "🟢 Green Radio Button (UNREAD indicator) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:31:53.804Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hnblNR",
+          "textContent": "none",
+          "innerHTML": "<div class=\"styled__ReadButton-sc-5xhq84-1 eXgJxH\" style=\"\"></div>"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1447,
+            "y": 188.5,
+            "width": 40,
+            "height": 40,
+            "top": 188.5,
+            "right": 1487,
+            "bottom": 228.5,
+            "left": 1447
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 40,
+            "height": 40
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__ButtonWrapper-sc-5xhq84-0 kfVcuA hnblNR",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__TooltipWrapper-sc-7zjhea-0 lokaUz",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__ReadButton-sc-5xhq84-1 eXgJxH",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 85,
+              "class": "styled__DropdownButton-sc-13jov82-9 ekCnSs",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            },
+            {
+              "distance": 123,
+              "class": "styled__DropdownButton-sc-13jov82-9 jQBqny",
+              "text": "All",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:31:53.805Z"
+  },
+  "conversation-jie-lu": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__NotificationRow-sc-5xhq84-2",
+        ".kfVcuA",
+        ".hpcoAn",
+        "text=\"Jie Lu(1)• 10mACCESS\"",
+        ":has-text(\"Jie Lu(1)• 10mACCESS\")"
+      ],
+      "description": "👤 Jie Lu Conversation - marked via right-click menu",
+      "timestamp": "2025-08-24T21:26:48.231Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "textContent": "Jie Lu(1)• 10mACCESS",
+          "innerHTML": "<div class=\"styled__AvatarWrapper-sc-5xhq84-3 lewlin\"><div class=\"styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm\"><span title=\"Jie Lu\" class=\"styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR\"><img src=\"https://as"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1003,
+            "y": 245,
+            "width": 500,
+            "height": 72,
+            "top": 245,
+            "right": 1503,
+            "bottom": 317,
+            "left": 1003
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 500,
+            "height": 71
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "A",
+          "parentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__AvatarWrapper-sc-5xhq84-3 lewlin",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__Overlay-sc-5xhq84-6 fZBzqd",
+              "id": "",
+              "text": "Jie Lu(1)• 10mACCESS"
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 59,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 22,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:26:48.233Z"
+  },
+  "conversation-unread-jie": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__NotificationRow-sc-5xhq84-2",
+        ".kfVcuA",
+        ".hpcoAn",
+        "text=\"Jie Lu(1)• 10mACCESS\"",
+        ":has-text(\"Jie Lu(1)• 10mACCESS\")"
+      ],
+      "description": "🔴 UNREAD Jie Lu Conversation - marked via right-click menu",
+      "timestamp": "2025-08-24T21:27:04.938Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "textContent": "Jie Lu(1)• 10mACCESS",
+          "innerHTML": "<div class=\"styled__AvatarWrapper-sc-5xhq84-3 lewlin\"><div class=\"styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm\"><span title=\"Jie Lu\" class=\"styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR\"><img src=\"https://as"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1003,
+            "y": 245,
+            "width": 500,
+            "height": 72,
+            "top": 245,
+            "right": 1503,
+            "bottom": 317,
+            "left": 1003
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 500,
+            "height": 71
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "A",
+          "parentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__AvatarWrapper-sc-5xhq84-3 lewlin",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__Overlay-sc-5xhq84-6 fZBzqd",
+              "id": "",
+              "text": "Jie Lu(1)• 10mACCESS"
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 59,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 22,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:27:04.939Z"
+  },
+  "conversation-read-sterling": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__NotificationRow-sc-5xhq84-2",
+        ".kfVcuA",
+        ".hpcoAn"
+      ],
+      "description": "✅ READ Sterling Cooley Conversation - marked via right-click menu",
+      "timestamp": "2025-08-24T21:27:09.561Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "textContent": "Sterling Cooley• 9mI will have your link shortly. https://myultra.coach/auth/login?code=vgs-17560702",
+          "innerHTML": "<div class=\"styled__AvatarWrapper-sc-5xhq84-3 hdUXSh\"><div class=\"styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm\"><span title=\"Sterling Cooley\" class=\"styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR\"><img src=\"h"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1003,
+            "y": 173,
+            "width": 500,
+            "height": 72,
+            "top": 173,
+            "right": 1503,
+            "bottom": 245,
+            "left": 1003
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 500,
+            "height": 71
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "A",
+          "parentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__AvatarWrapper-sc-5xhq84-3 hdUXSh",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__Overlay-sc-5xhq84-6 gdcsYb",
+              "id": "",
+              "text": "Sterling Cooley• 9mI"
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 22,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 89,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:27:09.562Z"
+  },
+  "profile-avatar": {
+    "selector": {
+      "selector": "img",
+      "alternativeSelectors": [],
+      "description": "🖼️ Profile Avatar/Picture - marked via right-click menu",
+      "timestamp": "2025-08-24T21:30:23.472Z",
+      "analysis": {
+        "basic": {
+          "tagName": "IMG",
+          "id": "none",
+          "className": "none",
+          "textContent": "none",
+          "innerHTML": "none"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1266,
+            "y": 137,
+            "width": 200,
+            "height": 200,
+            "top": 137,
+            "right": 1466,
+            "bottom": 337,
+            "left": 1266
+          },
+          "offsetParent": "SPAN",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 200,
+            "height": 200
+          }
+        },
+        "attributes": {
+          "src": "https://assets.skool.com/f/d9aa717ea57d481090586a68a3d1bc0c/ed3bf06b0bca43a09c91a6224bde789064585e70358745b7b9c3a71a057674f9-md.jpg",
+          "alt": "Jie Lu",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgba(0, 0, 0, 0)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "SPAN",
+          "parentClass": "styled__AvatarWrapper-sc-1ruw40r-0 BUAVN",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__AvatarWrapper-sc-1o1lx2q-0 bnhRCC",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 150,
+              "class": "styled__ButtonWrapper-sc-1crx28g-1 GvgtH styled__ChatNotificationsIconButton-sc-14ipnak-0 fOkxgW",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:30:23.474Z"
+  },
+  "conversation-sterling-cooley": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Row-sc-dwrxl6-0",
+        ".styled__NotificationRow-sc-5xhq84-2",
+        ".kfVcuA",
+        ".hpcoAn"
+      ],
+      "description": "👤 Sterling Cooley Conversation - marked via right-click menu",
+      "timestamp": "2025-08-24T21:31:05.602Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "textContent": "Sterling Cooley(1)• 13mI will have your link shortly. https://myultra.coach/auth/login?code=vgs-1756",
+          "innerHTML": "<div class=\"styled__AvatarWrapper-sc-5xhq84-3 lewlin\"><div class=\"styled__AvatarWrapper-sc-1o1lx2q-0 eUHsSm\"><span title=\"Sterling Cooley\" class=\"styled__AvatarWrapper-sc-1ruw40r-0 dyMUsR\"><img src=\"h"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1003,
+            "y": 173,
+            "width": 500,
+            "height": 72,
+            "top": 173,
+            "right": 1503,
+            "bottom": 245,
+            "left": 1003
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 500,
+            "height": 71
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Row-sc-dwrxl6-0 styled__NotificationRow-sc-5xhq84-2 kfVcuA hpcoAn",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "A",
+          "parentClass": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__AvatarWrapper-sc-5xhq84-3 lewlin",
+              "id": "",
+              "text": ""
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__Overlay-sc-5xhq84-6 fZBzqd",
+              "id": "",
+              "text": "Sterling Cooley(1)• "
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 eiexzt",
+              "id": "",
+              "text": ""
+            }
+          ],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 22,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 89,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:31:05.604Z"
+  },
+  "conversation-name-sterling": {
+    "selector": {
+      "selector": "text=\"Sterling Cooley\"",
+      "alternativeSelectors": [
+        "text=\"Sterling Cooley\"",
+        ":has-text(\"Sterling Cooley\")"
+      ],
+      "description": "🏷️ Sterling Cooley Name in Conversation - marked via right-click menu",
+      "timestamp": "2025-08-24T21:31:17.632Z",
+      "analysis": {
+        "basic": {
+          "tagName": "SPAN",
+          "id": "none",
+          "className": "none",
+          "textContent": "Sterling Cooley",
+          "innerHTML": "Sterling&nbsp;Cooley"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1071,
+            "y": 188,
+            "width": 109.6875,
+            "height": 19,
+            "top": 188,
+            "right": 1180.6875,
+            "bottom": 207,
+            "left": 1071
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "inline",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "SPAN",
+          "parentClass": "styled__UserNameText-sc-24o0l3-1 kXoxKY",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TypographyWrapper-sc-70zmwu-0 craEzt",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 52,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 89,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:31:17.633Z"
+  },
+  "conversation-name-jie": {
+    "selector": {
+      "selector": "text=\"Jie Lu\"",
+      "alternativeSelectors": [
+        "text=\"Jie Lu\"",
+        ":has-text(\"Jie Lu\")"
+      ],
+      "description": "🏷️ Jie Lu Name in Conversation - marked via right-click menu",
+      "timestamp": "2025-08-24T21:31:22.574Z",
+      "analysis": {
+        "basic": {
+          "tagName": "SPAN",
+          "id": "none",
+          "className": "none",
+          "textContent": "Jie Lu",
+          "innerHTML": "Jie&nbsp;Lu"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1071,
+            "y": 260,
+            "width": 43.234375,
+            "height": 19,
+            "top": 260,
+            "right": 1114.234375,
+            "bottom": 279,
+            "left": 1071
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "inline",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "SPAN",
+          "parentClass": "styled__UserNameText-sc-24o0l3-1 kXoxKY",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TypographyWrapper-sc-70zmwu-0 craEzt",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 88,
+              "src": "https://assets.skool.com/f/44a8d5f5699d4347907b839",
+              "alt": "Sterling Cooley",
+              "class": ""
+            },
+            {
+              "distance": 52,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:31:22.575Z"
+  },
+  "our-message-bubble": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Column-sc-1h1w9fe-0",
+        ".styled__ChatBubble-sc-cfaah3-8",
+        ".duwkcK",
+        ".gxWjce"
+      ],
+      "description": "🟦 Our Message Bubble (My Ultra Coach) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:33:03.189Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK gxWjce",
+          "textContent": "My Ultra Coach2:32pmLet me get that for you right now...",
+          "innerHTML": "<div class=\"styled__ChatMessageHeader-sc-cfaah3-12 bSTozG\"><div class=\"styled__UserNameWrapper-sc-24o0l3-0 eqcLoO\"><a href=\"/@my-ultra-coach-6588\" class=\"styled__ChildrenLink-sc-1brgbbt-1 fQYQam\" styl"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 709,
+            "y": 636.75,
+            "width": 535,
+            "height": 66,
+            "top": 636.75,
+            "right": 1244,
+            "bottom": 702.75,
+            "left": 709
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 533,
+            "height": 64
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK gxWjce",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgb(248, 247, 245)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 gOkcrL Row-sc-dwrxl6-0 kfVcuA",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__ChatMessageHeader-sc-cfaah3-12 bSTozG",
+              "id": "",
+              "text": "My Ultra Coach2:32pm"
+            },
+            {
+              "tag": "DIV",
+              "class": "",
+              "id": "",
+              "text": "Let me get that for "
+            }
+          ],
+          "siblings": [
+            {
+              "tag": "A",
+              "class": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+              "id": "",
+              "text": ""
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 88,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            },
+            {
+              "distance": 48,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:33:03.191Z"
+  },
+  "their-message-bubble": {
+    "selector": {
+      "selector": ".styled__BoxWrapper-sc-esqoz3-0",
+      "alternativeSelectors": [
+        ".styled__BoxWrapper-sc-esqoz3-0",
+        ".kxjOSJ",
+        ".Column-sc-1h1w9fe-0",
+        ".styled__ChatBubble-sc-cfaah3-8",
+        ".duwkcK",
+        ".hMgFWq",
+        "text=\"Jie Lu2:16pmACCESS\"",
+        ":has-text(\"Jie Lu2:16pmACCESS\")"
+      ],
+      "description": "⬜ Their Message Bubble (Other User) - marked via right-click menu",
+      "timestamp": "2025-08-24T21:33:15.557Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK hMgFWq",
+          "textContent": "Jie Lu2:16pmACCESS",
+          "innerHTML": "<div class=\"styled__ChatMessageHeader-sc-cfaah3-12 bSTozG\"><div class=\"styled__UserNameWrapper-sc-24o0l3-0 eqcLoO\"><a href=\"/@jie-lu-3653\" class=\"styled__ChildrenLink-sc-1brgbbt-1 fQYQam\" style=\"overf"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 709,
+            "y": 562.75,
+            "width": 535,
+            "height": 66,
+            "top": 562.75,
+            "right": 1244,
+            "bottom": 628.75,
+            "left": 709
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 533,
+            "height": 64
+          }
+        },
+        "attributes": {
+          "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 styled__ChatBubble-sc-cfaah3-8 duwkcK hMgFWq",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgb(255, 255, 255)",
+          "color": "rgb(32, 33, 36)",
+          "display": "flex",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 gOkcrL Row-sc-dwrxl6-0 kfVcuA",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "none",
+          "children": [
+            {
+              "tag": "DIV",
+              "class": "styled__ChatMessageHeader-sc-cfaah3-12 bSTozG",
+              "id": "",
+              "text": "Jie Lu2:16pm"
+            },
+            {
+              "tag": "DIV",
+              "class": "",
+              "id": "",
+              "text": "ACCESS"
+            }
+          ],
+          "siblings": [
+            {
+              "tag": "A",
+              "class": "styled__ChildrenLink-sc-1brgbbt-1 fQYQam",
+              "id": "",
+              "text": ""
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [
+            {
+              "distance": 48,
+              "src": "https://assets.skool.com/f/d9aa717ea57d481090586a6",
+              "alt": "Jie Lu",
+              "class": ""
+            },
+            {
+              "distance": 88,
+              "src": "https://assets.skool.com/f/9fba5f157cc04a3f80ff4b5",
+              "alt": "My Ultra Coach",
+              "class": ""
+            }
+          ],
+          "nearbyButtons": [],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": true,
+          "reasons": [
+            "Contains mail-related keywords"
+          ],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T21:33:15.559Z"
   }
 }
