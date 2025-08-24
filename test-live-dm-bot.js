@@ -497,36 +497,50 @@ class LiveDMBot {
     
     console.log(`📊 ENHANCED: ${enhancedConversationDetection.blueRadioCount} blue radios, ${enhancedConversationDetection.unreadRowCount} unread rows, ${enhancedConversationDetection.conversationPreviewCount} previews`);
     
-    // Priority 1: Click on CONVERSATION PREVIEW TEXT (not the radio button!)
-    // Look for conversation items with unread indicators (blue radio buttons)
-    const conversationPreviewElements = await this.browserService.page.$$('.styled__MessageContent-sc-5xhq84-9, .styled__ReadButton-sc-5xhq84-1');
-    
-    if (conversationPreviewElements.length > 0) {
-      console.log(`🎯 Found ${conversationPreviewElements.length} conversation preview(s) - clicking first one...`);
-      
+    // Priority 1: Click on specific CONVERSATION LIST ITEMS (from trained selectors)
+    // Try Sterling Cooley conversation specifically first
+    const sterlingConversation = await this.browserService.page.$('text="Sterling Cooley"');
+    if (sterlingConversation) {
+      console.log('🎯 Found STERLING COOLEY conversation by name - clicking...');
       try {
-        // Click the PREVIEW TEXT (not the radio button) - this opens the conversation
-        await conversationPreviewElements[0].click();
+        await sterlingConversation.click();
         await this.browserService.page.waitForTimeout(3000);
-        console.log('✅ Opened conversation via PREVIEW TEXT click');
+        console.log('✅ Opened Sterling Cooley conversation via NAME click');
         return;
       } catch (clickError) {
-        console.log('⚠️ Preview text click failed, trying conversation container...');
+        console.log('⚠️ Sterling Cooley name click failed, trying container...');
       }
     }
     
-    // Priority 2: Try clicking the conversation container/row directly
-    const conversationRows = await this.browserService.page.$$('.styled__NotificationRow-sc-5xhq84-2');
-    if (conversationRows.length > 0) {
-      console.log(`📄 Found ${conversationRows.length} conversation row(s) - clicking first one...`);
+    // Priority 2: Look for conversation items in the CONVERSATION LIST (not chat window)
+    const conversationListItems = await this.browserService.page.$$('.styled__NotificationRow-sc-5xhq84-2.kfVcuA, .styled__NotificationRow-sc-5xhq84-2');
+    
+    if (conversationListItems.length > 0) {
+      console.log(`📄 Found ${conversationListItems.length} conversation list item(s) - clicking first one...`);
       
       try {
-        await conversationRows[0].click();
+        // Click the first conversation list item (should be the unread one)
+        await conversationListItems[0].click();
         await this.browserService.page.waitForTimeout(3000);
-        console.log('✅ Opened conversation via CONVERSATION ROW click');
+        console.log('✅ Opened conversation via CONVERSATION LIST ITEM click');
         return;
       } catch (clickError) {
-        console.log('⚠️ Conversation row click failed...');
+        console.log('⚠️ Conversation list item click failed...');
+      }
+    }
+    
+    // Priority 3: Try clicking by text content (more specific targeting)
+    const conversationTexts = await this.browserService.page.$$('text=/Sterling Cooley|Jie Lu/');
+    if (conversationTexts.length > 0) {
+      console.log(`👤 Found ${conversationTexts.length} conversation by user name - clicking first...`);
+      
+      try {
+        await conversationTexts[0].click();
+        await this.browserService.page.waitForTimeout(3000);
+        console.log('✅ Opened conversation via USER NAME text click');
+        return;
+      } catch (clickError) {
+        console.log('⚠️ User name text click failed...');
       }
     }
     
@@ -544,21 +558,44 @@ class LiveDMBot {
       }
     }
     
-    // Fallback: Original method
-    console.log('⚠️ Using FALLBACK method - no trained selectors found unread conversations');
-    const fallbackConversations = await this.browserService.page.$$('.styled__ReadButton-sc-5xhq84-1, .styled__MessageContent-sc-5xhq84-9');
+    // Fallback: More general selectors for conversation list
+    console.log('⚠️ Using FALLBACK method - searching for any clickable conversation items...');
     
-    if (fallbackConversations.length === 0) {
-      throw new Error('No conversations found with any method - all messages may be read');
+    // Try various selectors that might represent conversation list items
+    const fallbackSelectors = [
+      '.styled__BoxWrapper-sc-esqoz3-0', // General box wrapper (from training)
+      '.Row-sc-dwrxl6-0', // Row containers (from training)
+      '[class*="NotificationRow"]', // Any notification row
+      '[class*="BoxWrapper"]', // Any box wrapper
+      'div[role="button"]', // Any clickable div
+      'div:has-text("Sterling Cooley")', // Div containing Sterling's name
+      'div:has-text("Jie Lu")', // Div containing Jie's name
+    ];
+    
+    let foundConversation = false;
+    
+    for (const selector of fallbackSelectors) {
+      try {
+        const elements = await this.browserService.page.$$(selector);
+        if (elements.length > 0) {
+          console.log(`📊 FALLBACK: Found ${elements.length} element(s) with selector: ${selector}`);
+          
+          // Try clicking the first element
+          await elements[0].click();
+          await this.browserService.page.waitForTimeout(3000);
+          console.log(`✅ Opened conversation using fallback selector: ${selector}`);
+          foundConversation = true;
+          break;
+        }
+      } catch (error) {
+        console.log(`⚠️ Fallback selector ${selector} failed: ${error.message}`);
+        continue;
+      }
     }
-
-    console.log(`📊 FALLBACK: Found ${fallbackConversations.length} conversation(s)`);
     
-    // Click the first (latest) conversation
-    await fallbackConversations[0].click();
-    await this.browserService.page.waitForTimeout(3000);
-
-    console.log('✅ Opened conversation using fallback method');
+    if (!foundConversation) {
+      throw new Error('No conversations found with any method - all messages may be read or UI has changed');
+    }
   }
 
   async sendResponse() {
