@@ -903,9 +903,50 @@ class SkoolWorkflowManager {
         }
       });
 
+      // Recover auto-saved data from previous sessions
+      function recoverAutoSavedData() {
+        try {
+          // Check for auto-save data
+          const autoSaveData = localStorage.getItem('skool-selectors-auto-save');
+          const periodicData = localStorage.getItem('skool-selectors-periodic');
+          
+          let recoveredData = null;
+          
+          if (autoSaveData) {
+            const autoSave = JSON.parse(autoSaveData);
+            recoveredData = autoSave;
+            console.log(`🔄 Found auto-save data from: ${autoSave.timestamp}`);
+          }
+          
+          if (periodicData) {
+            const periodic = JSON.parse(periodicData);
+            if (!recoveredData || new Date(periodic.timestamp) > new Date(recoveredData.timestamp)) {
+              recoveredData = periodic;
+              console.log(`🔄 Found newer periodic save from: ${periodic.timestamp}`);
+            }
+          }
+          
+          if (recoveredData && recoveredData.elements) {
+            window.markedElements = recoveredData.elements;
+            console.log(`✅ Recovered ${Object.keys(recoveredData.elements).length} tagged elements`);
+            
+            // Show recovery notification
+            setTimeout(() => {
+              alert(`🔄 Recovered ${Object.keys(recoveredData.elements).length} previously tagged elements from your last session!`);
+            }, 1000);
+          }
+          
+        } catch (error) {
+          console.log('⚠️ Error recovering auto-saved data:', error);
+        }
+      }
+
       // Initialize when DOM is ready
       function initializeWorkflowManager() {
         if (document.getElementById('workflow-manager')) return;
+        
+        // Try to recover auto-saved data
+        recoverAutoSavedData();
         
         const panel = createWorkflowPanel();
         renderWorkflow();
@@ -975,6 +1016,49 @@ class SkoolWorkflowManager {
 
         console.log('🎯 Workflow Manager initialized!');
       }
+
+      // Auto-save when browser window closes
+      window.addEventListener('beforeunload', () => {
+        if (Object.keys(window.markedElements).length > 0) {
+          console.log('💾 Auto-saving tagged elements on window close...');
+          
+          // Save to localStorage as backup
+          localStorage.setItem('skool-selectors-auto-save', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            elements: window.markedElements
+          }));
+          
+          // Try to save to file (may not complete due to page unload)
+          saveSelectorsToFile();
+          
+          // Also download as backup
+          try {
+            const dataStr = JSON.stringify(window.markedElements, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `auto-save-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+            console.log('💾 Auto-downloaded backup file');
+          } catch (error) {
+            console.log('⚠️ Auto-download failed:', error);
+          }
+        }
+      });
+
+      // Auto-save periodically every 30 seconds
+      setInterval(() => {
+        if (Object.keys(window.markedElements).length > 0) {
+          console.log('🔄 Periodic auto-save...');
+          localStorage.setItem('skool-selectors-periodic', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            elements: window.markedElements
+          }));
+          saveSelectorsToFile();
+        }
+      }, 30000);
 
       // Initialize when page loads
       if (document.readyState === 'loading') {
