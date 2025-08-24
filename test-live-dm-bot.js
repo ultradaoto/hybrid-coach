@@ -766,6 +766,7 @@ class LiveDMBot {
       }
       
       // 2. Look for the user's display name (full name like "Sterling Cooley")
+      // Focus on MESSAGE-specific selectors to avoid group names
       const nameSelectors = [
         '.styled__Username-sc-1c7orh8-0', // From discovery sessions
         '[data-testid="username"]',
@@ -773,23 +774,31 @@ class LiveDMBot {
         '.author-name',
         '.message-author',
         '.user-name',
-        '.display-name',
-        '.conversation-name',
-        '[class*="name"]',
-        '[class*="Name"]'
+        '.display-name'
       ];
 
       for (const selector of nameSelectors) {
         try {
-          const element = await this.browserService.page.$(selector);
-          if (element) {
+          const elements = await this.browserService.page.$$(selector);
+          console.log(`🔍 Checking selector "${selector}" - found ${elements.length} elements`);
+          for (const element of elements) {
             const text = await element.textContent();
-            if (text && text.trim() && text !== 'My Ultra Coach' && text.includes(' ')) {
+            console.log(`   📝 Found text: "${text}"`);
+            // Be more specific: must be 2 words, no "DeSci", no "Science", no "Decentralized"
+            if (text && text.trim() && 
+                text !== 'My Ultra Coach' && 
+                text.includes(' ') &&
+                !text.toLowerCase().includes('desci') &&
+                !text.toLowerCase().includes('science') &&
+                !text.toLowerCase().includes('decentralized') &&
+                text.split(' ').length <= 3 && // Max 3 words (first, middle, last)
+                text.length < 30) { // Reasonable name length
               fullName = text.trim();
-              console.log(`👤 Found full name: ${fullName}`);
+              console.log(`✅ Selected as full name: ${fullName}`);
               break;
             }
           }
+          if (fullName) break;
         } catch (e) {
           // Continue to next selector
         }
@@ -905,11 +914,11 @@ class LiveDMBot {
       console.log(`🔍 Opening new tab for profile: ${profileUrl}`);
       
       // Open profile page in new tab
-      if (!this.browserService.context) {
-        console.log('❌ Browser context not available');
+      if (!this.browserService.browser) {
+        console.log('❌ Browser not available');
         return null;
       }
-      profilePage = await this.browserService.context.newPage();
+      profilePage = await this.browserService.browser.newPage();
       
       // Get current page URL to extract group context
       const currentUrl = this.browserService.page.url();

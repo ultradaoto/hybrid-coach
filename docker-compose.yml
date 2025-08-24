@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  hybridcoach-db:
+  hybridcoach-pg:
     image: postgres:15
-    container_name: hybridcoach-db
+    container_name: hybridcoach-pg
     environment:
       POSTGRES_USER: hybridcoach
       POSTGRES_PASSWORD: hybridcoach_password
