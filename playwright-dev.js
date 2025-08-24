@@ -166,6 +166,16 @@ class SkoolPlaywrightDev {
         'username-them': '🏷️ Other User Username',
         'profile-link': '🔗 Profile Link',
         
+        // Profile Page Elements (for scraping user data)
+        'profile-real-name': '👤 Profile Real Name (e.g., "Sterling Cooley")',
+        'profile-skool-id': '🆔 Profile Skool ID (e.g., "@sterling-cooley")',
+        'profile-bio-description': '📄 Profile Bio/Description (e.g., "Neuro and data nerd...")',
+        'profile-display-name': '🏷️ Profile Display Name/Title',
+        'profile-user-info': '📋 Profile User Information Section',
+        'profile-about-section': '📖 Profile About/Bio Section',
+        'profile-header': '📄 Profile Header Area',
+        'profile-main-content': '📝 Profile Main Content Area',
+        
         // Timestamp Types (Important Distinction)
         'timestamp-date': '📅 Date Timestamp (e.g., "Dec 25, 2024")',
         'timestamp-time': '🕐 Time Timestamp (e.g., "10:30pm")',

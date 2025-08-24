@@ -1583,5 +1583,383 @@
     },
     "description": "",
     "timestamp": "2025-08-23T04:34:50.111Z"
+  },
+  "profile-display-name": {
+    "selector": {
+      "selector": "text=\"Kira Morin\"",
+      "alternativeSelectors": [
+        "text=\"Kira Morin\"",
+        ":has-text(\"Kira Morin\")"
+      ],
+      "description": "🏷️ Profile Display Name/Title - marked via right-click menu",
+      "timestamp": "2025-08-24T02:49:01.668Z",
+      "analysis": {
+        "basic": {
+          "tagName": "SPAN",
+          "id": "none",
+          "className": "none",
+          "textContent": "Kira Morin",
+          "innerHTML": "Kira&nbsp;Morin"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1239,
+            "y": 413.515625,
+            "width": 107.328125,
+            "height": 28,
+            "top": 413.515625,
+            "right": 1346.328125,
+            "bottom": 441.515625,
+            "left": 1239
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "inline",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "SPAN",
+          "parentClass": "styled__UserNameText-sc-24o0l3-1 kXoxKY",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TypographyWrapper-sc-70zmwu-0 HobcY",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 144,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T02:49:01.671Z"
+  },
+  "profile-skool-id": {
+    "selector": {
+      "selector": ".styled__UserHandle-sc-1gipnml-6",
+      "alternativeSelectors": [
+        ".styled__UserHandle-sc-1gipnml-6",
+        ".gmAjKD",
+        "text=\"@kira-morin-1676\"",
+        ":has-text(\"@kira-morin-1676\")"
+      ],
+      "description": "🆔 Profile Skool ID (e.g., \"@sterling-cooley\") - marked via right-click menu",
+      "timestamp": "2025-08-24T02:49:11.688Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__UserHandle-sc-1gipnml-6 gmAjKD",
+          "textContent": "@kira-morin-1676",
+          "innerHTML": "@kira-morin-1676"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1239,
+            "y": 445.015625,
+            "width": 239,
+            "height": 21,
+            "top": 445.015625,
+            "right": 1478,
+            "bottom": 466.015625,
+            "left": 1239
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 239,
+            "height": 21
+          }
+        },
+        "attributes": {
+          "class": "styled__UserHandle-sc-1gipnml-6 gmAjKD",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(144, 144, 144)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 duwkcK",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 cCffsR Column-sc-1h1w9fe-0 duwkcK",
+          "children": [],
+          "siblings": [
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 fiJfKc Row-sc-dwrxl6-0 kfVcuA",
+              "id": "",
+              "text": "Kira Morin"
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 123,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T02:49:11.689Z"
+  },
+  "profile-bio-description": {
+    "selector": {
+      "selector": ".styled__Bio-sc-1gipnml-9",
+      "alternativeSelectors": [
+        ".styled__Bio-sc-1gipnml-9",
+        ".hGQpgW",
+        "text=\"Neuro and data nerd, MECFS/Long Covid warrior\"",
+        ":has-text(\"Neuro and data nerd, MECFS/Long Covid warrior\")"
+      ],
+      "description": "📄 Profile Bio/Description (e.g., \"Neuro and data nerd...\") - marked via right-click menu",
+      "timestamp": "2025-08-24T02:49:22.481Z",
+      "analysis": {
+        "basic": {
+          "tagName": "DIV",
+          "id": "none",
+          "className": "styled__Bio-sc-1gipnml-9 hGQpgW",
+          "textContent": "Neuro and data nerd, MECFS/Long Covid warrior",
+          "innerHTML": "Neuro and data nerd, MECFS/Long Covid warrior"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1239,
+            "y": 474.015625,
+            "width": 239,
+            "height": 48,
+            "top": 474.015625,
+            "right": 1478,
+            "bottom": 522.015625,
+            "left": 1239
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 239,
+            "height": 48
+          }
+        },
+        "attributes": {
+          "class": "styled__Bio-sc-1gipnml-9 hGQpgW",
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "block",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "auto",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "DIV",
+          "parentClass": "styled__BoxWrapper-sc-esqoz3-0 cCffsR Column-sc-1h1w9fe-0 duwkcK",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__BoxWrapper-sc-esqoz3-0 hChSku Column-sc-1h1w9fe-0 duwkcK",
+          "children": [],
+          "siblings": [
+            {
+              "tag": "DIV",
+              "class": "styled__ProgressWrapper-sc-1gipnml-0 cfFHpM",
+              "id": "",
+              "text": "2Level 29points to level up"
+            },
+            {
+              "tag": "DIV",
+              "class": "styled__BoxWrapper-sc-esqoz3-0 kxjOSJ Column-sc-1h1w9fe-0 duwkcK",
+              "id": "",
+              "text": "Kira Morin@kira-morin-1676"
+            }
+          ]
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 108,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T02:49:22.484Z"
+  },
+  "profile-real-name": {
+    "selector": {
+      "selector": "text=\"Kira Morin\"",
+      "alternativeSelectors": [
+        "text=\"Kira Morin\"",
+        ":has-text(\"Kira Morin\")"
+      ],
+      "description": "👤 Profile Real Name (e.g., \"Sterling Cooley\") - marked via right-click menu",
+      "timestamp": "2025-08-24T02:49:29.405Z",
+      "analysis": {
+        "basic": {
+          "tagName": "SPAN",
+          "id": "none",
+          "className": "none",
+          "textContent": "Kira Morin",
+          "innerHTML": "Kira&nbsp;Morin"
+        },
+        "position": {
+          "boundingRect": {
+            "x": 1239,
+            "y": 413.515625,
+            "width": 107.328125,
+            "height": 28,
+            "top": 413.515625,
+            "right": 1346.328125,
+            "bottom": 441.515625,
+            "left": 1239
+          },
+          "offsetParent": "DIV",
+          "scrollPosition": {
+            "top": 0,
+            "left": 0
+          },
+          "clientSize": {
+            "width": 0,
+            "height": 0
+          }
+        },
+        "attributes": {
+          "style": "outline: rgb(76, 175, 80) solid 3px; outline-offset: 2px;"
+        },
+        "styling": {
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(32, 33, 36)",
+          "display": "inline",
+          "position": "static",
+          "zIndex": "auto",
+          "cursor": "pointer",
+          "visibility": "visible"
+        },
+        "hierarchy": {
+          "parentTag": "SPAN",
+          "parentClass": "styled__UserNameText-sc-24o0l3-1 kXoxKY",
+          "parentId": "none",
+          "grandparentTag": "DIV",
+          "grandparentClass": "styled__TypographyWrapper-sc-70zmwu-0 HobcY",
+          "children": [],
+          "siblings": []
+        },
+        "context": {
+          "nearbyText": "",
+          "nearbyImages": [],
+          "nearbyButtons": [
+            {
+              "distance": 144,
+              "class": "styled__DropdownButton-sc-13jov82-9 hJpAKS",
+              "text": "",
+              "type": "button",
+              "ariaLabel": null
+            }
+          ],
+          "nearbySvgs": [],
+          "nearbyPaths": [],
+          "containsNumbers": false,
+          "hasRedStyling": false
+        },
+        "mailIconAnalysis": {
+          "couldBeMail": false,
+          "reasons": [],
+          "pathCount": 0,
+          "hasRedElements": false,
+          "distanceFromSvg": null
+        }
+      }
+    },
+    "description": "",
+    "timestamp": "2025-08-24T02:49:29.407Z"
   }
 }

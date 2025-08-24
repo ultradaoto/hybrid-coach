@@ -2,80 +2,80 @@
   "cookies": [
     {
       "name": "client_id",
-      "value": "fcfc4e2ae138470983b28e40927dc152",
+      "value": "6cd9d6cc91a2475e8922a799e642d8e2",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1787459324,
+      "expires": 1787539703,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Lax"
     },
     {
       "name": "auth_token",
-      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODc0NTkzMjQsImlhdCI6MTc1NTkyMzMyNCwidXNlcl9pZCI6IjlmYmE1ZjE1N2NjMDRhM2Y4MGZmNGI1ZTBlNjNkNjQ1In0.EHKLT3aJVonr9HbcCdPsY7UWUrCt9vp3wy5lNNNS6l8",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODc1Mzk3MDQsImlhdCI6MTc1NjAwMzcwNCwidXNlcl9pZCI6IjlmYmE1ZjE1N2NjMDRhM2Y4MGZmNGI1ZTBlNjNkNjQ1In0.bZAexXriUB3Tb-ea-46ZdQxvCPO6mvi5B66pcwAv17w",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1787459326.602661,
+      "expires": 1787539705.395434,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"
     },
     {
-      "name": "m",
-      "value": "2fbfe43f-157f-4b3f-b59b-1cb7da744c1aee00cb",
-      "domain": "m.stripe.com",
-      "path": "/",
-      "expires": 1790483327.579771,
-      "httpOnly": true,
-      "secure": true,
-      "sameSite": "None"
-    },
-    {
-      "name": "__stripe_mid",
-      "value": "84682af5-e20d-4999-be45-3d66558ce3df223efc",
-      "domain": ".www.skool.com",
-      "path": "/",
-      "expires": 1787459327,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "Strict"
-    },
-    {
-      "name": "__stripe_sid",
-      "value": "61c19d77-3dad-4d1a-b004-d8bbce148f41f15e78",
-      "domain": ".www.skool.com",
-      "path": "/",
-      "expires": 1755925127,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "Strict"
-    },
-    {
       "name": "AWSALB",
-      "value": "m/kLeQ2TK50cW7MLG2Bvcg28QxiJ5tTONXNA+yP14TpndGGcItvA75z+GceHdx7aEYjaLf3MikDnuwzUwxrHRylzCPV6SFj478kVDMBeJgVcjdzmkRg5OTEkjlZs",
+      "value": "ZWtOztOp3P8IUQ/bN69pFshQIYuF5Rcr+kzShsZbzyYO/AVKKqEjs+2mM1+M3GlwsD/PG+cU5rw6nO99zjH1MOk0NEZRHGAhDI/XZ31ti0UAkALmzcaR7mLCY5CZ",
       "domain": "www.skool.com",
       "path": "/",
-      "expires": 1756528126.783623,
+      "expires": 1756608504.545098,
       "httpOnly": false,
       "secure": false,
       "sameSite": "Lax"
     },
     {
       "name": "AWSALBCORS",
-      "value": "m/kLeQ2TK50cW7MLG2Bvcg28QxiJ5tTONXNA+yP14TpndGGcItvA75z+GceHdx7aEYjaLf3MikDnuwzUwxrHRylzCPV6SFj478kVDMBeJgVcjdzmkRg5OTEkjlZs",
+      "value": "ZWtOztOp3P8IUQ/bN69pFshQIYuF5Rcr+kzShsZbzyYO/AVKKqEjs+2mM1+M3GlwsD/PG+cU5rw6nO99zjH1MOk0NEZRHGAhDI/XZ31ti0UAkALmzcaR7mLCY5CZ",
       "domain": "www.skool.com",
       "path": "/",
-      "expires": 1756528126.78369,
+      "expires": 1756608504.545157,
       "httpOnly": false,
       "secure": true,
       "sameSite": "None"
     },
     {
+      "name": "m",
+      "value": "602ecae2-85d0-4701-abe0-8d4470fe1e8bc14149",
+      "domain": "m.stripe.com",
+      "path": "/",
+      "expires": 1790563706.426739,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__stripe_mid",
+      "value": "883898c0-b3e8-4aa5-a5c2-1e97d35b7608f1fcb5",
+      "domain": ".www.skool.com",
+      "path": "/",
+      "expires": 1787539706,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Strict"
+    },
+    {
+      "name": "__stripe_sid",
+      "value": "4134bfd1-a653-447b-a1ff-829e47f71dbf9d6cbe",
+      "domain": ".www.skool.com",
+      "path": "/",
+      "expires": 1756005506,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Strict"
+    },
+    {
       "name": "aws-waf-token",
-      "value": "ef6d6946-8956-4989-b745-dd2f8026bbcc:FAoAkzcfKCYlAAAA:dfPm9rA4bnQoN2XY+L8GZ2f9iWZYT7Q/Sp+RRQF35sjMlldzh0gfvn+wD5y1OEYhyUHdEsX65rI920D8z+bM+Fe+BmOGPNXjbFou2wEaYELiO1o+sVK1gcO6m04W2SGiyTjjRzHkyXjsRDK5Ce/JuyiMq0WuLZK48FLuKOOHgf4FI63IS/0l2BRsVMZHb00H1P+lpMsMsqop4EzInPGDFexcnH5hXgLcthH3qSXk5bhBpcSjvwZVMSbPDIjXgq+21bbl4g==",
+      "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAaHcTtI8BAAAA:8dqYJZZe51B+eZ+xuFgozFsS00UcuMKQ/gY8dzB2RKanXApOwFrcePVM5jCY+ooHh0oQ99E5/q6+XOTdyFFS4Di0xnHRE14GVNW6xpX1UdND9LryWJpna44TOQcGdjq82B/SdQ/1tT40taHUdQ+n8dhQDlIrPdG4imxdZpvcds1gBnLqK7qQneel6Jhuak0FKlNAiwqsiGjsWLnJxPfHjoDbH9o2sNNvieB/N5lZAxkXQI9EcbqlPvf4tXLSmDehl6IWDg==",
       "domain": ".skool.com",
       "path": "/",
-      "expires": 1756268927,
+      "expires": 1756349306,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Lax"
@@ -87,7 +87,7 @@
       "localStorage": [
         {
           "name": "awswaf_token_refresh_timestamp",
-          "value": "1755923324250"
+          "value": "1756003703222"
         },
         {
           "name": "last-group",
@@ -95,7 +95,7 @@
         },
         {
           "name": "awswaf_session_storage",
-          "value": "ef6d6946-8956-4989-b745-dd2f8026bbcc:FAoAkzcfKCclAAAA:a+21hZjP3jDS2UY3daXGdDRn/1d6mM512cUF3KINNqqZBkiKVSouLpba1kTejvqAgeLlARH9Isi4e2cvxYiCgYGtBwY/Pb+OeG/xig11B0ruZIaz+IuA4Q1Avq4wgvjEh4Fw631d/BrVIIQ8ecYIASfQJTiFcS83TzkayFqTzZNIGUxDdE4MysHVc9cYE8eS72u1jDQdf8Qvv7octZSV1V0p+O/cJaqrGaGQwRp+vxL8f2rL0R9HyJolHzPoCTekHb7CBowZTDU3O6z0gFMgqYUCKjPyA43Zk4JhSAjpCkhHMF6s+xdni8l4H7OUErnsCOVlguJCyoaGxOWRLExxlp0Wc9WR+WWDRpQ0japcLIrrygQszWSCzDLX63BmPFa7SyjaKLaH1w37fLS9ZEW8HkVB/Os4Ugi4rD6pDLGaAMMU9uBpmvlQrig2noUZqms1as5vbo0GLlU5IugHqM9oZ6FxcC/msmxMRMXvoUuClD4g+ZEKU7MtvFsHrm3WequkPQ=="
+          "value": "b2f43fd9-2679-4ea9-8b26-b6d5ba7f8457:FAoAaHcTtJABAAAA:TNIOKSKkITdoGWpdxoxn3ekFdY2qjGIyJs6WdT8BmynFcn+tj5tdTlPstk7tqBGlA8x9OMBtL7PZRIpg1ZVjhvK3oxLBtsoKfHaJvt1J6MktUsG4iDNqz6hzN59TGuJ/UPSkSIfctLI2IEe1RfrCBgeajEIAdnfkdOaznEiKeUa8YutVo8SGf9vG6z3JZUEQPxdI/RLTgFXMOYCE0T1EuN4VhzPTcBA/cqMJsWFQmoWmwUWZHVOXHz2SH13XTDM5wnOXLGtKiLRXK40ltktR47g3p2Nq2knZkpLKlNbq7YAHmuJJA+On465cv2zDrp9ABqTvOd5pAsZmjy5QvzAHpYtZXGX8HHAzhYn+nETDjZAd618tA1FhBnm11LcJVZcNI5KpgA3NelHA6LSp9HHJcBKv86NqAhfB+xuWRWp4Zm2EeTo8Ev3V+HCt8rBai+m3lMI7+kJWnS/sq5kV/qMnTFXY7PigFojLPXIoPPxZFdPM56gBhnhLt5rrOEcpEU6vPA=="
         },
         {
           "name": "se",

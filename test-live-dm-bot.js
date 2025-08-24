@@ -919,9 +919,11 @@ class LiveDMBot {
           userId: null
         };
         
-        // Try to find the real name - look for heading elements
+        // Try to find the real name using tagged selectors
         const nameSelectors = [
-          'h1', 'h2', 'h3', // Main headings
+          // REAL selectors from Playwright tagging session
+          'h1', 'h2', 'h3', // Main headings first
+          '.styled__UserHandle-sc-1gipnml-6', // Skool ID selector (tagged)
           '[class*="name"]', '[class*="Name"]', // Name classes
           '[class*="title"]', '[class*="Title"]', // Title classes
           '[class*="header"]', '[class*="Header"]', // Header classes
@@ -952,8 +954,11 @@ class LiveDMBot {
           }
         }
         
-        // Try to find bio/description
+        // Try to find bio/description using tagged selectors
         const bioSelectors = [
+          // REAL selectors from Playwright tagging session
+          '.styled__Bio-sc-1gipnml-9', // Bio selector (tagged)
+          '.hGQpgW', // Alternative bio selector (tagged)
           '[class*="bio"]', '[class*="Bio"]',
           '[class*="description"]', '[class*="Description"]',
           '[class*="about"]', '[class*="About"]',
