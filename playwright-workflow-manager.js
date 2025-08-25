@@ -630,81 +630,93 @@ class SkoolWorkflowManager {
                 console.log(`📝 Typed: "${step.text}"`);
               }
             } else if (step.type === 'keypress') {
-              // FIXED: Press ENTER key in the CORRECT message textarea
-              console.log(`⌨️ Attempting to send message with ENTER key in message textarea...`);
+              // ALTERNATIVE APPROACH: Try multiple methods to send message
+              console.log(`⌨️ ATTEMPTING MESSAGE SEND - Multiple Methods...`);
               
-              // Method 1: Find the SPECIFIC message textarea (not search bar!)
-              const messageTextarea = document.querySelector('textarea[placeholder*="Message"], textarea[data-testid="input-component"], .styled__MultiLineInput-sc-1saiqqb-2');
-              if (messageTextarea) {
-                console.log(`🎯 Found message textarea:`, messageTextarea);
-                console.log(`📝 Textarea placeholder: "${messageTextarea.placeholder}"`);
-                console.log(`📝 Textarea value: "${messageTextarea.value}"`);
-                
-                // Ensure it's focused and has the message
-                messageTextarea.focus();
-                messageTextarea.click(); // Ensure it's active
-                
-                // Wait a moment for focus
-                await new Promise(resolve => setTimeout(resolve, 100));
-                
-                // Create multiple ENTER key events for reliability
-                const events = [
-                  new KeyboardEvent('keydown', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    keyCode: 13,
-                    which: 13,
-                    bubbles: true,
-                    cancelable: true,
-                    composed: true
-                  }),
-                  new KeyboardEvent('keypress', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    keyCode: 13,
-                    which: 13,
-                    bubbles: true,
-                    cancelable: true,
-                    composed: true
-                  }),
-                  new KeyboardEvent('keyup', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    keyCode: 13,
-                    which: 13,
-                    bubbles: true,
-                    cancelable: true,
-                    composed: true
-                  })
-                ];
-                
-                // Dispatch all events
-                for (const event of events) {
-                  const result = messageTextarea.dispatchEvent(event);
-                  console.log(`⌨️ ${event.type} dispatched, result:`, result);
+              // Method 1: Find and focus the message textarea specifically
+              const messageSelectors = [
+                'textarea[data-testid="input-component"]',
+                'textarea[placeholder*="Message"]',
+                '.styled__MultiLineInput-sc-1saiqqb-2',
+                '.styled__ChatTextArea-sc-1w0nbeu-4 textarea',
+                'textarea:not([aria-hidden="true"])'
+              ];
+              
+              let messageTextarea = null;
+              for (const selector of messageSelectors) {
+                messageTextarea = document.querySelector(selector);
+                if (messageTextarea && !messageTextarea.hasAttribute('aria-hidden')) {
+                  console.log(`🎯 Found message textarea with: ${selector}`);
+                  break;
                 }
-                
-                // Also try triggering input/change events
-                messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-                messageTextarea.dispatchEvent(new Event('change', { bubbles: true }));
-                
-                console.log(`✅ ENTER key sequence sent to message textarea`);
-              } else {
-                console.error(`❌ Message textarea not found!`);
-                
-                // Fallback: List all textareas to debug
-                const allTextareas = document.querySelectorAll('textarea');
-                console.log(`🔍 Found ${allTextareas.length} textareas on page:`);
-                allTextareas.forEach((ta, i) => {
-                  console.log(`  ${i + 1}. Placeholder: "${ta.placeholder}", Value: "${ta.value}", Classes: "${ta.className}"`);
-                });
               }
               
-              // Method 2: Try form submission as backup
-              const chatForm = document.querySelector('form, .styled__ChatTextArea-sc-1w0nbeu-4');
-              if (chatForm) {
-                console.log(`📝 Found chat form, attempting submission...`);
-                chatForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+              if (messageTextarea) {
+                console.log(`📝 Textarea details:`);
+                console.log(`  Placeholder: "${messageTextarea.placeholder}"`);
+                console.log(`  Value: "${messageTextarea.value}"`);
+                console.log(`  Classes: "${messageTextarea.className}"`);
+                
+                // Method A: Try React-style event triggering
+                console.log(`🔥 Method A: React-style events...`);
+                messageTextarea.focus();
+                messageTextarea.click();
+                
+                // Wait for focus
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // Create React-compatible events
+                const enterKeyEvent = new KeyboardEvent('keydown', {
+                  key: 'Enter',
+                  code: 'Enter',
+                  keyCode: 13,
+                  which: 13,
+                  bubbles: true,
+                  cancelable: true,
+                  composed: true,
+                  view: window
+                });
+                
+                // Set React fiber properties if they exist
+                if (messageTextarea._reactInternalFiber || messageTextarea._reactInternalInstance) {
+                  console.log(`🔧 React fiber detected, using React events...`);
+                }
+                
+                const sent = messageTextarea.dispatchEvent(enterKeyEvent);
+                console.log(`⌨️ React ENTER event result: ${sent}`);
+                
+                // Method B: Try simulating actual typing
+                console.log(`🔥 Method B: Simulate typing ENTER...`);
+                const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+                messageTextarea.dispatchEvent(inputEvent);
+                
+                // Method C: Try form submission
+                console.log(`🔥 Method C: Form submission...`);
+                const form = messageTextarea.closest('form');
+                if (form) {
+                  form.dispatchEvent(new Event('submit', { bubbles: true }));
+                  console.log(`📤 Form submit attempted`);
+                }
+                
+                // Method D: Look for and click send button
+                console.log(`🔥 Method D: Send button click...`);
+                const sendButton = document.querySelector('button[type="submit"], button[aria-label*="send"], button[title*="Send"]');
+                if (sendButton) {
+                  sendButton.click();
+                  console.log(`📤 Send button clicked`);
+                } else {
+                  console.log(`❌ No send button found`);
+                }
+                
+              } else {
+                console.error(`❌ NO MESSAGE TEXTAREA FOUND!`);
+                
+                // Debug: List all textareas
+                const allTextareas = document.querySelectorAll('textarea');
+                console.log(`🔍 All textareas on page (${allTextareas.length}):`);
+                allTextareas.forEach((ta, i) => {
+                  console.log(`  ${i + 1}. "${ta.placeholder}" | Value: "${ta.value}" | Hidden: ${ta.hasAttribute('aria-hidden')}`);
+                });
               }
             } else if (step.type === 'close') {
               // Close chat window - find the X button specifically
@@ -776,9 +788,11 @@ class SkoolWorkflowManager {
                   console.error(`❌ Profile link not found in chat header`);
                 }
               } else if (step.target === 'profile-details') {
-                // AGGRESSIVE profile extraction with forced continuation
-                console.log(`🔍 Starting AGGRESSIVE profile data extraction...`);
-                console.log(`📍 Extracting from URL: ${window.location.href}`);
+                // SUPER AGGRESSIVE profile extraction with MAXIMUM logging
+                console.log(`🔍 ========== PROFILE EXTRACTION START ==========`);
+                console.log(`📍 URL: ${window.location.href}`);
+                console.log(`📊 Page Title: ${document.title}`);
+                console.log(`🔢 Total Elements: ${document.querySelectorAll('*').length}`);
                 
                 const profileData = {
                   name: 'Unknown',
@@ -788,9 +802,14 @@ class SkoolWorkflowManager {
                   location: ''
                 };
                 
-                // FORCE extraction even if elements aren't perfect
-                let extractionAttempts = 0;
-                const maxExtractionAttempts = 3;
+                // IMMEDIATE URL extraction - ALWAYS works
+                const urlMatch = window.location.href.match(/\/@([^\/\?]+)/);
+                if (urlMatch) {
+                  profileData.skoolId = urlMatch[1];
+                  console.log(`✅ IMMEDIATE Skool ID: ${profileData.skoolId}`);
+                } else {
+                  console.log(`❌ Could not extract Skool ID from URL!`);
+                }
                 
                 // Extract name - try multiple selectors
                 const nameSelectors = [
@@ -950,13 +969,17 @@ class SkoolWorkflowManager {
                   console.error(`❌ No profile URL to navigate to`);
                 }
               } else if (step.target === 'back-to-chat') {
-                // Navigate back to chat
+                // Navigate back to chat - ENHANCED with fallback
+                console.log(`🧭 ========== NAVIGATION BACK TO CHAT ==========`);
                 const chatUrl = window.currentChatUrl || getWorkflowData('currentChatUrl');
+                console.log(`🔗 Stored chat URL: ${chatUrl}`);
+                
                 if (chatUrl) {
                   // Save state before navigation
                   saveWorkflowState(currentStepIndex + 1, 'running', {
                     navigatingTo: 'chat',
-                    targetUrl: chatUrl
+                    targetUrl: chatUrl,
+                    fromProfile: true
                   });
                   
                   console.log(`🧭 Navigating back to chat: ${chatUrl}`);
@@ -967,8 +990,26 @@ class SkoolWorkflowManager {
                   window.location.href = chatUrl;
                   return; // Exit workflow execution as page will reload
                 } else {
-                  console.error(`❌ No chat URL to navigate back to`);
+                  console.error(`❌ No chat URL stored! Using fallback navigation...`);
+                  
+                  // FALLBACK: Go directly to close chat step by skipping back to chat
+                  console.log(`🔄 SKIPPING back-to-chat, jumping to close-chat step...`);
+                  currentStepIndex = window.botWorkflow.findIndex(s => s.target === 'return-monitoring') - 1;
+                  if (currentStepIndex < 0) currentStepIndex = window.botWorkflow.length - 3; // Go near end
+                  console.log(`⏭️ Jumping to step ${currentStepIndex + 1}`);
                 }
+              } else if (step.target === 'return-monitoring') {
+                // Enhanced return to monitoring with forced navigation
+                console.log(`🏠 ========== RETURNING TO MONITORING ==========`);
+                const monitoringUrl = 'https://www.skool.com/@my-ultra-coach-6588';
+                
+                // Clear workflow state since we're completing the cycle
+                console.log(`🗑️ Clearing workflow state - cycle complete`);
+                clearWorkflowState();
+                
+                console.log(`🧭 Navigating to monitoring URL: ${monitoringUrl}`);
+                window.location.href = monitoringUrl;
+                return; // Exit workflow execution as page will reload
               } else if (step.selector && step.selector.startsWith('https://')) {
                 // Navigate to specific URL
                 saveWorkflowState(currentStepIndex + 1, 'running', {
@@ -1000,6 +1041,9 @@ class SkoolWorkflowManager {
             
             step.status = 'completed';
             renderWorkflow();
+            
+            console.log(`✅ STEP ${currentStepIndex + 1} COMPLETED: ${step.description}`);
+            console.log(`➡️ Moving to step ${currentStepIndex + 2}...`);
             
             // Move to next step
             currentStepIndex++;
