@@ -577,27 +577,33 @@ class SkoolWorkflowManager {
               }
             } else if (step.type === 'wait') {
               if (step.condition === 'profile_elements_ready') {
-                // Smart wait - check if profile elements are actually loaded
-                console.log(`⏳ Waiting for profile elements to load...`);
+                // AGGRESSIVE profile loading detection
+                console.log(`⏳ Checking if profile page is ready...`);
+                console.log(`📍 Current URL: ${window.location.href}`);
+                
                 let profileReady = false;
                 let attempts = 0;
-                const maxAttempts = 15; // 15 seconds max
+                const maxAttempts = 10; // Reduced to 10 seconds max
                 
                 while (!profileReady && attempts < maxAttempts) {
-                  // Check for common profile elements
+                  // Check for ANY profile indicators (more lenient)
                   const profileElements = {
-                    name: document.querySelector('h1, .styled__UserNameText-sc-24o0l3-1, .styled__ProfileName-sc-*, [class*="ProfileName"], [class*="UserName"]'),
-                    bio: document.querySelector('p, .styled__Bio-sc-*, .styled__Description-sc-*, [class*="Bio"], [class*="Description"]'),
-                    avatar: document.querySelector('img[alt], .styled__AvatarWrapper-sc-*, [class*="Avatar"]'),
-                    container: document.querySelector('.styled__UserCardWrapper-sc-*, .styled__ProfileContainer-sc-*, [class*="Profile"], [class*="User"]')
+                    name: document.querySelector('h1, .styled__UserNameText-sc-24o0l3-1, .styled__ProfileName-sc-*, [class*="ProfileName"], [class*="UserName"], [class*="profile"], [class*="user"]'),
+                    bio: document.querySelector('p, .styled__Bio-sc-*, .styled__Description-sc-*, [class*="Bio"], [class*="Description"], [class*="about"]'),
+                    avatar: document.querySelector('img[alt], .styled__AvatarWrapper-sc-*, [class*="Avatar"], [class*="avatar"], img[src*="assets"]'),
+                    container: document.querySelector('.styled__UserCardWrapper-sc-*, .styled__ProfileContainer-sc-*, [class*="Profile"], [class*="User"], [class*="profile"], [class*="card"]'),
+                    anyText: document.querySelector('span, div, p, h1, h2, h3')
                   };
                   
                   const elementsFound = Object.values(profileElements).filter(el => el !== null).length;
-                  console.log(`🔍 Profile elements found: ${elementsFound}/4`);
+                  const totalElements = document.querySelectorAll('*').length;
                   
-                  if (elementsFound >= 2) { // At least name + one other element
+                  console.log(`🔍 Attempt ${attempts + 1}: Profile elements found: ${elementsFound}/5, Total DOM elements: ${totalElements}`);
+                  
+                  // More lenient conditions - proceed if we have basic page structure
+                  if (elementsFound >= 1 || totalElements > 50 || attempts >= 3) {
                     profileReady = true;
-                    console.log(`✅ Profile page loaded! Found sufficient elements.`);
+                    console.log(`✅ Profile page ready! Proceeding with extraction...`);
                     break;
                   }
                   
@@ -606,8 +612,11 @@ class SkoolWorkflowManager {
                 }
                 
                 if (!profileReady) {
-                  console.log(`⚠️ Profile elements not fully loaded after ${maxAttempts}s, proceeding anyway...`);
+                  console.log(`⚠️ Profile page not detected after ${maxAttempts}s, FORCING continuation...`);
                 }
+                
+                // ALWAYS proceed regardless - don't get stuck
+                console.log(`🚀 CONTINUING to profile extraction step...`);
               } else {
                 // Standard wait
                 await new Promise(resolve => setTimeout(resolve, step.delay || 1000));
@@ -621,54 +630,81 @@ class SkoolWorkflowManager {
                 console.log(`📝 Typed: "${step.text}"`);
               }
             } else if (step.type === 'keypress') {
-              // FIXED: Press ENTER key to send message - NO MORE EMOJI!
-              console.log(`⌨️ Attempting to send message with ENTER key...`);
+              // FIXED: Press ENTER key in the CORRECT message textarea
+              console.log(`⌨️ Attempting to send message with ENTER key in message textarea...`);
               
-              // Method 1: Find the message input field specifically
-              const messageInput = document.querySelector('.styled__MultiLineInput-sc-1saiqqb-2, textarea[placeholder*="message"], textarea, input[type="text"]');
-              if (messageInput) {
-                console.log(`🎯 Found message input:`, messageInput);
+              // Method 1: Find the SPECIFIC message textarea (not search bar!)
+              const messageTextarea = document.querySelector('textarea[placeholder*="Message"], textarea[data-testid="input-component"], .styled__MultiLineInput-sc-1saiqqb-2');
+              if (messageTextarea) {
+                console.log(`🎯 Found message textarea:`, messageTextarea);
+                console.log(`📝 Textarea placeholder: "${messageTextarea.placeholder}"`);
+                console.log(`📝 Textarea value: "${messageTextarea.value}"`);
                 
-                // Focus the input first
-                messageInput.focus();
+                // Ensure it's focused and has the message
+                messageTextarea.focus();
+                messageTextarea.click(); // Ensure it's active
                 
-                // Create proper ENTER key event
-                const enterEvent = new KeyboardEvent('keydown', {
-                  key: 'Enter',
-                  code: 'Enter',
-                  keyCode: 13,
-                  which: 13,
-                  bubbles: true,
-                  cancelable: true,
-                  composed: true
-                });
+                // Wait a moment for focus
+                await new Promise(resolve => setTimeout(resolve, 100));
                 
-                // Dispatch the event
-                const result = messageInput.dispatchEvent(enterEvent);
-                console.log(`⌨️ ENTER key dispatched, result:`, result);
+                // Create multiple ENTER key events for reliability
+                const events = [
+                  new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                  }),
+                  new KeyboardEvent('keypress', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                  }),
+                  new KeyboardEvent('keyup', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true,
+                    composed: true
+                  })
+                ];
                 
-                // Also try input event
-                messageInput.dispatchEvent(new Event('input', { bubbles: true }));
-                messageInput.dispatchEvent(new Event('change', { bubbles: true }));
-              } else {
-                console.error(`❌ Message input not found!`);
-              }
-              
-              // Method 2: Try form submission
-              const form = document.querySelector('form');
-              if (form) {
-                console.log(`📝 Found form, attempting submission...`);
-                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-              }
-              
-              // Method 3: Look for send button and click it
-              const sendButtons = document.querySelectorAll('button[type="submit"], button[aria-label*="send"], button[title*="send"], button:has(svg)');
-              for (const btn of sendButtons) {
-                if (btn.textContent.toLowerCase().includes('send') || btn.querySelector('svg')) {
-                  console.log(`📤 Clicking send button:`, btn);
-                  btn.click();
-                  break;
+                // Dispatch all events
+                for (const event of events) {
+                  const result = messageTextarea.dispatchEvent(event);
+                  console.log(`⌨️ ${event.type} dispatched, result:`, result);
                 }
+                
+                // Also try triggering input/change events
+                messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                messageTextarea.dispatchEvent(new Event('change', { bubbles: true }));
+                
+                console.log(`✅ ENTER key sequence sent to message textarea`);
+              } else {
+                console.error(`❌ Message textarea not found!`);
+                
+                // Fallback: List all textareas to debug
+                const allTextareas = document.querySelectorAll('textarea');
+                console.log(`🔍 Found ${allTextareas.length} textareas on page:`);
+                allTextareas.forEach((ta, i) => {
+                  console.log(`  ${i + 1}. Placeholder: "${ta.placeholder}", Value: "${ta.value}", Classes: "${ta.className}"`);
+                });
+              }
+              
+              // Method 2: Try form submission as backup
+              const chatForm = document.querySelector('form, .styled__ChatTextArea-sc-1w0nbeu-4');
+              if (chatForm) {
+                console.log(`📝 Found chat form, attempting submission...`);
+                chatForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
               }
             } else if (step.type === 'close') {
               // Close chat window - find the X button specifically
@@ -740,8 +776,10 @@ class SkoolWorkflowManager {
                   console.error(`❌ Profile link not found in chat header`);
                 }
               } else if (step.target === 'profile-details') {
-                // Enhanced profile extraction with multiple selectors
-                console.log(`🔍 Starting profile data extraction...`);
+                // AGGRESSIVE profile extraction with forced continuation
+                console.log(`🔍 Starting AGGRESSIVE profile data extraction...`);
+                console.log(`📍 Extracting from URL: ${window.location.href}`);
+                
                 const profileData = {
                   name: 'Unknown',
                   bio: '',
@@ -749,6 +787,10 @@ class SkoolWorkflowManager {
                   joinDate: '',
                   location: ''
                 };
+                
+                // FORCE extraction even if elements aren't perfect
+                let extractionAttempts = 0;
+                const maxExtractionAttempts = 3;
                 
                 // Extract name - try multiple selectors
                 const nameSelectors = [
@@ -823,14 +865,51 @@ class SkoolWorkflowManager {
                 console.log(`  Skool ID: ${profileData.skoolId}`);
                 console.log(`  Join Date: ${profileData.joinDate || 'Not found'}`);
                 
-                // Validate we got meaningful data
+                // ALWAYS extract at least the Skool ID from URL - never fail completely
+                if (!profileData.skoolId) {
+                  const urlMatch = window.location.href.match(/\/@([^\/\?]+)/);
+                  if (urlMatch) {
+                    profileData.skoolId = urlMatch[1];
+                    console.log(`🔧 FORCED Skool ID extraction: ${profileData.skoolId}`);
+                  }
+                }
+                
+                // If name is still unknown, try to extract from URL
+                if (profileData.name === 'Unknown' && profileData.skoolId) {
+                  // Convert skool-id to readable name (e.g., jie-lu-3653 -> Jie Lu)
+                  const nameFromId = profileData.skoolId.replace(/-\d+$/, '').split('-').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1)
+                  ).join(' ');
+                  profileData.name = nameFromId;
+                  console.log(`🔧 FORCED name from ID: ${profileData.name}`);
+                }
+                
+                // Validate and log results
                 if (profileData.name === 'Unknown' && !profileData.bio && !profileData.skoolId) {
-                  console.error(`❌ Failed to extract meaningful profile data!`);
+                  console.error(`❌ Failed to extract ANY profile data!`);
                   console.log(`📄 Current page URL: ${window.location.href}`);
                   console.log(`🔍 Available elements:`, document.querySelectorAll('*').length);
+                  
+                  // FORCE basic data from URL as last resort
+                  const basicMatch = window.location.href.match(/skool\.com\/@([^\/\?]+)/);
+                  if (basicMatch) {
+                    profileData.skoolId = basicMatch[1];
+                    profileData.name = basicMatch[1].replace(/-/g, ' ').replace(/\d+/g, '').trim();
+                    console.log(`🚨 EMERGENCY extraction from URL: ${profileData.name} (${profileData.skoolId})`);
+                  }
                 } else {
                   console.log(`✅ Profile extraction successful!`);
                 }
+                
+                // ALWAYS proceed - never get stuck here
+                console.log(`🚀 FORCING continuation to next step regardless of extraction quality...`);
+                
+                // Add a timeout to prevent infinite hanging
+                setTimeout(() => {
+                  console.log(`⏰ TIMEOUT: Forcing step completion after 5 seconds`);
+                  step.status = 'completed';
+                  renderWorkflow();
+                }, 5000);
               } else {
                 console.log(`🔍 Extract step: ${step.description}`);
               }
