@@ -128,7 +128,7 @@ class SkoolWorkflowManager {
         { id: 8, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 2000, status: 'pending' },
         { id: 9, type: 'extract', target: 'profile-link', description: 'Extract user profile link from chat header', selector: '.styled__ChatModalHeader-sc-f4viec-2 a[href*="/@"]', status: 'pending' },
         { id: 10, type: 'navigate', target: 'user-profile', description: 'Navigate to user profile page', selector: 'extracted-profile-url', status: 'pending' },
-        { id: 11, type: 'wait', target: 'profile-loaded', description: 'Wait for profile page to load', delay: 3000, status: 'pending' },
+        { id: 11, type: 'wait', target: 'profile-loaded', description: 'Wait for profile page to load completely', delay: 2000, condition: 'profile_elements_ready', status: 'pending' },
         { id: 12, type: 'extract', target: 'profile-details', description: 'Extract user name, bio, and details from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15, .styled__ProfileContainer-sc-*', status: 'pending' },
         { id: 13, type: 'save', target: 'user-database', description: 'Save extracted user data to database', condition: 'profile_data_extracted', status: 'pending' },
         { id: 14, type: 'navigate', target: 'back-to-chat', description: 'Navigate back to chat window', selector: 'previous-chat-url', status: 'pending' },
@@ -391,16 +391,31 @@ class SkoolWorkflowManager {
         if (workflowState && workflowState.status === 'running') {
           currentStepIndex = workflowState.currentStep;
           console.log(`🔄 RESUMING workflow from step ${currentStepIndex + 1}`);
+          console.log(`📍 Previous URL: ${workflowState.url}`);
+          console.log(`📍 Current URL: ${window.location.href}`);
+          
+          // Show resuming indicator in UI
+          const panel = document.getElementById('workflow-manager');
+          if (panel) {
+            const header = panel.querySelector('#panel-header h3');
+            if (header) {
+              header.textContent = `🔄 Bot Workflow Manager (RESUMING Step ${currentStepIndex + 1})`;
+              header.style.color = '#ffc107'; // Yellow to indicate resuming
+            }
+          }
           
           // Restore any saved data
           if (workflowData.extractedProfileUrl) {
             window.extractedProfileUrl = workflowData.extractedProfileUrl;
+            console.log(`📂 Restored profile URL: ${workflowData.extractedProfileUrl}`);
           }
           if (workflowData.currentChatUrl) {
             window.currentChatUrl = workflowData.currentChatUrl;
+            console.log(`📂 Restored chat URL: ${workflowData.currentChatUrl}`);
           }
           if (workflowData.extractedProfileData) {
             window.extractedProfileData = workflowData.extractedProfileData;
+            console.log(`📂 Restored profile data:`, workflowData.extractedProfileData);
           }
           if (workflowData.targetUnreadConversation) {
             // Can't restore DOM element, but we can log it
@@ -409,6 +424,16 @@ class SkoolWorkflowManager {
         } else {
           console.log('🆕 Starting fresh workflow...');
           clearWorkflowState(); // Clean slate
+          
+          // Reset UI header
+          const panel = document.getElementById('workflow-manager');
+          if (panel) {
+            const header = panel.querySelector('#panel-header h3');
+            if (header) {
+              header.textContent = '🤖 Bot Workflow Manager';
+              header.style.color = 'white';
+            }
+          }
         }
         
         while (currentStepIndex < window.botWorkflow.length) {
@@ -551,8 +576,43 @@ class SkoolWorkflowManager {
                 }
               }
             } else if (step.type === 'wait') {
-              await new Promise(resolve => setTimeout(resolve, step.delay || 1000));
-              console.log(`⏱️ Waited: ${step.delay}ms`);
+              if (step.condition === 'profile_elements_ready') {
+                // Smart wait - check if profile elements are actually loaded
+                console.log(`⏳ Waiting for profile elements to load...`);
+                let profileReady = false;
+                let attempts = 0;
+                const maxAttempts = 15; // 15 seconds max
+                
+                while (!profileReady && attempts < maxAttempts) {
+                  // Check for common profile elements
+                  const profileElements = {
+                    name: document.querySelector('h1, .styled__UserNameText-sc-24o0l3-1, .styled__ProfileName-sc-*, [class*="ProfileName"], [class*="UserName"]'),
+                    bio: document.querySelector('p, .styled__Bio-sc-*, .styled__Description-sc-*, [class*="Bio"], [class*="Description"]'),
+                    avatar: document.querySelector('img[alt], .styled__AvatarWrapper-sc-*, [class*="Avatar"]'),
+                    container: document.querySelector('.styled__UserCardWrapper-sc-*, .styled__ProfileContainer-sc-*, [class*="Profile"], [class*="User"]')
+                  };
+                  
+                  const elementsFound = Object.values(profileElements).filter(el => el !== null).length;
+                  console.log(`🔍 Profile elements found: ${elementsFound}/4`);
+                  
+                  if (elementsFound >= 2) { // At least name + one other element
+                    profileReady = true;
+                    console.log(`✅ Profile page loaded! Found sufficient elements.`);
+                    break;
+                  }
+                  
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  attempts++;
+                }
+                
+                if (!profileReady) {
+                  console.log(`⚠️ Profile elements not fully loaded after ${maxAttempts}s, proceeding anyway...`);
+                }
+              } else {
+                // Standard wait
+                await new Promise(resolve => setTimeout(resolve, step.delay || 1000));
+                console.log(`⏱️ Waited: ${step.delay}ms`);
+              }
             } else if (step.type === 'type' && step.text) {
               const element = document.querySelector(step.selector);
               if (element) {
@@ -680,7 +740,8 @@ class SkoolWorkflowManager {
                   console.error(`❌ Profile link not found in chat header`);
                 }
               } else if (step.target === 'profile-details') {
-                // Extract user details from profile page
+                // Enhanced profile extraction with multiple selectors
+                console.log(`🔍 Starting profile data extraction...`);
                 const profileData = {
                   name: 'Unknown',
                   bio: '',
@@ -689,31 +750,87 @@ class SkoolWorkflowManager {
                   location: ''
                 };
                 
-                // Extract name
-                const nameElements = document.querySelectorAll('h1, .styled__UserNameText-sc-24o0l3-1, .styled__ProfileName-sc-*');
-                if (nameElements.length > 0) {
-                  profileData.name = nameElements[0].textContent.trim();
-                }
+                // Extract name - try multiple selectors
+                const nameSelectors = [
+                  'h1', 
+                  '.styled__UserNameText-sc-24o0l3-1', 
+                  '.styled__ProfileName-sc-*',
+                  '[class*="ProfileName"]',
+                  '[class*="UserName"]',
+                  '[data-testid*="name"]',
+                  '.profile-name',
+                  '.user-name'
+                ];
                 
-                // Extract bio
-                const bioElements = document.querySelectorAll('.styled__Bio-sc-*, .styled__Description-sc-*, p');
-                for (const bio of bioElements) {
-                  if (bio.textContent.length > 20) {
-                    profileData.bio = bio.textContent.trim();
+                for (const selector of nameSelectors) {
+                  const nameEl = document.querySelector(selector);
+                  if (nameEl && nameEl.textContent.trim().length > 0) {
+                    profileData.name = nameEl.textContent.trim();
+                    console.log(`✅ Found name: "${profileData.name}" using selector: ${selector}`);
                     break;
                   }
+                }
+                
+                // Extract bio - try multiple selectors and filter meaningful content
+                const bioSelectors = [
+                  '.styled__Bio-sc-*', 
+                  '.styled__Description-sc-*', 
+                  '[class*="Bio"]',
+                  '[class*="Description"]',
+                  '[class*="About"]',
+                  'p',
+                  '.profile-bio',
+                  '.user-bio'
+                ];
+                
+                for (const selector of bioSelectors) {
+                  const bioElements = document.querySelectorAll(selector);
+                  for (const bio of bioElements) {
+                    const text = bio.textContent.trim();
+                    if (text.length > 20 && !text.includes('joined') && !text.includes('ago') && !text.includes('posts')) {
+                      profileData.bio = text;
+                      console.log(`✅ Found bio: "${text.substring(0, 50)}..." using selector: ${selector}`);
+                      break;
+                    }
+                  }
+                  if (profileData.bio) break;
                 }
                 
                 // Extract Skool ID from URL
                 const urlMatch = window.location.href.match(/\/@([^\/\?]+)/);
                 if (urlMatch) {
                   profileData.skoolId = urlMatch[1];
+                  console.log(`✅ Extracted Skool ID: ${profileData.skoolId}`);
+                }
+                
+                // Additional data extraction attempts
+                const joinElements = document.querySelectorAll('*');
+                for (const el of joinElements) {
+                  const text = el.textContent;
+                  if (text && text.includes('joined') && text.length < 50) {
+                    profileData.joinDate = text.trim();
+                    break;
+                  }
                 }
                 
                 // Save to both window and persistent storage
                 window.extractedProfileData = profileData;
                 setWorkflowData('extractedProfileData', profileData);
-                console.log(`👤 Extracted & saved profile data:`, profileData);
+                
+                console.log(`👤 COMPLETE PROFILE DATA EXTRACTED:`);
+                console.log(`  Name: ${profileData.name}`);
+                console.log(`  Bio: ${profileData.bio ? profileData.bio.substring(0, 100) + '...' : 'Not found'}`);
+                console.log(`  Skool ID: ${profileData.skoolId}`);
+                console.log(`  Join Date: ${profileData.joinDate || 'Not found'}`);
+                
+                // Validate we got meaningful data
+                if (profileData.name === 'Unknown' && !profileData.bio && !profileData.skoolId) {
+                  console.error(`❌ Failed to extract meaningful profile data!`);
+                  console.log(`📄 Current page URL: ${window.location.href}`);
+                  console.log(`🔍 Available elements:`, document.querySelectorAll('*').length);
+                } else {
+                  console.log(`✅ Profile extraction successful!`);
+                }
               } else {
                 console.log(`🔍 Extract step: ${step.description}`);
               }
@@ -1352,20 +1469,39 @@ class SkoolWorkflowManager {
         if (shouldResume === 'true') {
           localStorage.removeItem('auto-resume-workflow');
           console.log('🔄 Auto-resuming workflow after page navigation...');
+          console.log(`📍 Current URL: ${window.location.href}`);
           
-          // Wait a bit for page to fully load, then resume
-          setTimeout(() => {
+          // Check if we have workflow state to resume
+          const savedState = localStorage.getItem('skool-bot-workflow-state');
+          if (savedState) {
+            const state = JSON.parse(savedState);
+            console.log(`📋 Resuming from step ${state.currentStep + 1}: ${window.botWorkflow[state.currentStep]?.description || 'Unknown'}`);
+          }
+          
+          // Wait for page to fully load, then resume with retries
+          let resumeAttempts = 0;
+          const maxResumeAttempts = 5;
+          
+          function attemptResume() {
+            resumeAttempts++;
+            console.log(`🔄 Resume attempt ${resumeAttempts}/${maxResumeAttempts}...`);
+            
             if (typeof window.runWorkflow === 'function') {
+              console.log('✅ Workflow function found, resuming...');
               window.runWorkflow();
+            } else if (resumeAttempts < maxResumeAttempts) {
+              console.log('⚠️ Workflow function not ready, retrying in 2s...');
+              setTimeout(attemptResume, 2000);
             } else {
-              console.log('⚠️ Workflow function not ready, retrying...');
-              setTimeout(() => {
-                if (typeof window.runWorkflow === 'function') {
-                  window.runWorkflow();
-                }
-              }, 2000);
+              console.error('❌ Failed to resume workflow - function not available after multiple attempts');
+              // Clear the state to prevent infinite loops
+              localStorage.removeItem('skool-bot-workflow-state');
+              localStorage.removeItem('skool-bot-workflow-data');
             }
-          }, 3000); // Wait 3 seconds for page to fully load
+          }
+          
+          // Initial delay to let page settle
+          setTimeout(attemptResume, 2000);
         }
       }
       
