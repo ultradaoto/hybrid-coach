@@ -95,9 +95,9 @@ class SkoolWorkflowManager {
       // Global state
       window.markedElements = {};
       window.botWorkflow = [
-        { id: 1, type: 'monitor', target: 'blue-radio-polling', description: 'Monitor for blue unread indicators (poll every 10s)', selector: '.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ', condition: 'wait_for_blue', status: 'pending', polling: true, interval: 10000 },
-        { id: 2, type: 'find', target: 'blue-radio-unread', description: 'Find conversation with blue unread indicator', selector: '.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ', condition: 'first_blue_unread', status: 'pending' },
-        { id: 3, type: 'click', target: 'conversation-preview', description: 'Click preview text of conversation with blue indicator', selector: '.styled__MessageContent-sc-5xhq84-9', dynamic: true, status: 'pending' },
+        { id: 1, type: 'monitor', target: 'unread-badge-polling', description: 'Monitor for unread count badges like "(1)" (poll every 10s)', selector: '.styled__UnreadCount-sc-5xhq84-7', condition: 'wait_for_unread_badge', status: 'pending', polling: true, interval: 10000 },
+        { id: 2, type: 'find', target: 'unread-conversation', description: 'Find conversation with unread count badge (e.g., Jie Lu with "(1)")', selector: '.styled__NotificationRow-sc-5xhq84-2', condition: 'first_blue_unread', status: 'pending' },
+        { id: 3, type: 'click', target: 'conversation-preview', description: 'Click the UNREAD conversation (not Sterling - the one with badge)', selector: 'stored-target', dynamic: true, status: 'pending' },
         { id: 4, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 2000, status: 'pending' },
         { id: 5, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
         { id: 6, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
@@ -331,54 +331,40 @@ class SkoolWorkflowManager {
           
           try {
             if (step.type === 'monitor') {
-              if (step.condition === 'wait_for_blue') {
-                console.log('👁️ MONITORING: Checking for blue unread indicators...');
+              if (step.condition === 'wait_for_unread_badge' || step.condition === 'wait_for_blue') {
+                console.log('👁️ MONITORING: Checking for unread count badges...');
                 
-                // Check for blue radio buttons
-                const blueRadios = document.querySelectorAll(step.selector);
                 let foundUnread = false;
                 
-                // ENHANCED: Check if any radios are actually "filled" with blue content
-                for (const radio of blueRadios) {
-                  const parent = radio.closest('.styled__NotificationRow-sc-5xhq84-2');
+                // ENHANCED: Check for UNREAD conversations using the unread count badge
+                const allConversations = document.querySelectorAll('.styled__NotificationRow-sc-5xhq84-2');
+                console.log(`🔍 Found ${allConversations.length} total conversations`);
+                
+                for (const conversation of allConversations) {
+                  // Method 1: Look for unread count badge (MOST RELIABLE)
+                  const unreadBadge = conversation.querySelector('.styled__UnreadCount-sc-5xhq84-7');
+                  if (unreadBadge && unreadBadge.textContent.includes('(')) {
+                    console.log('🔴 FOUND: Unread conversation with badge:', unreadBadge.textContent);
+                    foundUnread = true;
+                    break;
+                  }
                   
-                  if (parent) {
-                    // Method 1: Check for SVG content with blue fills
-                    const svgs = radio.querySelectorAll('svg');
-                    const hasBlueContent = Array.from(svgs).some(svg => {
-                      const paths = svg.querySelectorAll('path, circle, rect');
-                      return Array.from(paths).some(path => {
-                        const fill = path.getAttribute('fill') || getComputedStyle(path).fill;
-                        return fill && (
-                          fill.includes('#') || 
-                          fill.includes('rgb') || 
-                          fill.includes('blue') ||
-                          fill !== 'none' && fill !== 'transparent'
-                        );
-                      });
-                    });
-                    
-                    // Method 2: Check background color of radio itself
-                    const radioStyles = getComputedStyle(radio);
-                    const hasBackground = radioStyles.backgroundColor !== 'rgba(0, 0, 0, 0)' && 
-                                        radioStyles.backgroundColor !== 'transparent';
-                    
-                    // Method 3: Check for child elements with visible content
-                    const hasVisibleChildren = Array.from(radio.children).some(child => {
-                      const childStyles = getComputedStyle(child);
-                      return child.offsetWidth > 0 && child.offsetHeight > 0 && 
-                             (childStyles.backgroundColor !== 'rgba(0, 0, 0, 0)' ||
-                              childStyles.color !== 'rgba(0, 0, 0, 0)');
-                    });
-                    
-                    if (hasBlueContent || hasBackground || hasVisibleChildren) {
-                      console.log('🔵 FOUND: Blue unread indicator detected!');
-                      console.log(`  hasBlueContent: ${hasBlueContent}`);
-                      console.log(`  hasBackground: ${hasBackground}`);
-                      console.log(`  hasVisibleChildren: ${hasVisibleChildren}`);
+                  // Method 2: Check for specific unread radio button classes
+                  const readButton = conversation.querySelector('.styled__ReadButton-sc-5xhq84-1');
+                  if (readButton) {
+                    const classList = readButton.className;
+                    // Sterling (read) has 'dduCXD', Jie Lu (unread) has 'eXgJxH'
+                    if (classList.includes('eXgJxH')) {
+                      console.log('🔵 FOUND: Unread conversation with eXgJxH class');
                       foundUnread = true;
                       break;
                     }
+                  }
+                  
+                  // Method 3: Check for username to debug
+                  const username = conversation.querySelector('.styled__UserNameText-sc-24o0l3-1');
+                  if (username) {
+                    console.log(`👤 Conversation: ${username.textContent} - Badge: ${unreadBadge ? unreadBadge.textContent : 'none'} - ReadButton: ${readButton ? readButton.className : 'none'}`);
                   }
                 }
                 
@@ -394,17 +380,22 @@ class SkoolWorkflowManager {
               }
             } else if (step.type === 'find') {
               if (step.condition === 'first_blue_unread') {
-                // Find the specific conversation with blue unread indicator
-                const blueRadios = document.querySelectorAll(step.selector);
-                console.log(`🔍 Searching through ${blueRadios.length} potential unread indicators...`);
+                // Find the specific conversation with UNREAD badge
+                const allConversations = document.querySelectorAll('.styled__NotificationRow-sc-5xhq84-2');
+                console.log(`🔍 Searching through ${allConversations.length} conversations for unread...`);
                 
-                let foundUnreadConversation = false;
-                for (const radio of blueRadios) {
-                  const parent = radio.closest('.styled__NotificationRow-sc-5xhq84-2');
-                  if (parent && radio.offsetWidth > 0) {
-                    console.log('🎯 Found conversation with blue unread indicator');
-                    foundUnreadConversation = true;
+                let foundUnreadConversation = null;
+                for (const conversation of allConversations) {
+                  // Look for unread count badge (e.g., "(1)")
+                  const unreadBadge = conversation.querySelector('.styled__UnreadCount-sc-5xhq84-7');
+                  const username = conversation.querySelector('.styled__UserNameText-sc-24o0l3-1');
+                  
+                  if (unreadBadge && unreadBadge.textContent.includes('(')) {
+                    console.log(`🎯 Found UNREAD conversation: ${username ? username.textContent : 'unknown'} with badge: ${unreadBadge.textContent}`);
+                    foundUnreadConversation = conversation;
                     break;
+                  } else {
+                    console.log(`✅ READ conversation: ${username ? username.textContent : 'unknown'} (no unread badge)`);
                   }
                 }
                 
@@ -412,32 +403,52 @@ class SkoolWorkflowManager {
                   console.log('❌ No unread conversations found - returning to monitoring');
                   currentStepIndex = 0; // Go back to monitoring
                   continue;
+                } else {
+                  // Store the found conversation for the next click step
+                  window.targetUnreadConversation = foundUnreadConversation;
+                  console.log('✅ Target unread conversation stored for clicking');
                 }
               }
             } else if (step.type === 'click') {
               if (step.target === 'conversation-preview') {
-                // Use your tagged conversation preview selector
-                const previews = document.querySelectorAll(step.selector);
-                if (previews.length > 0) {
-                  // Find the preview that has an unread indicator nearby
-                  let targetPreview = null;
-                  for (const preview of previews) {
-                    const parent = preview.closest('.styled__NotificationRow-sc-5xhq84-2');
-                    if (parent && parent.querySelector('.styled__BoxWrapper-sc-esqoz3-0.kxjOSJ')) {
-                      targetPreview = preview;
-                      break;
+                // Use the stored target unread conversation
+                if (window.targetUnreadConversation) {
+                  const targetConversation = window.targetUnreadConversation;
+                  const username = targetConversation.querySelector('.styled__UserNameText-sc-24o0l3-1');
+                  const unreadBadge = targetConversation.querySelector('.styled__UnreadCount-sc-5xhq84-7');
+                  
+                  console.log(`🎯 Clicking UNREAD conversation: ${username ? username.textContent : 'unknown'} with badge: ${unreadBadge ? unreadBadge.textContent : 'none'}`);
+                  
+                  // Try multiple click targets within the unread conversation
+                  const clickTargets = [
+                    targetConversation.querySelector('.styled__MessageContent-sc-5xhq84-9'), // Message preview text
+                    targetConversation.querySelector('.styled__ChildrenLink-sc-1brgbbt-1'), // The link wrapper
+                    targetConversation.querySelector('.styled__Overlay-sc-5xhq84-6'), // Content overlay
+                    targetConversation // The conversation row itself
+                  ];
+                  
+                  let clicked = false;
+                  for (const target of clickTargets) {
+                    if (target) {
+                      try {
+                        target.click();
+                        console.log(`✅ Successfully clicked unread conversation via: ${target.className}`);
+                        clicked = true;
+                        break;
+                      } catch (error) {
+                        console.log(`⚠️ Click attempt failed on: ${target.className}`);
+                      }
                     }
                   }
                   
-                  if (targetPreview) {
-                    targetPreview.click();
-                    console.log(`✅ Clicked conversation preview with unread indicator`);
-                  } else {
-                    previews[0].click(); // Fallback to first preview
-                    console.log(`✅ Clicked first conversation preview (fallback)`);
+                  if (!clicked) {
+                    console.error(`❌ Failed to click unread conversation`);
                   }
+                  
+                  // Clear the stored target
+                  window.targetUnreadConversation = null;
                 } else {
-                  console.error(`❌ No conversation previews found: ${step.selector}`);
+                  console.error(`❌ No target unread conversation stored`);
                 }
               } else {
                 // Standard click
@@ -460,24 +471,62 @@ class SkoolWorkflowManager {
                 console.log(`📝 Typed: "${step.text}"`);
               }
             } else if (step.type === 'keypress') {
-              // Press ENTER key to send message
+              // Press ENTER key to send message - MULTIPLE METHODS
               const activeElement = document.activeElement;
+              console.log(`🎯 Current active element:`, activeElement);
+              
+              // Method 1: KeyboardEvent on active element
               if (activeElement) {
+                const keydownEvent = new KeyboardEvent('keydown', {
+                  key: step.key,
+                  code: step.key === 'Enter' ? 'Enter' : step.key,
+                  keyCode: step.key === 'Enter' ? 13 : 0,
+                  which: step.key === 'Enter' ? 13 : 0,
+                  bubbles: true,
+                  cancelable: true
+                });
+                const keypressEvent = new KeyboardEvent('keypress', {
+                  key: step.key,
+                  code: step.key === 'Enter' ? 'Enter' : step.key,
+                  keyCode: step.key === 'Enter' ? 13 : 0,
+                  which: step.key === 'Enter' ? 13 : 0,
+                  bubbles: true,
+                  cancelable: true
+                });
+                const keyupEvent = new KeyboardEvent('keyup', {
+                  key: step.key,
+                  code: step.key === 'Enter' ? 'Enter' : step.key,
+                  keyCode: step.key === 'Enter' ? 13 : 0,
+                  which: step.key === 'Enter' ? 13 : 0,
+                  bubbles: true,
+                  cancelable: true
+                });
+                
+                activeElement.dispatchEvent(keydownEvent);
+                activeElement.dispatchEvent(keypressEvent);
+                activeElement.dispatchEvent(keyupEvent);
+                console.log(`⌨️ Pressed ${step.key} key sequence on active element`);
+              }
+              
+              // Method 2: Find message input and trigger on it specifically
+              const messageInput = document.querySelector('.styled__MultiLineInput-sc-1saiqqb-2, textarea, input[type="text"]');
+              if (messageInput && messageInput !== activeElement) {
                 const keyEvent = new KeyboardEvent('keydown', {
                   key: step.key,
                   code: step.key === 'Enter' ? 'Enter' : step.key,
-                  bubbles: true
+                  keyCode: step.key === 'Enter' ? 13 : 0,
+                  bubbles: true,
+                  cancelable: true
                 });
-                activeElement.dispatchEvent(keyEvent);
-                console.log(`⌨️ Pressed ${step.key} key to send message`);
-              } else {
-                // Fallback: press key on document
-                document.dispatchEvent(new KeyboardEvent('keydown', {
-                  key: step.key,
-                  code: step.key === 'Enter' ? 'Enter' : step.key,
-                  bubbles: true
-                }));
-                console.log(`⌨️ Pressed ${step.key} key (document fallback)`);
+                messageInput.dispatchEvent(keyEvent);
+                console.log(`⌨️ Pressed ${step.key} key on message input`);
+              }
+              
+              // Method 3: Try to find and click submit button as backup
+              const submitBtn = document.querySelector('button[type="submit"], button[aria-label*="send"], button[title*="send"]');
+              if (submitBtn) {
+                submitBtn.click();
+                console.log(`📤 Clicked submit button as backup`);
               }
             } else if (step.type === 'close') {
               // Close chat window using multiple possible selectors
