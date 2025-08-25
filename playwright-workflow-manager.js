@@ -92,8 +92,31 @@ class SkoolWorkflowManager {
 
   async injectWorkflowManager() {
     await this.page.addInitScript(() => {
-      // Global state
+      // PERSISTENT Global state - survives page changes
       window.markedElements = {};
+      
+      // Workflow state persistence
+      const WORKFLOW_STATE_KEY = 'skool-bot-workflow-state';
+      const WORKFLOW_DATA_KEY = 'skool-bot-workflow-data';
+      
+      // Load existing workflow state if available
+      let workflowState = null;
+      let workflowData = {};
+      try {
+        const savedState = localStorage.getItem(WORKFLOW_STATE_KEY);
+        const savedData = localStorage.getItem(WORKFLOW_DATA_KEY);
+        if (savedState) {
+          workflowState = JSON.parse(savedState);
+          console.log(`🔄 Recovered workflow state: Step ${workflowState.currentStep}, Status: ${workflowState.status}`);
+        }
+        if (savedData) {
+          workflowData = JSON.parse(savedData);
+          console.log(`📊 Recovered workflow data:`, Object.keys(workflowData));
+        }
+      } catch (e) {
+        console.log('⚠️ No previous workflow state found, starting fresh');
+      }
+      
       window.botWorkflow = [
         { id: 1, type: 'monitor', target: 'unread-badge-polling', description: 'Monitor for unread count badges like "(1)" (poll every 10s)', selector: '.styled__UnreadCount-sc-5xhq84-7', condition: 'wait_for_unread_badge', status: 'pending', polling: true, interval: 10000 },
         { id: 2, type: 'find', target: 'unread-conversation', description: 'Find conversation with unread count badge (e.g., Jie Lu with "(1)")', selector: '.styled__NotificationRow-sc-5xhq84-2', condition: 'first_blue_unread', status: 'pending' },
@@ -102,19 +125,59 @@ class SkoolWorkflowManager {
         { id: 5, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
         { id: 6, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
         { id: 7, type: 'keypress', target: 'send-message', description: 'Press ENTER to send message', key: 'Enter', status: 'pending' },
-        { id: 8, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 1000, status: 'pending' },
-        { id: 9, type: 'close', target: 'chat-window', description: 'Close chat window', selector: '.styled__CloseButton-sc-1w5xk2o-0, button[aria-label*="close"], .close-button', status: 'pending' },
-        { id: 10, type: 'check', target: 'profile-scraped', description: 'Check if user profile already scraped', condition: 'database_check', status: 'pending' },
-        { id: 11, type: 'conditional', target: 'profile-scraping', description: 'IF not scraped: Click profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', condition: 'if_not_scraped', status: 'pending' },
-        { id: 12, type: 'extract', target: 'profile-data', description: 'Extract name, bio, skoolId from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15', condition: 'if_profile_opened', status: 'pending' },
-        { id: 13, type: 'save', target: 'database', description: 'Save user data to Prisma database', condition: 'if_profile_scraped', status: 'pending' },
-        { id: 14, type: 'navigate', target: 'return-monitoring', description: 'Return to MyUltra Coach profile for monitoring', selector: 'https://www.skool.com/@my-ultra-coach-6588', status: 'pending' },
-        { id: 15, type: 'loop', target: 'monitoring', description: 'Return to step 1 - Continue monitoring', delay: 2000, status: 'pending', loop_to: 1 }
+        { id: 8, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 2000, status: 'pending' },
+        { id: 9, type: 'extract', target: 'profile-link', description: 'Extract user profile link from chat header', selector: '.styled__ChatModalHeader-sc-f4viec-2 a[href*="/@"]', status: 'pending' },
+        { id: 10, type: 'navigate', target: 'user-profile', description: 'Navigate to user profile page', selector: 'extracted-profile-url', status: 'pending' },
+        { id: 11, type: 'wait', target: 'profile-loaded', description: 'Wait for profile page to load', delay: 3000, status: 'pending' },
+        { id: 12, type: 'extract', target: 'profile-details', description: 'Extract user name, bio, and details from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15, .styled__ProfileContainer-sc-*', status: 'pending' },
+        { id: 13, type: 'save', target: 'user-database', description: 'Save extracted user data to database', condition: 'profile_data_extracted', status: 'pending' },
+        { id: 14, type: 'navigate', target: 'back-to-chat', description: 'Navigate back to chat window', selector: 'previous-chat-url', status: 'pending' },
+        { id: 15, type: 'close', target: 'chat-window', description: 'Close chat window with X button', selector: '.styled__ChatModalHeader-sc-f4viec-2 ~ div button[type="button"]:last-child, button[type="button"] .styled__IconWrapper-sc-zxv7pb-0:has(svg[viewBox="0 0 40 40"])', status: 'pending' },
+        { id: 16, type: 'navigate', target: 'return-monitoring', description: 'Return to MyUltra Coach profile for monitoring', selector: 'https://www.skool.com/@my-ultra-coach-6588', status: 'pending' },
+        { id: 17, type: 'loop', target: 'monitoring', description: 'Return to step 1 - Continue monitoring', delay: 2000, status: 'pending', loop_to: 1 }
       ];
 
       let draggedItem = null;
       let currentElement = null;
       let customMenu = null;
+      
+      // Workflow state management functions
+      function saveWorkflowState(currentStepIndex, status = 'running', data = {}) {
+        const state = {
+          currentStep: currentStepIndex,
+          status: status,
+          timestamp: new Date().toISOString(),
+          url: window.location.href
+        };
+        
+        // Merge with existing data
+        const allData = { ...workflowData, ...data };
+        
+        localStorage.setItem(WORKFLOW_STATE_KEY, JSON.stringify(state));
+        localStorage.setItem(WORKFLOW_DATA_KEY, JSON.stringify(allData));
+        
+        console.log(`💾 Saved workflow state: Step ${currentStepIndex}, Status: ${status}`);
+        if (Object.keys(data).length > 0) {
+          console.log(`📊 Saved data:`, data);
+        }
+      }
+      
+      function clearWorkflowState() {
+        localStorage.removeItem(WORKFLOW_STATE_KEY);
+        localStorage.removeItem(WORKFLOW_DATA_KEY);
+        workflowState = null;
+        workflowData = {};
+        console.log(`🗑️ Cleared workflow state`);
+      }
+      
+      function getWorkflowData(key) {
+        return workflowData[key];
+      }
+      
+      function setWorkflowData(key, value) {
+        workflowData[key] = value;
+        localStorage.setItem(WORKFLOW_DATA_KEY, JSON.stringify(workflowData));
+      }
 
       // Element types for tagging - ENHANCED with DEEP VISUAL STATE DETECTION
       const ELEMENT_TYPES = {
@@ -319,15 +382,42 @@ class SkoolWorkflowManager {
         }
       };
 
-      // Enhanced workflow execution with smart blue radio detection
+      // Enhanced workflow execution with PERSISTENT STATE
       window.runWorkflow = async function() {
-        console.log('🚀 Starting smart monitoring workflow...');
+        console.log('🚀 Starting smart monitoring workflow with state persistence...');
+        
+        // Check if we're resuming from a previous state
         let currentStepIndex = 0;
+        if (workflowState && workflowState.status === 'running') {
+          currentStepIndex = workflowState.currentStep;
+          console.log(`🔄 RESUMING workflow from step ${currentStepIndex + 1}`);
+          
+          // Restore any saved data
+          if (workflowData.extractedProfileUrl) {
+            window.extractedProfileUrl = workflowData.extractedProfileUrl;
+          }
+          if (workflowData.currentChatUrl) {
+            window.currentChatUrl = workflowData.currentChatUrl;
+          }
+          if (workflowData.extractedProfileData) {
+            window.extractedProfileData = workflowData.extractedProfileData;
+          }
+          if (workflowData.targetUnreadConversation) {
+            // Can't restore DOM element, but we can log it
+            console.log('📋 Previous target conversation data available');
+          }
+        } else {
+          console.log('🆕 Starting fresh workflow...');
+          clearWorkflowState(); // Clean slate
+        }
         
         while (currentStepIndex < window.botWorkflow.length) {
           const step = window.botWorkflow[currentStepIndex];
           step.status = 'running';
           renderWorkflow();
+          
+          // Save current state before each step
+          saveWorkflowState(currentStepIndex, 'running');
           
           try {
             if (step.type === 'monitor') {
@@ -471,91 +561,233 @@ class SkoolWorkflowManager {
                 console.log(`📝 Typed: "${step.text}"`);
               }
             } else if (step.type === 'keypress') {
-              // Press ENTER key to send message - MULTIPLE METHODS
-              const activeElement = document.activeElement;
-              console.log(`🎯 Current active element:`, activeElement);
+              // FIXED: Press ENTER key to send message - NO MORE EMOJI!
+              console.log(`⌨️ Attempting to send message with ENTER key...`);
               
-              // Method 1: KeyboardEvent on active element
-              if (activeElement) {
-                const keydownEvent = new KeyboardEvent('keydown', {
-                  key: step.key,
-                  code: step.key === 'Enter' ? 'Enter' : step.key,
-                  keyCode: step.key === 'Enter' ? 13 : 0,
-                  which: step.key === 'Enter' ? 13 : 0,
+              // Method 1: Find the message input field specifically
+              const messageInput = document.querySelector('.styled__MultiLineInput-sc-1saiqqb-2, textarea[placeholder*="message"], textarea, input[type="text"]');
+              if (messageInput) {
+                console.log(`🎯 Found message input:`, messageInput);
+                
+                // Focus the input first
+                messageInput.focus();
+                
+                // Create proper ENTER key event
+                const enterEvent = new KeyboardEvent('keydown', {
+                  key: 'Enter',
+                  code: 'Enter',
+                  keyCode: 13,
+                  which: 13,
                   bubbles: true,
-                  cancelable: true
-                });
-                const keypressEvent = new KeyboardEvent('keypress', {
-                  key: step.key,
-                  code: step.key === 'Enter' ? 'Enter' : step.key,
-                  keyCode: step.key === 'Enter' ? 13 : 0,
-                  which: step.key === 'Enter' ? 13 : 0,
-                  bubbles: true,
-                  cancelable: true
-                });
-                const keyupEvent = new KeyboardEvent('keyup', {
-                  key: step.key,
-                  code: step.key === 'Enter' ? 'Enter' : step.key,
-                  keyCode: step.key === 'Enter' ? 13 : 0,
-                  which: step.key === 'Enter' ? 13 : 0,
-                  bubbles: true,
-                  cancelable: true
+                  cancelable: true,
+                  composed: true
                 });
                 
-                activeElement.dispatchEvent(keydownEvent);
-                activeElement.dispatchEvent(keypressEvent);
-                activeElement.dispatchEvent(keyupEvent);
-                console.log(`⌨️ Pressed ${step.key} key sequence on active element`);
+                // Dispatch the event
+                const result = messageInput.dispatchEvent(enterEvent);
+                console.log(`⌨️ ENTER key dispatched, result:`, result);
+                
+                // Also try input event
+                messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+                messageInput.dispatchEvent(new Event('change', { bubbles: true }));
+              } else {
+                console.error(`❌ Message input not found!`);
               }
               
-              // Method 2: Find message input and trigger on it specifically
-              const messageInput = document.querySelector('.styled__MultiLineInput-sc-1saiqqb-2, textarea, input[type="text"]');
-              if (messageInput && messageInput !== activeElement) {
-                const keyEvent = new KeyboardEvent('keydown', {
-                  key: step.key,
-                  code: step.key === 'Enter' ? 'Enter' : step.key,
-                  keyCode: step.key === 'Enter' ? 13 : 0,
-                  bubbles: true,
-                  cancelable: true
-                });
-                messageInput.dispatchEvent(keyEvent);
-                console.log(`⌨️ Pressed ${step.key} key on message input`);
+              // Method 2: Try form submission
+              const form = document.querySelector('form');
+              if (form) {
+                console.log(`📝 Found form, attempting submission...`);
+                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
               }
               
-              // Method 3: Try to find and click submit button as backup
-              const submitBtn = document.querySelector('button[type="submit"], button[aria-label*="send"], button[title*="send"]');
-              if (submitBtn) {
-                submitBtn.click();
-                console.log(`📤 Clicked submit button as backup`);
-              }
-            } else if (step.type === 'close') {
-              // Close chat window using multiple possible selectors
-              const closeSelectors = step.selector.split(', ');
-              let closed = false;
-              
-              for (const closeSelector of closeSelectors) {
-                const closeButton = document.querySelector(closeSelector.trim());
-                if (closeButton) {
-                  closeButton.click();
-                  console.log(`✅ Closed chat window using: ${closeSelector}`);
-                  closed = true;
+              // Method 3: Look for send button and click it
+              const sendButtons = document.querySelectorAll('button[type="submit"], button[aria-label*="send"], button[title*="send"], button:has(svg)');
+              for (const btn of sendButtons) {
+                if (btn.textContent.toLowerCase().includes('send') || btn.querySelector('svg')) {
+                  console.log(`📤 Clicking send button:`, btn);
+                  btn.click();
                   break;
                 }
               }
+            } else if (step.type === 'close') {
+              // Close chat window - find the X button specifically
+              console.log(`❌ Attempting to close chat window...`);
+              let closed = false;
               
+              // Method 1: Look for the X button in the chat header
+              const closeButtons = document.querySelectorAll('button[type="button"]');
+              for (const btn of closeButtons) {
+                const svg = btn.querySelector('svg[viewBox="0 0 40 40"]');
+                if (svg) {
+                  const path = svg.querySelector('path');
+                  if (path && path.getAttribute('d').includes('40 4.02857L35.9714 0L20 15.9714')) {
+                    console.log(`✅ Found X button, clicking...`);
+                    btn.click();
+                    closed = true;
+                    break;
+                  }
+                }
+              }
+              
+              // Method 2: Try the specific selectors from your HTML
               if (!closed) {
-                // Fallback: try pressing Escape
-                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-                console.log(`✅ Closed chat window using Escape key (fallback)`);
+                const specificSelectors = [
+                  '.styled__ChatModalHeader-sc-f4viec-2 ~ div button[type="button"]:last-child',
+                  'button[type="button"]:has(svg[viewBox="0 0 40 40"])',
+                  '.styled__ButtonWrapper-sc-1crx28g-1:last-child'
+                ];
+                
+                for (const selector of specificSelectors) {
+                  try {
+                    const closeBtn = document.querySelector(selector);
+                    if (closeBtn) {
+                      console.log(`✅ Closing with selector: ${selector}`);
+                      closeBtn.click();
+                      closed = true;
+                      break;
+                    }
+                  } catch (e) {
+                    console.log(`⚠️ Selector failed: ${selector}`);
+                  }
+                }
+              }
+              
+              // Method 3: Fallback to Escape key
+              if (!closed) {
+                console.log(`🔄 Fallback: Using Escape key to close`);
+                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+                document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', bubbles: true }));
+                console.log(`✅ Sent Escape key events`);
               }
             } else if (step.type === 'extract') {
-              console.log(`🔍 Extract step: ${step.description} (simulation)`);
+              if (step.target === 'profile-link') {
+                // Extract profile link from chat header
+                const profileLinks = document.querySelectorAll('.styled__ChatModalHeader-sc-f4viec-2 a[href*="/@"]');
+                if (profileLinks.length > 0) {
+                  const profileUrl = profileLinks[0].href;
+                  const currentChatUrl = window.location.href;
+                  
+                  // Save to both window and persistent storage
+                  window.extractedProfileUrl = profileUrl;
+                  window.currentChatUrl = currentChatUrl;
+                  setWorkflowData('extractedProfileUrl', profileUrl);
+                  setWorkflowData('currentChatUrl', currentChatUrl);
+                  
+                  console.log(`🔗 Extracted & saved profile URL: ${profileUrl}`);
+                  console.log(`💾 Saved current chat URL: ${currentChatUrl}`);
+                } else {
+                  console.error(`❌ Profile link not found in chat header`);
+                }
+              } else if (step.target === 'profile-details') {
+                // Extract user details from profile page
+                const profileData = {
+                  name: 'Unknown',
+                  bio: '',
+                  skoolId: '',
+                  joinDate: '',
+                  location: ''
+                };
+                
+                // Extract name
+                const nameElements = document.querySelectorAll('h1, .styled__UserNameText-sc-24o0l3-1, .styled__ProfileName-sc-*');
+                if (nameElements.length > 0) {
+                  profileData.name = nameElements[0].textContent.trim();
+                }
+                
+                // Extract bio
+                const bioElements = document.querySelectorAll('.styled__Bio-sc-*, .styled__Description-sc-*, p');
+                for (const bio of bioElements) {
+                  if (bio.textContent.length > 20) {
+                    profileData.bio = bio.textContent.trim();
+                    break;
+                  }
+                }
+                
+                // Extract Skool ID from URL
+                const urlMatch = window.location.href.match(/\/@([^\/\?]+)/);
+                if (urlMatch) {
+                  profileData.skoolId = urlMatch[1];
+                }
+                
+                // Save to both window and persistent storage
+                window.extractedProfileData = profileData;
+                setWorkflowData('extractedProfileData', profileData);
+                console.log(`👤 Extracted & saved profile data:`, profileData);
+              } else {
+                console.log(`🔍 Extract step: ${step.description}`);
+              }
             } else if (step.type === 'conditional') {
               console.log(`🔀 Conditional step: ${step.description} (simulation)`);
             } else if (step.type === 'save') {
-              console.log(`💾 Save step: ${step.description} (simulation)`);
+              if (step.target === 'user-database') {
+                // Save extracted profile data (simulation)
+                if (window.extractedProfileData) {
+                  console.log(`💾 Saving user data to database:`, window.extractedProfileData);
+                  // Here you could make an API call to save the data
+                } else {
+                  console.error(`❌ No profile data to save`);
+                }
+              } else {
+                console.log(`💾 Save step: ${step.description}`);
+              }
             } else if (step.type === 'navigate') {
-              console.log(`🧭 Navigate step: ${step.description} (simulation)`);
+              if (step.target === 'user-profile') {
+                // Navigate to extracted profile URL
+                const profileUrl = window.extractedProfileUrl || getWorkflowData('extractedProfileUrl');
+                if (profileUrl) {
+                  // Save state before navigation - CRITICAL!
+                  saveWorkflowState(currentStepIndex + 1, 'running', {
+                    navigatingTo: 'profile',
+                    targetUrl: profileUrl
+                  });
+                  
+                  console.log(`🧭 Navigating to profile: ${profileUrl}`);
+                  console.log(`💾 Saved state - will resume at step ${currentStepIndex + 2} after page load`);
+                  
+                  // Set a flag to auto-resume workflow after page loads
+                  localStorage.setItem('auto-resume-workflow', 'true');
+                  
+                  window.location.href = profileUrl;
+                  return; // Exit workflow execution as page will reload
+                } else {
+                  console.error(`❌ No profile URL to navigate to`);
+                }
+              } else if (step.target === 'back-to-chat') {
+                // Navigate back to chat
+                const chatUrl = window.currentChatUrl || getWorkflowData('currentChatUrl');
+                if (chatUrl) {
+                  // Save state before navigation
+                  saveWorkflowState(currentStepIndex + 1, 'running', {
+                    navigatingTo: 'chat',
+                    targetUrl: chatUrl
+                  });
+                  
+                  console.log(`🧭 Navigating back to chat: ${chatUrl}`);
+                  console.log(`💾 Saved state - will resume at step ${currentStepIndex + 2} after page load`);
+                  
+                  localStorage.setItem('auto-resume-workflow', 'true');
+                  
+                  window.location.href = chatUrl;
+                  return; // Exit workflow execution as page will reload
+                } else {
+                  console.error(`❌ No chat URL to navigate back to`);
+                }
+              } else if (step.selector && step.selector.startsWith('https://')) {
+                // Navigate to specific URL
+                saveWorkflowState(currentStepIndex + 1, 'running', {
+                  navigatingTo: 'url',
+                  targetUrl: step.selector
+                });
+                
+                console.log(`🧭 Navigating to: ${step.selector}`);
+                localStorage.setItem('auto-resume-workflow', 'true');
+                
+                window.location.href = step.selector;
+                return; // Exit workflow execution as page will reload
+              } else {
+                console.log(`🧭 Navigate step: ${step.description}`);
+              }
             } else if (step.type === 'loop') {
               if (step.loop_to) {
                 console.log(`🔄 Looping back to step ${step.loop_to}...`);
@@ -589,7 +821,11 @@ class SkoolWorkflowManager {
           }
         }
         
-        console.log('🎉 Workflow completed! Restarting monitoring...');
+        console.log('🎉 Workflow completed! Clearing state and restarting monitoring...');
+        
+        // Clear workflow state as we completed successfully
+        clearWorkflowState();
+        
         // Restart the workflow
         setTimeout(() => window.runWorkflow(), 3000);
       };
@@ -1110,11 +1346,38 @@ class SkoolWorkflowManager {
         }
       }, 30000);
 
+      // Auto-resume workflow after page navigation
+      function checkAutoResume() {
+        const shouldResume = localStorage.getItem('auto-resume-workflow');
+        if (shouldResume === 'true') {
+          localStorage.removeItem('auto-resume-workflow');
+          console.log('🔄 Auto-resuming workflow after page navigation...');
+          
+          // Wait a bit for page to fully load, then resume
+          setTimeout(() => {
+            if (typeof window.runWorkflow === 'function') {
+              window.runWorkflow();
+            } else {
+              console.log('⚠️ Workflow function not ready, retrying...');
+              setTimeout(() => {
+                if (typeof window.runWorkflow === 'function') {
+                  window.runWorkflow();
+                }
+              }, 2000);
+            }
+          }, 3000); // Wait 3 seconds for page to fully load
+        }
+      }
+      
       // Initialize when page loads
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeWorkflowManager);
+        document.addEventListener('DOMContentLoaded', () => {
+          initializeWorkflowManager();
+          checkAutoResume();
+        });
       } else {
         initializeWorkflowManager();
+        checkAutoResume();
       }
     });
   }
