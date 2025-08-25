@@ -101,7 +101,7 @@ class SkoolWorkflowManager {
         { id: 4, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 2000, status: 'pending' },
         { id: 5, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
         { id: 6, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
-        { id: 7, type: 'click', target: 'send-button', description: 'Send the message', selector: 'button[type="submit"]', status: 'pending' },
+        { id: 7, type: 'keypress', target: 'send-message', description: 'Press ENTER to send message', key: 'Enter', status: 'pending' },
         { id: 8, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 1000, status: 'pending' },
         { id: 9, type: 'close', target: 'chat-window', description: 'Close chat window', selector: '.styled__CloseButton-sc-1w5xk2o-0, button[aria-label*="close"], .close-button', status: 'pending' },
         { id: 10, type: 'check', target: 'profile-scraped', description: 'Check if user profile already scraped', condition: 'database_check', status: 'pending' },
@@ -233,6 +233,7 @@ class SkoolWorkflowManager {
             'extract': '#20c997',
             'save': '#28a745',
             'close': '#dc3545', // Red for close
+            'keypress': '#ffc107', // Yellow for keypress
             'loop': '#6c757d'
           };
           const typeColor = typeColors[step.type] || '#007bff';
@@ -457,6 +458,26 @@ class SkoolWorkflowManager {
                 element.value = step.text;
                 element.dispatchEvent(new Event('input', { bubbles: true }));
                 console.log(`📝 Typed: "${step.text}"`);
+              }
+            } else if (step.type === 'keypress') {
+              // Press ENTER key to send message
+              const activeElement = document.activeElement;
+              if (activeElement) {
+                const keyEvent = new KeyboardEvent('keydown', {
+                  key: step.key,
+                  code: step.key === 'Enter' ? 'Enter' : step.key,
+                  bubbles: true
+                });
+                activeElement.dispatchEvent(keyEvent);
+                console.log(`⌨️ Pressed ${step.key} key to send message`);
+              } else {
+                // Fallback: press key on document
+                document.dispatchEvent(new KeyboardEvent('keydown', {
+                  key: step.key,
+                  code: step.key === 'Enter' ? 'Enter' : step.key,
+                  bubbles: true
+                }));
+                console.log(`⌨️ Pressed ${step.key} key (document fallback)`);
               }
             } else if (step.type === 'close') {
               // Close chat window using multiple possible selectors
@@ -963,17 +984,9 @@ class SkoolWorkflowManager {
           console.log('📋 ALL TAGGED ELEMENTS:');
           console.log(JSON.stringify(window.markedElements, null, 2));
           
-          // Also create a downloadable file
-          const dataStr = JSON.stringify(window.markedElements, null, 2);
-          const dataBlob = new Blob([dataStr], {type: 'application/json'});
-          const url = URL.createObjectURL(dataBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = 'tagged-elements-export.json';
-          link.click();
-          URL.revokeObjectURL(url);
-          
-          console.log('💾 Downloaded tagged-elements-export.json');
+          // Save to server instead of random download
+          saveSelectorsToFile();
+          console.log('💾 Tagged elements saved to project directory');
         });
         
         document.getElementById('panel-header').appendChild(exportBtn);
@@ -1031,20 +1044,8 @@ class SkoolWorkflowManager {
           // Try to save to file (may not complete due to page unload)
           saveSelectorsToFile();
           
-          // Also download as backup
-          try {
-            const dataStr = JSON.stringify(window.markedElements, null, 2);
-            const dataBlob = new Blob([dataStr], {type: 'application/json'});
-            const url = URL.createObjectURL(dataBlob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `auto-save-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
-            link.click();
-            URL.revokeObjectURL(url);
-            console.log('💾 Auto-downloaded backup file');
-          } catch (error) {
-            console.log('⚠️ Auto-download failed:', error);
-          }
+          // Don't download random files - just save to server
+          console.log('💾 Tagged elements preserved in localStorage and server');
         }
       });
 
