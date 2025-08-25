@@ -123,11 +123,11 @@ class SkoolWorkflowManager {
         { id: 3, type: 'click', target: 'conversation-preview', description: 'Click the UNREAD conversation (not Sterling - the one with badge)', selector: 'stored-target', dynamic: true, status: 'pending' },
         { id: 4, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 2000, status: 'pending' },
         { id: 5, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
-        { id: 6, type: 'type', target: 'message-input', description: 'Type login message with unique code + ENTER', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}\n', status: 'pending' },
+        { id: 6, type: 'send-message', target: 'message-input', description: 'Type and FORCE SEND message with all methods', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
         { id: 7, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 2000, status: 'pending' },
         { id: 8, type: 'extract', target: 'profile-link', description: 'Extract user profile link from chat header', selector: '.styled__ChatModalHeader-sc-f4viec-2 a[href*="/@"]', status: 'pending' },
         { id: 9, type: 'navigate', target: 'user-profile', description: 'Navigate to user profile page', selector: 'extracted-profile-url', status: 'pending' },
-        { id: 10, type: 'wait', target: 'profile-loaded', description: 'Wait for profile page to load completely', delay: 2000, condition: 'profile_elements_ready', status: 'pending' },
+        { id: 10, type: 'skip', target: 'profile-loaded', description: 'SKIP - Profile page ready immediately', delay: 500, condition: 'immediate_skip', status: 'pending' },
         { id: 11, type: 'extract', target: 'profile-details', description: 'Extract user name, bio, and details from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15, .styled__ProfileContainer-sc-*', status: 'pending' },
         { id: 12, type: 'save', target: 'user-database', description: 'Save extracted user data to database', condition: 'profile_data_extracted', status: 'pending' },
         { id: 13, type: 'navigate', target: 'back-to-chat', description: 'Navigate back to chat window', selector: 'previous-chat-url', status: 'pending' },
@@ -296,6 +296,8 @@ class SkoolWorkflowManager {
             'save': '#28a745',
             'close': '#dc3545', // Red for close
             'keypress': '#ffc107', // Yellow for keypress
+            'send-message': '#ff6b6b', // Red for nuclear send
+            'skip': '#51cf66', // Green for skip
             'loop': '#6c757d'
           };
           const typeColor = typeColors[step.type] || '#007bff';
@@ -592,121 +594,178 @@ class SkoolWorkflowManager {
                   console.error(`❌ Element not found: ${step.selector}`);
                 }
               }
+            } else if (step.type === 'skip') {
+              // IMMEDIATE SKIP - No waiting at all
+              console.log(`⏩ SKIPPING STEP: ${step.description}`);
+              console.log(`📍 Current URL: ${window.location.href}`);
+              
+              // Minimal delay just for visual feedback
+              await new Promise(resolve => setTimeout(resolve, step.delay || 500));
+              
+              console.log(`🚀 SKIP COMPLETE - moving to next step immediately`);
+              
             } else if (step.type === 'wait') {
               if (step.condition === 'profile_elements_ready') {
-                // ULTRA MINIMAL WAIT - Just proceed immediately
-                console.log(`⏳ ULTRA MINIMAL PROFILE CHECK...`);
-                console.log(`📍 Current URL: ${window.location.href}`);
-                
-                // Check if we're on a profile URL
-                const isProfilePage = window.location.href.includes('/@') && !window.location.href.includes('my-ultra-coach');
-                
-                if (isProfilePage) {
-                  console.log(`✅ On profile page - PROCEEDING IMMEDIATELY`);
-                } else {
-                  console.log(`⚠️ Not on profile page, but proceeding anyway`);
-                }
-                
-                // Wait just 1 second then FORCE continuation
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                console.log(`🚀 FORCED CONTINUATION - moving to extraction step`);
-                
-                // IMMEDIATELY mark this step as completed and move on
-                step.status = 'completed';
-                renderWorkflow();
-                console.log(`✅ STEP ${currentStepIndex + 1} FORCE COMPLETED`);
-                
-                // Skip to next step immediately
-                currentStepIndex++;
-                continue;
+                // This should not be used anymore - replaced with skip
+                console.log(`⚠️ Old wait step detected - converting to immediate skip`);
+                await new Promise(resolve => setTimeout(resolve, 500));
               } else {
                 // Standard wait
                 await new Promise(resolve => setTimeout(resolve, step.delay || 1000));
                 console.log(`⏱️ Waited: ${step.delay}ms`);
               }
-            } else if (step.type === 'type' && step.text) {
-              // ENHANCED TYPING with newline support
-              console.log(`📝 ENHANCED TYPING with newline support...`);
+            } else if (step.type === 'send-message' && step.text) {
+              // NUCLEAR OPTION: Try EVERYTHING to send a message
+              console.log(`💥 NUCLEAR MESSAGE SEND - Trying EVERY possible method...`);
               
-              const element = document.querySelector(step.selector);
-              if (element) {
-                console.log(`🎯 Found textarea: ${element.placeholder}`);
-                console.log(`📄 Text to type: "${step.text}"`);
+              const messageSelectors = [
+                'textarea[data-testid="input-component"]',
+                'textarea[placeholder*="Message"]',
+                '.styled__MultiLineInput-sc-1saiqqb-2:not([aria-hidden="true"])',
+                '.styled__ChatTextArea-sc-1w0nbeu-4 textarea:not([aria-hidden="true"])',
+                'textarea:not([aria-hidden="true"])'
+              ];
+              
+              let messageElement = null;
+              for (const selector of messageSelectors) {
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                  if (el.offsetParent !== null && !el.hasAttribute('aria-hidden')) {
+                    messageElement = el;
+                    console.log(`🎯 Found visible textarea: "${el.placeholder}"`);
+                    break;
+                  }
+                }
+                if (messageElement) break;
+              }
+              
+              if (messageElement) {
+                console.log(`📝 Target: "${messageElement.placeholder}" | Current value: "${messageElement.value}"`);
                 
-                // Focus and clear first
-                element.focus();
-                element.click();
-                element.value = '';
+                // STEP 1: CLEAR AND TYPE MESSAGE
+                messageElement.focus();
+                messageElement.click();
+                messageElement.value = '';
+                messageElement.value = step.text;
                 
-                // Set the text including newline
-                element.value = step.text;
+                // STEP 2: TRIGGER ALL POSSIBLE EVENTS
+                messageElement.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                messageElement.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                messageElement.dispatchEvent(new Event('blur', { bubbles: true }));
+                messageElement.dispatchEvent(new Event('focus', { bubbles: true }));
                 
-                // Trigger multiple events to ensure React picks it up
-                element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-                element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                console.log(`✅ Message typed and events triggered`);
                 
-                // If there's a newline, try MULTIPLE methods to send
-                if (step.text.includes('\n')) {
-                  console.log(`🔥 Text contains newline - trying ALL send methods...`);
-                  
-                  // Method 1: ENTER key events
-                  const enterKeyDown = new KeyboardEvent('keydown', {
+                // STEP 3: TRY ALL SEND METHODS
+                let sendAttempts = 0;
+                
+                // Method 1: ENTER key simulation (multiple approaches)
+                console.log(`🔥 Method 1: ENTER key simulation...`);
+                const enterEvents = ['keydown', 'keypress', 'keyup'];
+                for (const eventType of enterEvents) {
+                  const keyEvent = new KeyboardEvent(eventType, {
                     key: 'Enter',
                     code: 'Enter',
                     keyCode: 13,
                     which: 13,
+                    charCode: 13,
                     bubbles: true,
-                    cancelable: true
+                    cancelable: true,
+                    composed: true,
+                    detail: 0,
+                    view: window
                   });
-                  
-                  const enterKeyUp = new KeyboardEvent('keyup', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    keyCode: 13,
-                    which: 13,
-                    bubbles: true,
-                    cancelable: true
-                  });
-                  
-                  element.dispatchEvent(enterKeyDown);
-                  element.dispatchEvent(enterKeyUp);
-                  console.log(`✅ Method 1: ENTER events dispatched`);
-                  
-                  // Method 2: Form submission
-                  const form = element.closest('form');
-                  if (form) {
-                    console.log(`📝 Method 2: Submitting form...`);
+                  messageElement.dispatchEvent(keyEvent);
+                  document.dispatchEvent(keyEvent);
+                }
+                sendAttempts++;
+                
+                // Method 2: Form submission (all possible forms)
+                console.log(`🔥 Method 2: Form submission...`);
+                const forms = [
+                  messageElement.form,
+                  messageElement.closest('form'),
+                  document.querySelector('form'),
+                  messageElement.closest('div[role="form"]')
+                ].filter(f => f);
+                
+                for (const form of forms) {
+                  try {
                     form.submit();
-                    form.dispatchEvent(new Event('submit', { bubbles: true }));
+                    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    sendAttempts++;
+                  } catch (e) {
+                    console.log(`Form submit failed:`, e);
                   }
-                  
-                  // Method 3: Look for send button and click it
-                  const sendButton = document.querySelector('button[type="submit"], button[aria-label*="Send"], button[title*="Send"]');
-                  if (sendButton) {
-                    console.log(`📤 Method 3: Clicking send button...`);
-                    sendButton.click();
-                  }
-                  
-                  // Method 4: Look for any button in the chat area
-                  const chatContainer = element.closest('div');
-                  if (chatContainer) {
-                    const buttons = chatContainer.querySelectorAll('button');
-                    for (const btn of buttons) {
-                      if (btn.textContent.toLowerCase().includes('send') || btn.getAttribute('aria-label')?.toLowerCase().includes('send')) {
-                        console.log(`📤 Method 4: Found send button: ${btn.textContent || btn.getAttribute('aria-label')}`);
-                        btn.click();
-                        break;
-                      }
-                    }
-                  }
-                  
-                  console.log(`✅ All send methods attempted`);
                 }
                 
-                console.log(`📝 Typed: "${step.text}" (${step.text.length} chars)`);
+                // Method 3: Find and click ALL possible send buttons
+                console.log(`🔥 Method 3: Send button hunting...`);
+                const buttonSelectors = [
+                  'button[type="submit"]',
+                  'button[aria-label*="send" i]',
+                  'button[title*="send" i]',
+                  'button:has(svg)',
+                  '[role="button"]',
+                  'input[type="submit"]'
+                ];
+                
+                const allButtons = [];
+                buttonSelectors.forEach(sel => {
+                  document.querySelectorAll(sel).forEach(btn => allButtons.push(btn));
+                });
+                
+                // Also search in the message container area
+                const container = messageElement.closest('div, section, main');
+                if (container) {
+                  container.querySelectorAll('button, [role="button"]').forEach(btn => allButtons.push(btn));
+                }
+                
+                for (const btn of allButtons) {
+                  const text = btn.textContent?.toLowerCase() || '';
+                  const label = btn.getAttribute('aria-label')?.toLowerCase() || '';
+                  const title = btn.getAttribute('title')?.toLowerCase() || '';
+                  
+                  if (text.includes('send') || label.includes('send') || title.includes('send') || 
+                      btn.type === 'submit' || btn.querySelector('svg')) {
+                    console.log(`📤 Clicking button: "${text || label || title || 'SVG button'}"`);
+                    try {
+                      btn.click();
+                      sendAttempts++;
+                    } catch (e) {
+                      console.log(`Button click failed:`, e);
+                    }
+                  }
+                }
+                
+                // Method 4: Programmatic form submission
+                console.log(`🔥 Method 4: Programmatic submission...`);
+                const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                document.dispatchEvent(submitEvent);
+                messageElement.dispatchEvent(submitEvent);
+                sendAttempts++;
+                
+                console.log(`💥 NUCLEAR SEND COMPLETE: ${sendAttempts} different methods attempted`);
+                
               } else {
-                console.error(`❌ Textarea not found with selector: ${step.selector}`);
+                console.error(`❌ CRITICAL: No message textarea found!`);
+                
+                // Emergency debug
+                const allTextareas = document.querySelectorAll('textarea');
+                console.log(`🔍 DEBUG: ${allTextareas.length} textareas found:`);
+                allTextareas.forEach((ta, i) => {
+                  console.log(`  ${i}: "${ta.placeholder}" | Visible: ${ta.offsetParent !== null} | Value: "${ta.value}"`);
+                });
+              }
+              
+            } else if (step.type === 'type' && step.text) {
+              // Simple typing for other cases
+              const element = document.querySelector(step.selector);
+              if (element) {
+                element.focus();
+                element.value = step.text;
+                element.dispatchEvent(new Event('input', { bubbles: true }));
+                console.log(`📝 Typed: "${step.text}"`);
               }
             } else if (step.type === 'keypress') {
               // PHYSICAL KEY SIMULATION - Most aggressive approach
