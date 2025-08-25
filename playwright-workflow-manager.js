@@ -443,12 +443,23 @@ class SkoolWorkflowManager {
           // Save current state before each step
           saveWorkflowState(currentStepIndex, 'running');
           
-          // GLOBAL STEP TIMEOUT - Never hang on any step!
+          // AGGRESSIVE STEP TIMEOUT - Never hang on any step!
           const stepTimeout = setTimeout(() => {
-            console.log(`⏰ GLOBAL TIMEOUT: Step ${currentStepIndex + 1} took too long, FORCING continuation...`);
+            console.log(`⏰ STEP NUDGE: Step ${currentStepIndex + 1} (${step.description}) took too long, FORCING continuation...`);
             step.status = 'completed';
             renderWorkflow();
-          }, 15000); // 15 second max per step
+            
+            // Force move to next step
+            currentStepIndex++;
+            console.log(`🚀 NUDGED to step ${currentStepIndex + 1}`);
+            
+            // Continue the workflow loop
+            setTimeout(() => {
+              if (currentStepIndex < window.botWorkflow.length) {
+                console.log(`🔄 Restarting workflow from nudged position...`);
+              }
+            }, 1000);
+          }, 8000); // Reduced to 8 seconds max per step
           
           try {
             if (step.type === 'monitor') {
@@ -583,18 +594,32 @@ class SkoolWorkflowManager {
               }
             } else if (step.type === 'wait') {
               if (step.condition === 'profile_elements_ready') {
-                // MINIMAL WAIT - Just check if we're on a profile page
-                console.log(`⏳ MINIMAL PROFILE CHECK...`);
+                // ULTRA MINIMAL WAIT - Just proceed immediately
+                console.log(`⏳ ULTRA MINIMAL PROFILE CHECK...`);
                 console.log(`📍 Current URL: ${window.location.href}`);
                 
-                // Just wait 2 seconds then proceed regardless
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Check if we're on a profile URL
+                const isProfilePage = window.location.href.includes('/@') && !window.location.href.includes('my-ultra-coach');
                 
-                const totalElements = document.querySelectorAll('*').length;
-                console.log(`🔢 Page has ${totalElements} elements - proceeding with extraction`);
+                if (isProfilePage) {
+                  console.log(`✅ On profile page - PROCEEDING IMMEDIATELY`);
+                } else {
+                  console.log(`⚠️ Not on profile page, but proceeding anyway`);
+                }
                 
-                // FORCE IMMEDIATE CONTINUATION
-                console.log(`🚀 FORCING IMMEDIATE CONTINUATION to extraction...`);
+                // Wait just 1 second then FORCE continuation
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                console.log(`🚀 FORCED CONTINUATION - moving to extraction step`);
+                
+                // IMMEDIATELY mark this step as completed and move on
+                step.status = 'completed';
+                renderWorkflow();
+                console.log(`✅ STEP ${currentStepIndex + 1} FORCE COMPLETED`);
+                
+                // Skip to next step immediately
+                currentStepIndex++;
+                continue;
               } else {
                 // Standard wait
                 await new Promise(resolve => setTimeout(resolve, step.delay || 1000));
@@ -621,10 +646,11 @@ class SkoolWorkflowManager {
                 element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
                 element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
                 
-                // If there's a newline, also trigger keydown/keyup for Enter
+                // If there's a newline, try MULTIPLE methods to send
                 if (step.text.includes('\n')) {
-                  console.log(`🔥 Text contains newline - triggering ENTER events...`);
+                  console.log(`🔥 Text contains newline - trying ALL send methods...`);
                   
+                  // Method 1: ENTER key events
                   const enterKeyDown = new KeyboardEvent('keydown', {
                     key: 'Enter',
                     code: 'Enter',
@@ -644,9 +670,38 @@ class SkoolWorkflowManager {
                   });
                   
                   element.dispatchEvent(enterKeyDown);
-                  setTimeout(() => element.dispatchEvent(enterKeyUp), 50);
+                  element.dispatchEvent(enterKeyUp);
+                  console.log(`✅ Method 1: ENTER events dispatched`);
                   
-                  console.log(`✅ ENTER events dispatched for newline character`);
+                  // Method 2: Form submission
+                  const form = element.closest('form');
+                  if (form) {
+                    console.log(`📝 Method 2: Submitting form...`);
+                    form.submit();
+                    form.dispatchEvent(new Event('submit', { bubbles: true }));
+                  }
+                  
+                  // Method 3: Look for send button and click it
+                  const sendButton = document.querySelector('button[type="submit"], button[aria-label*="Send"], button[title*="Send"]');
+                  if (sendButton) {
+                    console.log(`📤 Method 3: Clicking send button...`);
+                    sendButton.click();
+                  }
+                  
+                  // Method 4: Look for any button in the chat area
+                  const chatContainer = element.closest('div');
+                  if (chatContainer) {
+                    const buttons = chatContainer.querySelectorAll('button');
+                    for (const btn of buttons) {
+                      if (btn.textContent.toLowerCase().includes('send') || btn.getAttribute('aria-label')?.toLowerCase().includes('send')) {
+                        console.log(`📤 Method 4: Found send button: ${btn.textContent || btn.getAttribute('aria-label')}`);
+                        btn.click();
+                        break;
+                      }
+                    }
+                  }
+                  
+                  console.log(`✅ All send methods attempted`);
                 }
                 
                 console.log(`📝 Typed: "${step.text}" (${step.text.length} chars)`);
