@@ -123,18 +123,17 @@ class SkoolWorkflowManager {
         { id: 3, type: 'click', target: 'conversation-preview', description: 'Click the UNREAD conversation (not Sterling - the one with badge)', selector: 'stored-target', dynamic: true, status: 'pending' },
         { id: 4, type: 'wait', target: 'chat-window', description: 'Wait for chat window to open', delay: 2000, status: 'pending' },
         { id: 5, type: 'extract', target: 'user-info', description: 'Extract username and profile link', selector: '.styled__ChildrenLink-sc-1brgbbt-1', status: 'pending' },
-        { id: 6, type: 'type', target: 'message-input', description: 'Type login message with unique code', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}', status: 'pending' },
-        { id: 7, type: 'keypress', target: 'send-message', description: 'Press ENTER to send message', key: 'Enter', status: 'pending' },
-        { id: 8, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 2000, status: 'pending' },
-        { id: 9, type: 'extract', target: 'profile-link', description: 'Extract user profile link from chat header', selector: '.styled__ChatModalHeader-sc-f4viec-2 a[href*="/@"]', status: 'pending' },
-        { id: 10, type: 'navigate', target: 'user-profile', description: 'Navigate to user profile page', selector: 'extracted-profile-url', status: 'pending' },
-        { id: 11, type: 'wait', target: 'profile-loaded', description: 'Wait for profile page to load completely', delay: 2000, condition: 'profile_elements_ready', status: 'pending' },
-        { id: 12, type: 'extract', target: 'profile-details', description: 'Extract user name, bio, and details from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15, .styled__ProfileContainer-sc-*', status: 'pending' },
-        { id: 13, type: 'save', target: 'user-database', description: 'Save extracted user data to database', condition: 'profile_data_extracted', status: 'pending' },
-        { id: 14, type: 'navigate', target: 'back-to-chat', description: 'Navigate back to chat window', selector: 'previous-chat-url', status: 'pending' },
-        { id: 15, type: 'close', target: 'chat-window', description: 'Close chat window with X button', selector: '.styled__ChatModalHeader-sc-f4viec-2 ~ div button[type="button"]:last-child, button[type="button"] .styled__IconWrapper-sc-zxv7pb-0:has(svg[viewBox="0 0 40 40"])', status: 'pending' },
-        { id: 16, type: 'navigate', target: 'return-monitoring', description: 'Return to MyUltra Coach profile for monitoring', selector: 'https://www.skool.com/@my-ultra-coach-6588', status: 'pending' },
-        { id: 17, type: 'loop', target: 'monitoring', description: 'Return to step 1 - Continue monitoring', delay: 2000, status: 'pending', loop_to: 1 }
+        { id: 6, type: 'type', target: 'message-input', description: 'Type login message with unique code + ENTER', selector: '.styled__MultiLineInput-sc-1saiqqb-2', text: 'I will have your link shortly. {generated_link}\n', status: 'pending' },
+        { id: 7, type: 'wait', target: 'message-sent', description: 'Wait for message to send', delay: 2000, status: 'pending' },
+        { id: 8, type: 'extract', target: 'profile-link', description: 'Extract user profile link from chat header', selector: '.styled__ChatModalHeader-sc-f4viec-2 a[href*="/@"]', status: 'pending' },
+        { id: 9, type: 'navigate', target: 'user-profile', description: 'Navigate to user profile page', selector: 'extracted-profile-url', status: 'pending' },
+        { id: 10, type: 'wait', target: 'profile-loaded', description: 'Wait for profile page to load completely', delay: 2000, condition: 'profile_elements_ready', status: 'pending' },
+        { id: 11, type: 'extract', target: 'profile-details', description: 'Extract user name, bio, and details from profile', selector: '.styled__UserCardWrapper-sc-1gipnml-15, .styled__ProfileContainer-sc-*', status: 'pending' },
+        { id: 12, type: 'save', target: 'user-database', description: 'Save extracted user data to database', condition: 'profile_data_extracted', status: 'pending' },
+        { id: 13, type: 'navigate', target: 'back-to-chat', description: 'Navigate back to chat window', selector: 'previous-chat-url', status: 'pending' },
+        { id: 14, type: 'close', target: 'chat-window', description: 'Close chat window with X button', selector: '.styled__ChatModalHeader-sc-f4viec-2 ~ div button[type="button"]:last-child, button[type="button"] .styled__IconWrapper-sc-zxv7pb-0:has(svg[viewBox="0 0 40 40"])', status: 'pending' },
+        { id: 15, type: 'navigate', target: 'return-monitoring', description: 'Return to MyUltra Coach profile for monitoring', selector: 'https://www.skool.com/@my-ultra-coach-6588', status: 'pending' },
+        { id: 16, type: 'loop', target: 'monitoring', description: 'Return to step 1 - Continue monitoring', delay: 2000, status: 'pending', loop_to: 1 }
       ];
 
       let draggedItem = null;
@@ -602,11 +601,57 @@ class SkoolWorkflowManager {
                 console.log(`⏱️ Waited: ${step.delay}ms`);
               }
             } else if (step.type === 'type' && step.text) {
+              // ENHANCED TYPING with newline support
+              console.log(`📝 ENHANCED TYPING with newline support...`);
+              
               const element = document.querySelector(step.selector);
               if (element) {
+                console.log(`🎯 Found textarea: ${element.placeholder}`);
+                console.log(`📄 Text to type: "${step.text}"`);
+                
+                // Focus and clear first
+                element.focus();
+                element.click();
+                element.value = '';
+                
+                // Set the text including newline
                 element.value = step.text;
-                element.dispatchEvent(new Event('input', { bubbles: true }));
-                console.log(`📝 Typed: "${step.text}"`);
+                
+                // Trigger multiple events to ensure React picks it up
+                element.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                element.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                
+                // If there's a newline, also trigger keydown/keyup for Enter
+                if (step.text.includes('\n')) {
+                  console.log(`🔥 Text contains newline - triggering ENTER events...`);
+                  
+                  const enterKeyDown = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  
+                  const enterKeyUp = new KeyboardEvent('keyup', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    keyCode: 13,
+                    which: 13,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  
+                  element.dispatchEvent(enterKeyDown);
+                  setTimeout(() => element.dispatchEvent(enterKeyUp), 50);
+                  
+                  console.log(`✅ ENTER events dispatched for newline character`);
+                }
+                
+                console.log(`📝 Typed: "${step.text}" (${step.text.length} chars)`);
+              } else {
+                console.error(`❌ Textarea not found with selector: ${step.selector}`);
               }
             } else if (step.type === 'keypress') {
               // PHYSICAL KEY SIMULATION - Most aggressive approach
