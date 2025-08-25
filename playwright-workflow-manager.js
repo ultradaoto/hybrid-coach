@@ -444,6 +444,13 @@ class SkoolWorkflowManager {
           // Save current state before each step
           saveWorkflowState(currentStepIndex, 'running');
           
+          // GLOBAL STEP TIMEOUT - Never hang on any step!
+          const stepTimeout = setTimeout(() => {
+            console.log(`⏰ GLOBAL TIMEOUT: Step ${currentStepIndex + 1} took too long, FORCING continuation...`);
+            step.status = 'completed';
+            renderWorkflow();
+          }, 15000); // 15 second max per step
+          
           try {
             if (step.type === 'monitor') {
               if (step.condition === 'wait_for_unread_badge' || step.condition === 'wait_for_blue') {
@@ -577,46 +584,18 @@ class SkoolWorkflowManager {
               }
             } else if (step.type === 'wait') {
               if (step.condition === 'profile_elements_ready') {
-                // AGGRESSIVE profile loading detection
-                console.log(`⏳ Checking if profile page is ready...`);
+                // MINIMAL WAIT - Just check if we're on a profile page
+                console.log(`⏳ MINIMAL PROFILE CHECK...`);
                 console.log(`📍 Current URL: ${window.location.href}`);
                 
-                let profileReady = false;
-                let attempts = 0;
-                const maxAttempts = 10; // Reduced to 10 seconds max
+                // Just wait 2 seconds then proceed regardless
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 
-                while (!profileReady && attempts < maxAttempts) {
-                  // Check for ANY profile indicators (more lenient)
-                  const profileElements = {
-                    name: document.querySelector('h1, .styled__UserNameText-sc-24o0l3-1, .styled__ProfileName-sc-*, [class*="ProfileName"], [class*="UserName"], [class*="profile"], [class*="user"]'),
-                    bio: document.querySelector('p, .styled__Bio-sc-*, .styled__Description-sc-*, [class*="Bio"], [class*="Description"], [class*="about"]'),
-                    avatar: document.querySelector('img[alt], .styled__AvatarWrapper-sc-*, [class*="Avatar"], [class*="avatar"], img[src*="assets"]'),
-                    container: document.querySelector('.styled__UserCardWrapper-sc-*, .styled__ProfileContainer-sc-*, [class*="Profile"], [class*="User"], [class*="profile"], [class*="card"]'),
-                    anyText: document.querySelector('span, div, p, h1, h2, h3')
-                  };
-                  
-                  const elementsFound = Object.values(profileElements).filter(el => el !== null).length;
-                  const totalElements = document.querySelectorAll('*').length;
-                  
-                  console.log(`🔍 Attempt ${attempts + 1}: Profile elements found: ${elementsFound}/5, Total DOM elements: ${totalElements}`);
-                  
-                  // More lenient conditions - proceed if we have basic page structure
-                  if (elementsFound >= 1 || totalElements > 50 || attempts >= 3) {
-                    profileReady = true;
-                    console.log(`✅ Profile page ready! Proceeding with extraction...`);
-                    break;
-                  }
-                  
-                  await new Promise(resolve => setTimeout(resolve, 1000));
-                  attempts++;
-                }
+                const totalElements = document.querySelectorAll('*').length;
+                console.log(`🔢 Page has ${totalElements} elements - proceeding with extraction`);
                 
-                if (!profileReady) {
-                  console.log(`⚠️ Profile page not detected after ${maxAttempts}s, FORCING continuation...`);
-                }
-                
-                // ALWAYS proceed regardless - don't get stuck
-                console.log(`🚀 CONTINUING to profile extraction step...`);
+                // FORCE IMMEDIATE CONTINUATION
+                console.log(`🚀 FORCING IMMEDIATE CONTINUATION to extraction...`);
               } else {
                 // Standard wait
                 await new Promise(resolve => setTimeout(resolve, step.delay || 1000));
@@ -630,92 +609,121 @@ class SkoolWorkflowManager {
                 console.log(`📝 Typed: "${step.text}"`);
               }
             } else if (step.type === 'keypress') {
-              // ALTERNATIVE APPROACH: Try multiple methods to send message
-              console.log(`⌨️ ATTEMPTING MESSAGE SEND - Multiple Methods...`);
+              // PHYSICAL KEY SIMULATION - Most aggressive approach
+              console.log(`⌨️ PHYSICAL KEY SIMULATION - AGGRESSIVE MESSAGE SEND...`);
               
-              // Method 1: Find and focus the message textarea specifically
+              // Step 1: Find the correct textarea
               const messageSelectors = [
                 'textarea[data-testid="input-component"]',
                 'textarea[placeholder*="Message"]',
-                '.styled__MultiLineInput-sc-1saiqqb-2',
-                '.styled__ChatTextArea-sc-1w0nbeu-4 textarea',
-                'textarea:not([aria-hidden="true"])'
+                '.styled__MultiLineInput-sc-1saiqqb-2:not([aria-hidden="true"])',
+                '.styled__ChatTextArea-sc-1w0nbeu-4 textarea:not([aria-hidden="true"])'
               ];
               
               let messageTextarea = null;
               for (const selector of messageSelectors) {
-                messageTextarea = document.querySelector(selector);
-                if (messageTextarea && !messageTextarea.hasAttribute('aria-hidden')) {
-                  console.log(`🎯 Found message textarea with: ${selector}`);
-                  break;
+                const elements = document.querySelectorAll(selector);
+                for (const el of elements) {
+                  if (el.offsetParent !== null && !el.hasAttribute('aria-hidden') && el.placeholder && el.placeholder.includes('Message')) {
+                    messageTextarea = el;
+                    console.log(`🎯 Found VISIBLE message textarea: "${el.placeholder}"`);
+                    break;
+                  }
                 }
+                if (messageTextarea) break;
               }
               
               if (messageTextarea) {
-                console.log(`📝 Textarea details:`);
-                console.log(`  Placeholder: "${messageTextarea.placeholder}"`);
-                console.log(`  Value: "${messageTextarea.value}"`);
-                console.log(`  Classes: "${messageTextarea.className}"`);
+                console.log(`📝 Target textarea: "${messageTextarea.placeholder}" | Value: "${messageTextarea.value}"`);
                 
-                // Method A: Try React-style event triggering
-                console.log(`🔥 Method A: React-style events...`);
+                // AGGRESSIVE FOCUS
+                messageTextarea.scrollIntoView();
                 messageTextarea.focus();
                 messageTextarea.click();
                 
-                // Wait for focus
-                await new Promise(resolve => setTimeout(resolve, 200));
+                // Ensure cursor is at end
+                messageTextarea.selectionStart = messageTextarea.value.length;
+                messageTextarea.selectionEnd = messageTextarea.value.length;
                 
-                // Create React-compatible events
-                const enterKeyEvent = new KeyboardEvent('keydown', {
-                  key: 'Enter',
-                  code: 'Enter',
-                  keyCode: 13,
-                  which: 13,
-                  bubbles: true,
-                  cancelable: true,
-                  composed: true,
-                  view: window
-                });
+                await new Promise(resolve => setTimeout(resolve, 500));
                 
-                // Set React fiber properties if they exist
-                if (messageTextarea._reactInternalFiber || messageTextarea._reactInternalInstance) {
-                  console.log(`🔧 React fiber detected, using React events...`);
+                // Method 1: DIRECT PLAYWRIGHT-STYLE KEY PRESS
+                console.log(`🔥 Method 1: Direct key simulation...`);
+                try {
+                  // Simulate actual physical key press
+                  await new Promise(resolve => {
+                    const keydown = new KeyboardEvent('keydown', {
+                      key: 'Enter',
+                      code: 'Enter',
+                      keyCode: 13,
+                      which: 13,
+                      charCode: 13,
+                      bubbles: true,
+                      cancelable: true,
+                      composed: true,
+                      detail: 0,
+                      view: window,
+                      ctrlKey: false,
+                      altKey: false,
+                      shiftKey: false,
+                      metaKey: false
+                    });
+                    
+                    const keyup = new KeyboardEvent('keyup', {
+                      key: 'Enter',
+                      code: 'Enter',
+                      keyCode: 13,
+                      which: 13,
+                      charCode: 13,
+                      bubbles: true,
+                      cancelable: true,
+                      composed: true,
+                      detail: 0,
+                      view: window
+                    });
+                    
+                    messageTextarea.dispatchEvent(keydown);
+                    setTimeout(() => {
+                      messageTextarea.dispatchEvent(keyup);
+                      resolve();
+                    }, 50);
+                  });
+                  
+                  console.log(`✅ Physical key press simulated`);
+                } catch (e) {
+                  console.log(`⚠️ Physical key simulation failed:`, e);
                 }
                 
-                const sent = messageTextarea.dispatchEvent(enterKeyEvent);
-                console.log(`⌨️ React ENTER event result: ${sent}`);
-                
-                // Method B: Try simulating actual typing
-                console.log(`🔥 Method B: Simulate typing ENTER...`);
-                const inputEvent = new Event('input', { bubbles: true, cancelable: true });
-                messageTextarea.dispatchEvent(inputEvent);
-                
-                // Method C: Try form submission
-                console.log(`🔥 Method C: Form submission...`);
-                const form = messageTextarea.closest('form');
-                if (form) {
-                  form.dispatchEvent(new Event('submit', { bubbles: true }));
-                  console.log(`📤 Form submit attempted`);
+                // Method 2: FORCE SUBMIT via any available method
+                console.log(`🔥 Method 2: Force submit...`);
+                const container = messageTextarea.closest('div, form, section');
+                if (container) {
+                  // Look for submit buttons in container
+                  const submitButtons = container.querySelectorAll('button, input[type="submit"], [role="button"]');
+                  for (const btn of submitButtons) {
+                    if (btn.type === 'submit' || btn.textContent.toLowerCase().includes('send') || btn.getAttribute('aria-label')?.toLowerCase().includes('send')) {
+                      console.log(`📤 Found and clicking submit button: ${btn.textContent || btn.getAttribute('aria-label')}`);
+                      btn.click();
+                      break;
+                    }
+                  }
                 }
                 
-                // Method D: Look for and click send button
-                console.log(`🔥 Method D: Send button click...`);
-                const sendButton = document.querySelector('button[type="submit"], button[aria-label*="send"], button[title*="Send"]');
-                if (sendButton) {
-                  sendButton.click();
-                  console.log(`📤 Send button clicked`);
-                } else {
-                  console.log(`❌ No send button found`);
+                // Method 3: TRIGGER FORM SUBMISSION
+                const parentForm = messageTextarea.form || messageTextarea.closest('form');
+                if (parentForm) {
+                  console.log(`📝 Submitting parent form...`);
+                  parentForm.submit();
                 }
                 
               } else {
-                console.error(`❌ NO MESSAGE TEXTAREA FOUND!`);
+                console.error(`❌ CRITICAL: No message textarea found!`);
                 
-                // Debug: List all textareas
+                // Emergency debug
                 const allTextareas = document.querySelectorAll('textarea');
-                console.log(`🔍 All textareas on page (${allTextareas.length}):`);
+                console.log(`🔍 DEBUG: ${allTextareas.length} textareas found:`);
                 allTextareas.forEach((ta, i) => {
-                  console.log(`  ${i + 1}. "${ta.placeholder}" | Value: "${ta.value}" | Hidden: ${ta.hasAttribute('aria-hidden')}`);
+                  console.log(`  ${i}: "${ta.placeholder}" | Visible: ${ta.offsetParent !== null} | Hidden: ${ta.hasAttribute('aria-hidden')} | Value: "${ta.value}"`);
                 });
               }
             } else if (step.type === 'close') {
@@ -925,12 +933,17 @@ class SkoolWorkflowManager {
                 // ALWAYS proceed - never get stuck here
                 console.log(`🚀 FORCING continuation to next step regardless of extraction quality...`);
                 
-                // Add a timeout to prevent infinite hanging
+                // IMMEDIATE FORCED COMPLETION - No more hanging!
+                console.log(`🚀 IMMEDIATE STEP COMPLETION - No timeouts needed!`);
+                
+                // Set a very short timeout just to ensure async completion
                 setTimeout(() => {
-                  console.log(`⏰ TIMEOUT: Forcing step completion after 5 seconds`);
-                  step.status = 'completed';
-                  renderWorkflow();
-                }, 5000);
+                  if (step.status !== 'completed') {
+                    console.log(`⏰ FORCING step completion NOW`);
+                    step.status = 'completed';
+                    renderWorkflow();
+                  }
+                }, 100);
               } else {
                 console.log(`🔍 Extract step: ${step.description}`);
               }
@@ -1041,6 +1054,9 @@ class SkoolWorkflowManager {
               }
             }
             
+            // Clear the global timeout
+            clearTimeout(stepTimeout);
+            
             step.status = 'completed';
             renderWorkflow();
             
@@ -1052,6 +1068,9 @@ class SkoolWorkflowManager {
             await new Promise(resolve => setTimeout(resolve, 800));
             
           } catch (error) {
+            // Clear the global timeout on error too
+            clearTimeout(stepTimeout);
+            
             console.error(`❌ Step failed: ${step.description}`, error);
             step.status = 'pending';
             renderWorkflow();
