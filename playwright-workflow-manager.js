@@ -803,9 +803,9 @@ class SkoolWorkflowManager {
                 };
                 
                 // IMMEDIATE URL extraction - ALWAYS works
-                const urlMatch = window.location.href.match(/\/@([^\/\?]+)/);
-                if (urlMatch) {
-                  profileData.skoolId = urlMatch[1];
+                const immediateUrlMatch = window.location.href.match(/\/@([^\/\?]+)/);
+                if (immediateUrlMatch) {
+                  profileData.skoolId = immediateUrlMatch[1];
                   console.log(`✅ IMMEDIATE Skool ID: ${profileData.skoolId}`);
                 } else {
                   console.log(`❌ Could not extract Skool ID from URL!`);
@@ -857,11 +857,13 @@ class SkoolWorkflowManager {
                   if (profileData.bio) break;
                 }
                 
-                // Extract Skool ID from URL
-                const urlMatch = window.location.href.match(/\/@([^\/\?]+)/);
-                if (urlMatch) {
-                  profileData.skoolId = urlMatch[1];
-                  console.log(`✅ Extracted Skool ID: ${profileData.skoolId}`);
+                // Extract Skool ID from URL (if not already extracted)
+                if (!profileData.skoolId) {
+                  const secondUrlMatch = window.location.href.match(/\/@([^\/\?]+)/);
+                  if (secondUrlMatch) {
+                    profileData.skoolId = secondUrlMatch[1];
+                    console.log(`✅ Extracted Skool ID: ${profileData.skoolId}`);
+                  }
                 }
                 
                 // Additional data extraction attempts
@@ -886,9 +888,9 @@ class SkoolWorkflowManager {
                 
                 // ALWAYS extract at least the Skool ID from URL - never fail completely
                 if (!profileData.skoolId) {
-                  const urlMatch = window.location.href.match(/\/@([^\/\?]+)/);
-                  if (urlMatch) {
-                    profileData.skoolId = urlMatch[1];
+                  const finalUrlMatch = window.location.href.match(/\/@([^\/\?]+)/);
+                  if (finalUrlMatch) {
+                    profileData.skoolId = finalUrlMatch[1];
                     console.log(`🔧 FORCED Skool ID extraction: ${profileData.skoolId}`);
                   }
                 }
