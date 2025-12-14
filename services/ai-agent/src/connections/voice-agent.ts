@@ -178,10 +178,8 @@ export class VoiceAgentConnection extends EventEmitter {
   /**
    * Send Voice Agent settings with function definitions
    * 
-   * IMPORTANT: Deepgram Voice Agent API requires:
-   * - Input: linear16 at 16000Hz
-   * - Output: linear16 at 16000Hz (or 8000, 24000, 48000)
-   * - temp (not temperature) for LLM
+   * Deepgram Voice Agent API v1 Settings format
+   * Reference: https://developers.deepgram.com/docs/configure-voice-agent
    */
   private sendSettings(): void {
     // Build settings object matching Deepgram Voice Agent API format
@@ -199,29 +197,19 @@ export class VoiceAgentConnection extends EventEmitter {
         },
       },
       agent: {
-        language: 'en',
         listen: {
-          provider: {
-            type: 'deepgram',
-            model: 'nova-2',  // Use nova-2 for Voice Agent (more stable)
-          },
+          model: 'nova-2',
         },
         think: {
           provider: {
             type: 'open_ai',
-            model: this.config.llmModel,
-            temp: 0.7,  // Note: 'temp' not 'temperature' for Voice Agent API
           },
-          prompt: this.config.coachingPrompt,
-          // Functions omitted for initial testing - add back once basic connection works
+          model: this.config.llmModel,
+          instructions: this.config.coachingPrompt,
         },
         speak: {
-          provider: {
-            type: 'deepgram',
-            model: 'aura-asteria-en',  // Use stable voice model
-          },
+          model: 'aura-asteria-en',
         },
-        greeting: this.config.greeting,
       },
     };
 
