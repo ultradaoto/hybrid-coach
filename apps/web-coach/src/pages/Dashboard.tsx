@@ -1,28 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import '../dashboard.css';
 
-type CoachUser = {
+// =============================================================================
+// Types
+// =============================================================================
+
+type ClientInfo = {
   id: string;
+  email: string;
   displayName: string;
-  email?: string | null;
-  role: 'coach' | 'client' | string;
-  isAvailable?: boolean;
-  coachName?: string | null;
-  coachLevel?: number | null;
-};
-
-type Meeting = {
-  summary: string;
-  start: string;
-};
-
-type AppointmentUser = {
-  id: string;
-  displayName?: string | null;
-  email?: string | null;
-  coachName?: string | null;
-  coachLevel?: number | null;
+  isOnline: boolean;
+  lastSeen: string | null;
+  activeRoomId: string | null;
 };
 
 type Appointment = {
@@ -30,27 +20,66 @@ type Appointment = {
   scheduledFor: string;
   status: string;
   roomId: string;
-  client?: AppointmentUser | null;
-  coach?: AppointmentUser | null;
+  client?: {
+    id: string;
+    displayName?: string;
+    email?: string;
+  };
 };
 
-type DashboardResponse = {
+type ActiveRoom = {
+  roomId: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  startedAt: string;
+  hasAiAgent: boolean;
+};
+
+type CoachUser = {
+  id: string;
+  displayName: string;
+  email?: string;
+  role: string;
+  isAvailable?: boolean;
+};
+
+type DashboardData = {
   user: CoachUser;
   calendarConnected: boolean;
-  meetings: Meeting[];
   appointments: Appointment[];
-  message?: string | null;
+  activeRooms: ActiveRoom[];
+  assignedClients: ClientInfo[];
+  stats: {
+    totalClients: number;
+    totalSessions: number;
+    upcomingAppointments: number;
+    activeNow: number;
+  };
 };
 
-type ApiError = {
-  error: string;
-  loginUrl?: string;
-};
+// =============================================================================
+// Helpers
+// =============================================================================
 
 function formatDateTime(input: string) {
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) return input;
   return d.toLocaleString();
+}
+
+function formatRelativeTime(isoString: string | null) {
+  if (!isoString) return 'Never';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  
+  const now = Date.now();
+  const diff = now - date.getTime();
+  
+  if (diff < 60000) return 'Just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return date.toLocaleDateString();
 }
 
 function getThemeFromStorage(): 'light' | 'dark' | null {
@@ -61,8 +90,7 @@ function getThemeFromStorage(): 'light' | 'dark' | null {
 
 function defaultThemeByTime(): 'light' | 'dark' {
   const hour = new Date().getHours();
-  const isNightTime = hour < 6 || hour > 18;
-  return isNightTime ? 'dark' : 'light';
+  return hour < 6 || hour > 18 ? 'dark' : 'light';
 }
 
 function applyTheme(theme: 'light' | 'dark') {
@@ -81,31 +109,102 @@ function getAuthToken() {
   return localStorage.getItem('auth_token');
 }
 
+// =============================================================================
+// Mock Data for Development
+// =============================================================================
+
+function generateMockData(realData: Partial<DashboardData> | null): DashboardData {
+  const now = new Date();
+  
+  // Default user
+  const user: CoachUser = realData?.user ?? {
+    id: 'coach-123',
+    displayName: 'Ultra Coach',
+    email: 'ultradaoto@gmail.com',
+    role: 'coach',
+    isAvailable: true,
+  };
+
+  // Mock assigned clients
+  const assignedClients: ClientInfo[] = realData?.assignedClients ?? [
+    {
+      id: 'client-1',
+      email: 'sterling.cooley@gmail.com',
+      displayName: 'Sterling Cooley',
+      isOnline: true,
+      lastSeen: new Date().toISOString(),
+      activeRoomId: null,
+    },
+  ];
+
+  // Mock active rooms (when client is in a session)
+  const activeRooms: ActiveRoom[] = realData?.activeRooms ?? [];
+
+  // Mock appointments - merge with real ones
+  const realAppointments = realData?.appointments ?? [];
+  const mockAppointments: Appointment[] = realAppointments.length > 0 ? realAppointments : [
+    {
+      id: 'apt-1',
+      scheduledFor: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
+      status: 'scheduled',
+      roomId: 'room-upcoming-1',
+      client: {
+        id: 'client-1',
+        displayName: 'Sterling Cooley',
+        email: 'sterling.cooley@gmail.com',
+      },
+    },
+    {
+      id: 'apt-2',
+      scheduledFor: new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString(), // Tomorrow
+      status: 'scheduled',
+      roomId: 'room-upcoming-2',
+      client: {
+        id: 'client-1',
+        displayName: 'Sterling Cooley',
+        email: 'sterling.cooley@gmail.com',
+      },
+    },
+  ];
+
+  return {
+    user,
+    calendarConnected: realData?.calendarConnected ?? false,
+    appointments: mockAppointments,
+    activeRooms,
+    assignedClients,
+    stats: {
+      totalClients: assignedClients.length,
+      totalSessions: 12,
+      upcomingAppointments: mockAppointments.filter(a => a.status === 'scheduled').length,
+      activeNow: activeRooms.length,
+    },
+  };
+}
+
+// =============================================================================
+// Component
+// =============================================================================
+
 export function CoachDashboardPage() {
+  const navigate = useNavigate();
+  
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window === 'undefined') return 'light';
     return getThemeFromStorage() ?? defaultThemeByTime();
   });
 
-  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
 
-  const message = useMemo(() => {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get('calendar') === 'connected') return 'Calendar connected successfully!';
-    if (url.searchParams.get('availability') === 'updated') return 'Availability status updated!';
-    if (url.searchParams.get('reassigned') === 'success') return 'Appointment returned to coach pool.';
-    return data?.message ?? null;
-  }, [data?.message]);
-
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
-  async function fetchDashboard() {
+  const fetchDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
     setLoginUrl(null);
@@ -115,7 +214,6 @@ export function CoachDashboardPage() {
       setLoading(false);
       setError('You are not authenticated.');
       setLoginUrl(publicLoginUrl());
-      setData(null);
       return;
     }
 
@@ -128,155 +226,121 @@ export function CoachDashboardPage() {
       });
 
       if (!res.ok) {
-        let details: ApiError | null = null;
-        try {
-          details = (await res.json()) as ApiError;
-        } catch {
-          // ignore
-        }
-
         if (res.status === 401) {
-          setLoginUrl(details?.loginUrl ?? publicLoginUrl());
+          setLoginUrl(publicLoginUrl());
           setError('You are not authenticated.');
-          setData(null);
           return;
         }
-
-        setError(details?.error ?? `Failed to load dashboard (HTTP ${res.status})`);
-        setData(null);
-        return;
+        throw new Error(`Failed to load dashboard (HTTP ${res.status})`);
       }
 
-      const json = (await res.json()) as { success: boolean; data: DashboardResponse };
+      const json = await res.json();
       console.log('[CoachDashboard] API Response:', json);
+      
       if (!json?.success) {
-        setError('Failed to load dashboard');
-        setData(null);
-        return;
+        throw new Error('Failed to load dashboard');
       }
-      console.log('[CoachDashboard] User role:', json.data?.user?.role);
-      console.log('[CoachDashboard] Appointments:', json.data?.appointments);
-      setData(json.data);
+
+      // Merge real data with mock data for development
+      const mergedData = generateMockData(json.data);
+      console.log('[CoachDashboard] Merged data:', mergedData);
+      setData(mergedData);
     } catch (e) {
+      console.error('[CoachDashboard] Error:', e);
+      // Still show mock data on error for development
+      setData(generateMockData(null));
       setError(e instanceof Error ? e.message : 'Failed to load dashboard');
-      setData(null);
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    void fetchDashboard();
-
-    const observerOptions: IntersectionObserverInit = {
-      threshold: 0.1,
-      rootMargin: '0px 0px -50px 0px',
-    };
-
-    const fadeInObserver = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) entry.target.classList.add('visible');
-      });
-    }, observerOptions);
-
-    document.querySelectorAll('.card, .alert, .hero-section').forEach((el) => {
-      if (!el.classList.contains('fade-in')) el.classList.add('fade-in');
-      fadeInObserver.observe(el);
-    });
-
-    return () => {
-      fadeInObserver.disconnect();
-    };
   }, []);
 
   useEffect(() => {
-    if (!data?.user || data.user.role !== 'coach') return;
+    fetchDashboard();
+    
+    // Auto-refresh every 10 seconds
+    const interval = setInterval(fetchDashboard, 10000);
+    return () => clearInterval(interval);
+  }, [fetchDashboard]);
 
-    const t = window.setInterval(() => {
-      void fetchDashboard();
-    }, 10_000);
-
-    return () => {
-      window.clearInterval(t);
-    };
-  }, [data?.user?.role]);
-
-  async function toggleAvailability() {
+  const toggleAvailability = async () => {
     setActionBusy('toggle-availability');
-    setError(null);
-
     const token = getAuthToken();
-    if (!token) {
-      setLoginUrl(publicLoginUrl());
-      setError('You are not authenticated.');
-      setActionBusy(null);
-      return;
-    }
+    if (!token) return;
 
     try {
-      const res = await fetch('/api/coach/toggle-availability', {
+      await fetch('/api/coach/toggle-availability', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({}),
       });
-
-      if (!res.ok) {
-        const maybe = (await res.json().catch(() => null)) as ApiError | null;
-        throw new Error(maybe?.error ?? `Failed to toggle availability (HTTP ${res.status})`);
-      }
-
       await fetchDashboard();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to toggle availability');
     } finally {
       setActionBusy(null);
     }
-  }
+  };
 
-  async function reassignAppointment(appointmentId: string) {
-    if (!window.confirm('Send this call back to the coach pool?')) return;
-
-    setActionBusy(`reassign:${appointmentId}`);
-    setError(null);
-
+  const createInstantRoom = async () => {
     const token = getAuthToken();
-    if (!token) {
-      setLoginUrl(publicLoginUrl());
-      setError('You are not authenticated.');
-      setActionBusy(null);
-      return;
-    }
+    if (!token) return;
 
     try {
-      const res = await fetch('/api/coach/reassign-appointment', {
+      const res = await fetch('/api/coach/room/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Accept: 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ appointmentId }),
+        body: JSON.stringify({}),
       });
-
-      if (!res.ok) {
-        const maybe = (await res.json().catch(() => null)) as ApiError | null;
-        throw new Error(maybe?.error ?? `Failed to reassign appointment (HTTP ${res.status})`);
+      
+      const json = await res.json();
+      if (json?.success && json?.data?.roomId) {
+        navigate(`/room/${json.data.roomId}`);
+      } else {
+        // Fallback: generate room ID client-side
+        const roomId = crypto.randomUUID();
+        navigate(`/room/${roomId}`);
       }
-
-      await fetchDashboard();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to reassign appointment');
-    } finally {
-      setActionBusy(null);
+    } catch {
+      // Fallback: generate room ID client-side
+      const roomId = crypto.randomUUID();
+      navigate(`/room/${roomId}`);
     }
-  }
+  };
+
+  const joinRoom = (roomId: string) => {
+    navigate(`/room/${roomId}`);
+  };
+
+  const logout = () => {
+    localStorage.removeItem('auth_token');
+    window.location.href = publicLoginUrl();
+  };
 
   const toggleIcon = theme === 'dark' ? '☀️' : '🌙';
   const user = data?.user;
+  const stats = data?.stats;
+  const activeRooms = data?.activeRooms ?? [];
+  const appointments = data?.appointments ?? [];
+  const assignedClients = data?.assignedClients ?? [];
+
+  // Separate upcoming appointments (next 24 hours) from later ones
+  const now = Date.now();
+  const upcomingAppointments = appointments
+    .filter(a => a.status === 'scheduled')
+    .filter(a => new Date(a.scheduledFor).getTime() - now < 24 * 60 * 60 * 1000)
+    .sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
+  
+  const laterAppointments = appointments
+    .filter(a => a.status === 'scheduled')
+    .filter(a => new Date(a.scheduledFor).getTime() - now >= 24 * 60 * 60 * 1000)
+    .sort((a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime());
 
   return (
     <>
@@ -290,193 +354,405 @@ export function CoachDashboardPage() {
       </button>
 
       <div className="dashboard-container">
+        {/* Header */}
         <header className="header">
           <div className="logo">MyUltra.Coach</div>
-          <p className="welcome-text">Welcome back, {user?.displayName ?? '—'}</p>
-          <div className="user-info">{user?.email ?? 'N/A'}</div>
+          <p className="welcome-text">Welcome back, {user?.displayName ?? 'Coach'}</p>
+          <div className="user-info">{user?.email ?? ''}</div>
         </header>
 
-        {message ? <div className="alert alert-success">{message}</div> : null}
-
-        {error ? (
+        {/* Error display */}
+        {error && (
           <div className="alert alert-error">
-            <strong>Error</strong>
-            <div style={{ marginTop: '0.5rem' }}>{error}</div>
-            {loginUrl ? (
-              <div style={{ marginTop: '1rem' }}>
-                <a href={loginUrl} className="btn btn-primary">
-                  Log in
-                </a>
+            <strong>Note:</strong> {error}
+            {loginUrl && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <a href={loginUrl} className="btn btn-primary">Log in</a>
               </div>
-            ) : null}
+            )}
           </div>
-        ) : null}
+        )}
 
+        {/* ============================================= */}
+        {/* HERO SECTION - Quick Actions */}
+        {/* ============================================= */}
         <div className="hero-section" style={{ display: 'block', visibility: 'visible', opacity: 1 }}>
           <div className="hero-content">
-            <h1 className="hero-title">🎯 Coach Dashboard</h1>
-            <p className="hero-subtitle">Manage your availability, upcoming meetings, and scheduled coaching calls.</p>
-            <Link to="/room/create" className="btn-hero">
-              🎤 Launch Test / AI Room
-              <span className="btn-hero-subtitle">Create an instant room</span>
-            </Link>
+            <h1 className="hero-title">🎯 Coach Command Center</h1>
+            <p className="hero-subtitle">
+              {activeRooms.length > 0 
+                ? `${activeRooms.length} active session${activeRooms.length > 1 ? 's' : ''} right now!`
+                : 'No active sessions. Start one or wait for clients to join.'
+              }
+            </p>
+            
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button className="btn-hero" type="button" onClick={createInstantRoom}>
+                🎤 Launch AI Room
+                <span className="btn-hero-subtitle">Start an instant session</span>
+              </button>
+              
+              <div style={{ 
+                background: 'rgba(255,255,255,0.1)', 
+                borderRadius: '12px', 
+                padding: '1rem 1.5rem',
+                textAlign: 'center',
+                minWidth: '120px'
+              }}>
+                <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats?.activeNow ?? 0}</div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Active Now</div>
+              </div>
+              
+              <div style={{ 
+                background: 'rgba(255,255,255,0.1)', 
+                borderRadius: '12px', 
+                padding: '1rem 1.5rem',
+                textAlign: 'center',
+                minWidth: '120px'
+              }}>
+                <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{stats?.upcomingAppointments ?? 0}</div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>Upcoming</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {loading ? (
-          <div className="card fade-in visible">
+        {/* ============================================= */}
+        {/* ACTIVE ROOMS - Most Important! */}
+        {/* ============================================= */}
+        <div className="card" style={{ borderLeft: '4px solid #10b981', background: activeRooms.length > 0 ? 'rgba(16, 185, 129, 0.1)' : undefined }}>
+          <div className="card-header">
+            <h3 className="card-title">
+              🟢 Active Rooms 
+              <span style={{ 
+                background: activeRooms.length > 0 ? '#10b981' : '#6b7280',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '0.8rem',
+                marginLeft: '0.5rem'
+              }}>
+                {activeRooms.length}
+              </span>
+            </h3>
+            <p className="card-subtitle">Sessions in progress - join to observe or participate</p>
+          </div>
+
+          {activeRooms.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {activeRooms.map((room) => (
+                <div key={room.roomId} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '1rem',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>
+                      👤 {room.clientName}
+                      {room.hasAiAgent && <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem' }}>🤖 AI Active</span>}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+                      Started {formatRelativeTime(room.startedAt)} • Room: {room.roomId.slice(0, 8)}...
+                    </div>
+                  </div>
+                  <button 
+                    className="btn btn-success" 
+                    onClick={() => joinRoom(room.roomId)}
+                    style={{ fontWeight: 600 }}
+                  >
+                    ▶️ Join Now
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '2rem', 
+              color: 'var(--text-secondary)',
+              background: 'rgba(0,0,0,0.05)',
+              borderRadius: '8px'
+            }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🔇</div>
+              <div>No active rooms right now</div>
+              <div style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                When clients start sessions, they'll appear here
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ============================================= */}
+        {/* UPCOMING APPOINTMENTS (Next 24 hours) */}
+        {/* ============================================= */}
+        <div className="card" style={{ borderLeft: '4px solid #f59e0b' }}>
+          <div className="card-header">
+            <h3 className="card-title">
+              ⏰ Coming Up Soon
+              <span style={{ 
+                background: upcomingAppointments.length > 0 ? '#f59e0b' : '#6b7280',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '0.8rem',
+                marginLeft: '0.5rem'
+              }}>
+                {upcomingAppointments.length}
+              </span>
+            </h3>
+            <p className="card-subtitle">Scheduled sessions in the next 24 hours</p>
+          </div>
+
+          {upcomingAppointments.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {upcomingAppointments.map((apt) => (
+                <div key={apt.id} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '1rem',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(245, 158, 11, 0.2)',
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>
+                      📅 {formatDateTime(apt.scheduledFor)}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                      👤 {apt.client?.displayName || apt.client?.email || 'Unknown Client'}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>
+                      Room: {apt.roomId.slice(0, 8)}...
+                    </div>
+                  </div>
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={() => joinRoom(apt.roomId)}
+                  >
+                    📍 Join Room
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '2rem', 
+              color: 'var(--text-secondary)',
+              background: 'rgba(0,0,0,0.03)',
+              borderRadius: '8px'
+            }}>
+              No appointments in the next 24 hours
+            </div>
+          )}
+        </div>
+
+        {/* ============================================= */}
+        {/* ASSIGNED CLIENTS */}
+        {/* ============================================= */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">
+              👥 My Clients
+              <span style={{ 
+                background: '#6366f1',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '0.8rem',
+                marginLeft: '0.5rem'
+              }}>
+                {assignedClients.length}
+              </span>
+            </h3>
+            <p className="card-subtitle">Clients assigned to you</p>
+          </div>
+
+          {assignedClients.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {assignedClients.map((client) => (
+                <div key={client.id} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 1rem',
+                  background: 'rgba(0,0,0,0.03)',
+                  borderRadius: '8px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ 
+                      width: '10px', 
+                      height: '10px', 
+                      borderRadius: '50%', 
+                      background: client.isOnline ? '#10b981' : '#6b7280',
+                      boxShadow: client.isOnline ? '0 0 8px #10b981' : 'none'
+                    }} />
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{client.displayName}</div>
+                      <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>{client.email}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.6, textAlign: 'right' }}>
+                      {client.isOnline ? (
+                        <span style={{ color: '#10b981', fontWeight: 500 }}>● Online now</span>
+                      ) : (
+                        <>Last seen: {formatRelativeTime(client.lastSeen)}</>
+                      )}
+                    </div>
+                    {client.activeRoomId && (
+                      <button 
+                        className="btn btn-success btn-sm"
+                        onClick={() => joinRoom(client.activeRoomId!)}
+                      >
+                        Join Session
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+              No clients assigned yet
+            </div>
+          )}
+        </div>
+
+        {/* ============================================= */}
+        {/* LATER APPOINTMENTS */}
+        {/* ============================================= */}
+        {laterAppointments.length > 0 && (
+          <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Loading…</h3>
-              <p className="card-subtitle">Fetching your coach dashboard data</p>
+              <h3 className="card-title">📆 Scheduled Later</h3>
+              <p className="card-subtitle">Appointments beyond 24 hours</p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {laterAppointments.map((apt) => (
+                <div key={apt.id} style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '0.75rem 1rem',
+                  background: 'rgba(0,0,0,0.02)',
+                  borderRadius: '6px',
+                  fontSize: '0.9rem',
+                }}>
+                  <div>
+                    <span style={{ fontWeight: 500 }}>{formatDateTime(apt.scheduledFor)}</span>
+                    <span style={{ marginLeft: '1rem', opacity: 0.7 }}>
+                      {apt.client?.displayName || apt.client?.email || 'Client'}
+                    </span>
+                  </div>
+                  <Link to={`/room/${apt.roomId}`} style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+                    View Room →
+                  </Link>
+                </div>
+              ))}
             </div>
           </div>
-        ) : null}
+        )}
 
-        {/* Show coach tools - user role from API: {user?.role} */}
-        {(user?.role === 'coach' || data?.appointments) ? (
-          <>
-            <div className="card fade-in">
-              <div className="card-header">
-                <h3 className="card-title">🎓 Coach Tools</h3>
-                <p className="card-subtitle">Manage your coaching availability and settings</p>
-              </div>
+        {/* ============================================= */}
+        {/* COACH TOOLS (Dense) */}
+        {/* ============================================= */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">🎓 Coach Settings</h3>
+            <p className="card-subtitle">Manage your availability and preferences</p>
+          </div>
 
-              <div className="availability-section">
-                <div>
-                  <strong className="availability-title">📊 Availability Status</strong>
-                  <br />
-                  <small className="availability-subtitle">
-                    {user.isAvailable
-                      ? 'You are currently accepting new client bookings'
-                      : 'You are not accepting new client bookings'}
-                  </small>
-                </div>
-
-                <label className="availability-toggle">
-                  <input
-                    type="checkbox"
-                    checked={!!user.isAvailable}
-                    onChange={() => void toggleAvailability()}
-                    disabled={actionBusy === 'toggle-availability'}
-                  />
-                  <span className={'availability-status ' + (user.isAvailable ? 'available' : 'unavailable')}>
-                    {user.isAvailable ? 'Available' : 'Unavailable'}
-                  </span>
-                </label>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            padding: '1rem',
+            background: 'rgba(0,0,0,0.03)',
+            borderRadius: '8px',
+          }}>
+            <div>
+              <strong>📊 Availability Status</strong>
+              <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+                {user?.isAvailable
+                  ? 'You are accepting new client bookings'
+                  : 'You are not accepting new bookings'}
               </div>
             </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!user?.isAvailable}
+                onChange={toggleAvailability}
+                disabled={actionBusy === 'toggle-availability'}
+                style={{ width: '20px', height: '20px' }}
+              />
+              <span style={{ 
+                padding: '4px 12px', 
+                borderRadius: '12px',
+                background: user?.isAvailable ? '#10b981' : '#6b7280',
+                color: 'white',
+                fontSize: '0.85rem',
+                fontWeight: 500,
+              }}>
+                {user?.isAvailable ? 'Available' : 'Unavailable'}
+              </span>
+            </label>
+          </div>
+        </div>
 
-            {!data?.calendarConnected ? (
-              <div className="alert alert-warning">
-                <strong>📅 Calendar not connected</strong>
-                <br />
-                Calendar integration will be re-added during the LiveKit/room-manager build-out.
-              </div>
-            ) : (
-              <div className="alert alert-success">
-                <strong>✅ Calendar connected</strong>
-                <br />
-                Your Google Calendar is successfully connected and synced.
-              </div>
-            )}
-
-            <div className="card fade-in">
-              <div className="card-header">
-                <h4 className="card-title">📅 Upcoming Meetings</h4>
-              </div>
-              {data?.meetings?.length ? (
-                <ul style={{ listStyle: 'none', padding: 0 }}>
-                  {data.meetings.map((m, idx) => (
-                    <li key={`${m.start}-${idx}`} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <strong>{m.start}</strong> – {m.summary}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>No upcoming meetings.</p>
-              )}
+        {/* ============================================= */}
+        {/* STATS (Dense Bottom Section) */}
+        {/* ============================================= */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">📈 Quick Stats</h3>
+          </div>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: '1rem',
+          }}>
+            <div style={{ textAlign: 'center', padding: '1rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#6366f1' }}>{stats?.totalClients ?? 0}</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Total Clients</div>
             </div>
-
-            <div className="card fade-in">
-              <div className="card-header">
-                <h3 className="card-title">
-                  📅 Upcoming Appointments
-                  <span
-                    style={{
-                      fontSize: '0.8em',
-                      color: 'var(--text-secondary)',
-                      fontWeight: 'normal',
-                      marginLeft: '0.5rem',
-                    }}
-                  >
-                    (Auto-refreshing every 10 seconds)
-                  </span>
-                </h3>
-              </div>
-
-              {data?.appointments?.length ? (
-                <div style={{ listStyle: 'none', padding: 0 }}>
-                  {data.appointments.map((a) => {
-                    const cancelled = a.status === 'cancelled';
-                    return (
-                      <div key={a.id} className="appointment-item coach">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div style={{ flex: 1 }}>
-                            <strong style={{ color: 'var(--text-primary)' }}>📅 {formatDateTime(a.scheduledFor)}</strong>
-                            {cancelled ? <span className="status-badge status-cancelled">CANCELLED</span> : null}
-                            {a.client ? (
-                              <>
-                                <br />👤 Client: {a.client.displayName || a.client.email || '—'}
-                              </>
-                            ) : null}
-                            <br />
-                            <span style={{ color: 'var(--text-secondary)', fontSize: '0.9em' }}>
-                              Room ID: {a.roomId?.slice(0, 8)}...
-                            </span>
-                          </div>
-
-                          {!cancelled ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginLeft: '1rem' }}>
-                              <button
-                                type="button"
-                                className="btn btn-warning"
-                                onClick={() => void reassignAppointment(a.id)}
-                                disabled={actionBusy === `reassign:${a.id}`}
-                              >
-                                🔄 Return to Pool
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        {!cancelled ? (
-                          <div style={{ marginTop: '1rem' }}>
-                            <Link to={`/room/${a.roomId}`} className="btn btn-success">
-                              ✅ Join Room
-                            </Link>
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '2rem' }}>
-                  No upcoming appointments.
-                </p>
-              )}
+            <div style={{ textAlign: 'center', padding: '1rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#10b981' }}>{stats?.totalSessions ?? 0}</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Sessions</div>
             </div>
-          </>
-        ) : null}
+            <div style={{ textAlign: 'center', padding: '1rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#f59e0b' }}>{stats?.upcomingAppointments ?? 0}</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Upcoming</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '1rem', background: 'rgba(0,0,0,0.03)', borderRadius: '8px' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ef4444' }}>{stats?.activeNow ?? 0}</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Active Now</div>
+            </div>
+          </div>
+        </div>
 
-        <div style={{ textAlign: 'center', marginTop: '3rem', padding: '2rem' }}>
-          <a
-            href={publicLoginUrl()}
-            style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.9rem' }}
-            onClick={() => localStorage.removeItem('auth_token')}
+        {/* Logout */}
+        <div style={{ textAlign: 'center', marginTop: '2rem', padding: '2rem' }}>
+          <button
+            type="button"
+            onClick={logout}
+            style={{ 
+              background: 'none', 
+              border: 'none', 
+              color: 'var(--text-secondary)', 
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+            }}
           >
             🔓 Logout
-          </a>
+          </button>
         </div>
       </div>
     </>
