@@ -1,13 +1,15 @@
 /**
- * Voice Agent WebSocket Connection
+ * Voice Agent WebSocket Connection (Enhanced)
  * 
  * Connects to Deepgram Voice Agent API (wss://agent.deepgram.com/v1/agent/converse)
- * Handles STT + LLM + TTS in a single WebSocket for conversational AI.
  * 
  * Features:
- * - Receives audio from Audio Router (client always, coach when unmuted)
- * - Outputs AI voice responses to LiveKit
- * - Supports KeepAlive during silence/mute periods
+ * - STT + LLM + TTS in a single WebSocket
+ * - ConversationText events for transcripts (no separate STT needed for clients)
+ * - Function calling for client data, insights, exercises
+ * - Coach whisper (UpdatePrompt) for silent context injection
+ * - Barge-in support (stops AI when user speaks)
+ * - KeepAlive during silence/mute periods
  * 
  * Reference: https://developers.deepgram.com/docs/voice-agent-api
  */
@@ -15,53 +17,18 @@
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { DEEPGRAM_VOICE_AGENT_URL, OPUS_CONFIG, LINEAR16_CONFIG } from '../audio/opus-handler.js';
+import type {
+  SettingsMessage,
+  FunctionDefinition,
+  ConversationTextEvent,
+  FunctionCallRequestEvent,
+  VoiceAgentServerEvent,
+  TranscriptEntry,
+} from '../types/deepgram-events.js';
 
 // =============================================================================
 // Types
 // =============================================================================
-
-/**
- * Voice Agent Settings message
- * Sent immediately after connection opens
- */
-export interface VoiceAgentSettings {
-  type: 'Settings';
-  audio: {
-    input: {
-      encoding: string;
-      sample_rate: number;
-    };
-    output: {
-      encoding: string;
-      sample_rate: number;
-      container: string;
-    };
-  };
-  agent: {
-    language: string;
-    listen: {
-      provider: {
-        type: string;
-        model: string;
-      };
-    };
-    think: {
-      provider: {
-        type: string;
-        model: string;
-        temperature?: number;
-      };
-      prompt: string;
-    };
-    speak: {
-      provider: {
-        type: string;
-        model: string;
-      };
-    };
-    greeting?: string;
-  };
-}
 
 /**
  * Voice Agent connection configuration
@@ -72,22 +39,20 @@ export interface VoiceAgentConfig {
   greeting?: string;
   voiceModel?: string;
   llmModel?: string;
+  functions?: FunctionDefinition[];
   verbose?: boolean;
 }
 
 /**
- * Voice Agent events
+ * Extended configuration with function definitions
  */
-export interface VoiceAgentEvents {
-  'open': () => void;
-  'close': (code: number, reason: string) => void;
-  'error': (error: Error) => void;
-  'audio': (data: Buffer) => void;
-  'transcript': (text: string, isFinal: boolean) => void;
-  'agent-speaking': () => void;
-  'agent-done-speaking': () => void;
-  'user-speaking': () => void;
-  'user-done-speaking': () => void;
+interface InternalConfig extends VoiceAgentConfig {
+  coachingPrompt: string;
+  greeting: string;
+  voiceModel: string;
+  llmModel: string;
+  functions: FunctionDefinition[];
+  verbose: boolean;
 }
 
 // =============================================================================
@@ -114,21 +79,26 @@ const DEFAULT_GREETING = "Hi there! I'm your AI wellness coach. How are you feel
 
 export class VoiceAgentConnection extends EventEmitter {
   private ws: WebSocket | null = null;
-  private config: VoiceAgentConfig;
+  private config: InternalConfig;
   private isConnected: boolean = false;
+  private isAgentSpeaking: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 3;
   private reconnectDelay: number = 1000;
+  private transcriptLog: TranscriptEntry[] = [];
+  private sessionId: string = '';
 
   constructor(config: VoiceAgentConfig) {
     super();
     this.config = {
-      coachingPrompt: DEFAULT_COACHING_PROMPT,
       greeting: DEFAULT_GREETING,
       voiceModel: 'aura-2-thalia-en',
       llmModel: 'gpt-4o-mini',
+      functions: [],
       verbose: false,
       ...config,
+      // Ensure coachingPrompt has a fallback
+      coachingPrompt: config.coachingPrompt || DEFAULT_COACHING_PROMPT,
     };
   }
 
@@ -156,37 +126,30 @@ export class VoiceAgentConnection extends EventEmitter {
           },
         });
 
-        // Connection opened
         this.ws.on('open', () => {
           console.log('[VoiceAgent] ✅ Connected to Voice Agent API');
           this.isConnected = true;
           this.reconnectAttempts = 0;
           
-          // Send settings immediately
           this.sendSettings();
-          
           this.emit('open');
           resolve();
         });
 
-        // Message received
         this.ws.on('message', (data: Buffer | string) => {
           this.handleMessage(data);
         });
 
-        // Connection closed
         this.ws.on('close', (code, reason) => {
           console.log(`[VoiceAgent] 📡 Connection closed: ${code} - ${reason.toString()}`);
           this.isConnected = false;
           this.emit('close', code, reason.toString());
           
-          // Attempt reconnection if not intentional close
           if (code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.attemptReconnect();
           }
         });
 
-        // Error
         this.ws.on('error', (error) => {
           console.error('[VoiceAgent] ❌ WebSocket error:', error);
           this.emit('error', error);
@@ -201,10 +164,10 @@ export class VoiceAgentConnection extends EventEmitter {
   }
 
   /**
-   * Send Voice Agent settings after connection
+   * Send Voice Agent settings with function definitions
    */
   private sendSettings(): void {
-    const settings: VoiceAgentSettings = {
+    const settings: SettingsMessage = {
       type: 'Settings',
       audio: {
         input: {
@@ -214,7 +177,7 @@ export class VoiceAgentConnection extends EventEmitter {
         output: {
           encoding: LINEAR16_CONFIG.encoding,
           sample_rate: LINEAR16_CONFIG.sampleRate,
-          container: 'none', // Raw audio for LiveKit
+          container: 'none',
         },
       },
       agent: {
@@ -228,22 +191,28 @@ export class VoiceAgentConnection extends EventEmitter {
         think: {
           provider: {
             type: 'open_ai',
-            model: this.config.llmModel || 'gpt-4o-mini',
+            model: this.config.llmModel,
             temperature: 0.7,
           },
           prompt: this.config.coachingPrompt,
+          // Add function definitions if provided
+          ...(this.config.functions.length > 0 && {
+            functions: this.config.functions,
+          }),
         },
         speak: {
           provider: {
             type: 'deepgram',
-            model: this.config.voiceModel || 'aura-2-thalia-en',
+            model: this.config.voiceModel,
           },
         },
         greeting: this.config.greeting,
       },
     };
 
-    this.log('📤 Sending settings:', settings);
+    this.log('📤 Sending settings with functions:', {
+      functions: this.config.functions.map(f => f.name),
+    });
     this.ws?.send(JSON.stringify(settings));
     console.log('[VoiceAgent] ⚙️ Settings sent');
   }
@@ -260,7 +229,7 @@ export class VoiceAgentConnection extends EventEmitter {
 
     // Text data = JSON control message
     try {
-      const message = JSON.parse(data.toString());
+      const message = JSON.parse(data.toString()) as VoiceAgentServerEvent;
       this.handleControlMessage(message);
     } catch (error) {
       this.log('⚠️ Failed to parse message:', data.toString());
@@ -270,19 +239,29 @@ export class VoiceAgentConnection extends EventEmitter {
   /**
    * Handle control messages from Voice Agent
    */
-  private handleControlMessage(message: { type: string; [key: string]: unknown }): void {
+  private handleControlMessage(message: VoiceAgentServerEvent): void {
     switch (message.type) {
       case 'Welcome':
         console.log('[VoiceAgent] 👋 Welcome received');
+        this.sessionId = (message as { session_id?: string }).session_id || '';
+        this.emit('welcome', message);
         break;
 
       case 'SettingsApplied':
         console.log('[VoiceAgent] ⚙️ Settings applied');
+        this.emit('settings-applied');
         break;
 
       case 'UserStartedSpeaking':
         this.log('🎤 User started speaking');
         this.emit('user-speaking');
+        
+        // BARGE-IN: Stop AI audio playback when user speaks
+        if (this.isAgentSpeaking) {
+          this.log('⚡ Barge-in detected - clearing buffer');
+          this.clearBuffer();
+          this.emit('barge-in');
+        }
         break;
 
       case 'UserStoppedSpeaking':
@@ -292,30 +271,148 @@ export class VoiceAgentConnection extends EventEmitter {
 
       case 'AgentStartedSpeaking':
         this.log('🔊 Agent started speaking');
+        this.isAgentSpeaking = true;
         this.emit('agent-speaking');
         break;
 
       case 'AgentAudioDone':
         this.log('🔇 Agent done speaking');
+        this.isAgentSpeaking = false;
         this.emit('agent-done-speaking');
         break;
 
       case 'ConversationText':
-        // Transcript of what user said
-        const text = message.content as string || '';
-        const role = message.role as string || 'user';
-        this.log(`📝 ${role}: "${text}"`);
-        this.emit('transcript', text, true);
+        this.handleConversationText(message as ConversationTextEvent);
+        break;
+
+      case 'PromptUpdated':
+        this.log('✅ Prompt updated (coach whisper confirmed)');
+        this.emit('prompt-updated', message);
+        break;
+
+      case 'FunctionCallRequest':
+        this.handleFunctionCallRequest(message as FunctionCallRequestEvent);
         break;
 
       case 'Error':
+        const errorEvent = message as { message?: string; code?: string };
         console.error('[VoiceAgent] ❌ Agent error:', message);
-        this.emit('error', new Error(message.message as string || 'Voice Agent error'));
+        this.emit('error', new Error(errorEvent.message || 'Voice Agent error'));
         break;
 
       default:
         this.log(`❓ Unknown message type: ${message.type}`, message);
     }
+  }
+
+  /**
+   * Handle ConversationText event - transcripts for user and agent
+   * This replaces the need for separate STT for client audio
+   */
+  private handleConversationText(event: ConversationTextEvent): void {
+    const { role, content } = event;
+    
+    // Log the transcript
+    const entry: TranscriptEntry = {
+      sessionId: this.sessionId,
+      role: role as 'user' | 'assistant',
+      content,
+      timestamp: new Date(),
+      source: 'voice_agent',
+      isFinal: true,
+    };
+    
+    this.transcriptLog.push(entry);
+    
+    console.log(`[VoiceAgent] 📝 ${role}: "${content}"`);
+    
+    // Emit transcript event for logging/display
+    this.emit('conversation-text', entry);
+    
+    // Also emit the old transcript event for backwards compatibility
+    this.emit('transcript', content, true);
+  }
+
+  /**
+   * Handle FunctionCallRequest from the agent
+   */
+  private handleFunctionCallRequest(event: FunctionCallRequestEvent): void {
+    console.log(`[VoiceAgent] 📞 Function call request: ${event.function_name}`);
+    this.log('Function input:', event.input);
+    
+    // Emit event for the function handler to process
+    this.emit('function-call', event);
+  }
+
+  /**
+   * Send function call response back to Voice Agent
+   */
+  sendFunctionCallResponse(functionCallId: string, output: string): void {
+    if (!this.isConnected || !this.ws) {
+      console.error('[VoiceAgent] ❌ Cannot send function response - not connected');
+      return;
+    }
+
+    this.ws.send(JSON.stringify({
+      type: 'FunctionCallResponse',
+      function_call_id: functionCallId,
+      output,
+    }));
+    
+    this.log(`📤 Sent function response for ${functionCallId}`);
+  }
+
+  /**
+   * Update the agent's prompt (Coach Whisper)
+   * Silent context injection - affects reasoning without being spoken
+   */
+  updatePrompt(prompt: string): void {
+    if (!this.isConnected || !this.ws) {
+      console.error('[VoiceAgent] ❌ Cannot update prompt - not connected');
+      return;
+    }
+
+    this.ws.send(JSON.stringify({
+      type: 'UpdatePrompt',
+      prompt,
+    }));
+    
+    console.log('[VoiceAgent] 💬 Sent prompt update (coach whisper)');
+  }
+
+  /**
+   * Inject a message as if the user said it
+   * Triggers the agent to respond to this text
+   */
+  injectUserMessage(content: string): void {
+    if (!this.isConnected || !this.ws) {
+      console.error('[VoiceAgent] ❌ Cannot inject user message - not connected');
+      return;
+    }
+
+    this.ws.send(JSON.stringify({
+      type: 'InjectUserMessage',
+      content,
+    }));
+    
+    console.log(`[VoiceAgent] 💉 Injected user message: "${content}"`);
+  }
+
+  /**
+   * Force the agent to say something specific
+   */
+  injectAgentMessage(content: string): void {
+    if (!this.isConnected || !this.ws) {
+      console.error('[VoiceAgent] ❌ Cannot inject agent message - not connected');
+      return;
+    }
+
+    this.ws.send(JSON.stringify({
+      type: 'InjectAgentMessage',
+      content,
+    }));
+    
+    console.log(`[VoiceAgent] 🔊 Injected agent message: "${content}"`);
   }
 
   /**
@@ -342,8 +439,7 @@ export class VoiceAgentConnection extends EventEmitter {
   }
 
   /**
-   * Send KeepAlive message
-   * Call every 8 seconds during silence to maintain connection
+   * Send KeepAlive message (every 8 seconds during silence)
    */
   sendKeepAlive(): void {
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
@@ -353,33 +449,35 @@ export class VoiceAgentConnection extends EventEmitter {
   }
 
   /**
-   * Inject text for the agent to speak
-   * Used by coaches to guide the conversation
-   */
-  injectPrompt(text: string): void {
-    if (!this.isConnected || !this.ws) {
-      console.error('[VoiceAgent] ❌ Cannot inject prompt - not connected');
-      return;
-    }
-
-    // Send as Inject message per Voice Agent API
-    this.ws.send(JSON.stringify({
-      type: 'InjectAgentMessage',
-      message: text,
-    }));
-    
-    console.log(`[VoiceAgent] 💉 Injected prompt: "${text}"`);
-  }
-
-  /**
-   * Clear the agent's response buffer
-   * Use when user interrupts or conversation needs reset
+   * Clear the agent's response buffer (for barge-in)
    */
   clearBuffer(): void {
     if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: 'Clear' }));
+      this.isAgentSpeaking = false;
       this.log('🧹 Buffer cleared');
     }
+  }
+
+  /**
+   * Get all transcripts from the session
+   */
+  getTranscriptLog(): TranscriptEntry[] {
+    return [...this.transcriptLog];
+  }
+
+  /**
+   * Clear transcript log
+   */
+  clearTranscriptLog(): void {
+    this.transcriptLog = [];
+  }
+
+  /**
+   * Check if agent is currently speaking
+   */
+  isCurrentlySpeaking(): boolean {
+    return this.isAgentSpeaking;
   }
 
   /**
@@ -403,10 +501,17 @@ export class VoiceAgentConnection extends EventEmitter {
   /**
    * Get connection status
    */
-  getStatus(): { connected: boolean; reconnectAttempts: number } {
+  getStatus(): {
+    connected: boolean;
+    reconnectAttempts: number;
+    isAgentSpeaking: boolean;
+    transcriptCount: number;
+  } {
     return {
       connected: this.isConnected,
       reconnectAttempts: this.reconnectAttempts,
+      isAgentSpeaking: this.isAgentSpeaking,
+      transcriptCount: this.transcriptLog.length,
     };
   }
 
@@ -426,6 +531,7 @@ export class VoiceAgentConnection extends EventEmitter {
       this.ws = null;
     }
     this.isConnected = false;
+    this.isAgentSpeaking = false;
     console.log('[VoiceAgent] 📴 Connection closed');
   }
 }

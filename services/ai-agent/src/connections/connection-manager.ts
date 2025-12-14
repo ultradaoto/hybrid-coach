@@ -33,6 +33,9 @@ import { VoiceAgentConnection } from './voice-agent.js';
 import { TranscriptionConnection, type TranscriptResult } from './transcription.js';
 import { AudioRouter, type ParticipantRole } from '../audio/router.js';
 import type { MuteCommand } from '../audio/gating.js';
+import type { FunctionDefinition, FunctionCallRequestEvent, TranscriptEntry } from '../types/deepgram-events.js';
+import { FunctionCallingHandler, createFunctionCallingHandler, COACHING_FUNCTIONS } from '../features/function-calling.js';
+import { CoachWhisperManager } from '../features/coach-whisper.js';
 
 // =============================================================================
 // Types
@@ -44,6 +47,7 @@ export interface DualConnectionConfig {
   greeting?: string;
   voiceModel?: string;
   llmModel?: string;
+  functions?: FunctionDefinition[];
   verbose?: boolean;
 }
 
@@ -73,12 +77,17 @@ export class DualConnectionManager extends EventEmitter {
   private voiceAgent: VoiceAgentConnection;
   private transcription: TranscriptionConnection;
   private router: AudioRouter;
+  private functionHandler: FunctionCallingHandler;
+  private whisperManager: CoachWhisperManager;
   private config: DualConnectionConfig;
   private isInitialized: boolean = false;
 
   constructor(config: DualConnectionConfig) {
     super();
     this.config = config;
+
+    // Get function definitions (use provided or defaults)
+    const functions = config.functions || COACHING_FUNCTIONS;
 
     // Create connections
     this.voiceAgent = new VoiceAgentConnection({
@@ -87,6 +96,7 @@ export class DualConnectionManager extends EventEmitter {
       greeting: config.greeting,
       voiceModel: config.voiceModel,
       llmModel: config.llmModel,
+      functions: functions,
       verbose: config.verbose,
     });
 
@@ -100,6 +110,15 @@ export class DualConnectionManager extends EventEmitter {
       verbose: config.verbose,
     });
 
+    // Create function calling handler with default coaching functions
+    this.functionHandler = createFunctionCallingHandler(config.verbose);
+
+    // Create coach whisper manager
+    this.whisperManager = new CoachWhisperManager(
+      config.coachingPrompt,
+      { verbose: config.verbose }
+    );
+
     // Set up event forwarding
     this.setupEventHandlers();
   }
@@ -111,6 +130,11 @@ export class DualConnectionManager extends EventEmitter {
     // Voice Agent events
     this.voiceAgent.on('audio', (data: Buffer) => {
       this.emit('ai-audio', data);
+    });
+
+    // ConversationText - unified transcript logging
+    this.voiceAgent.on('conversation-text', (entry: TranscriptEntry) => {
+      this.emit('conversation-text', entry);
     });
 
     this.voiceAgent.on('transcript', (text: string, isFinal: boolean) => {
@@ -133,6 +157,22 @@ export class DualConnectionManager extends EventEmitter {
       this.emit('user-done-speaking');
     });
 
+    // Barge-in event (user interrupted AI)
+    this.voiceAgent.on('barge-in', () => {
+      this.emit('barge-in');
+    });
+
+    // Function call requests from AI
+    this.voiceAgent.on('function-call', async (event: FunctionCallRequestEvent) => {
+      await this.functionHandler.handleFunctionCallRequest(event);
+    });
+
+    // Prompt updated (coach whisper confirmed)
+    this.voiceAgent.on('prompt-updated', () => {
+      this.whisperManager.handlePromptUpdated({ type: 'PromptUpdated' });
+      this.emit('prompt-updated');
+    });
+
     this.voiceAgent.on('error', (error: Error) => {
       this.emit('voice-agent-error', error);
     });
@@ -141,7 +181,7 @@ export class DualConnectionManager extends EventEmitter {
       this.emit('voice-agent-close', { code, reason });
     });
 
-    // Transcription events
+    // Transcription events (for muted coach audio)
     this.transcription.on('transcript', (result: TranscriptResult) => {
       this.emit('transcription', result);
     });
@@ -165,6 +205,15 @@ export class DualConnectionManager extends EventEmitter {
     // Router events
     this.router.on('gate-event', (event) => {
       this.emit('gate-event', event);
+    });
+
+    // Function handler events
+    this.functionHandler.on('function-executed', (result) => {
+      this.emit('function-executed', result);
+    });
+
+    this.functionHandler.on('function-error', (error) => {
+      this.emit('function-error', error);
     });
   }
 
@@ -191,8 +240,14 @@ export class DualConnectionManager extends EventEmitter {
 
       this.router.setConnections(vaWs, trWs);
 
+      // Set up function handler and whisper manager with Voice Agent connection
+      this.functionHandler.setConnection(vaWs);
+      this.whisperManager.setConnection(vaWs);
+
       this.isInitialized = true;
       console.log('[DualConnection] ✅ Both connections initialized');
+      console.log('[DualConnection] 🔧 Function calling enabled');
+      console.log('[DualConnection] 💬 Coach whisper enabled');
       
       this.emit('initialized');
 
@@ -259,31 +314,101 @@ export class DualConnectionManager extends EventEmitter {
   }
 
   /**
-   * Inject a prompt for the AI to speak
+   * Inject a prompt for the AI to speak (deprecated: use injectAgentMessage)
    */
   injectPrompt(text: string): void {
-    this.voiceAgent.injectPrompt(text);
+    this.voiceAgent.injectAgentMessage(text);
   }
 
   /**
-   * Clear Voice Agent response buffer
+   * Force the AI to say something specific
+   */
+  injectAgentMessage(content: string): void {
+    this.voiceAgent.injectAgentMessage(content);
+  }
+
+  /**
+   * Inject a message as if the user said it (triggers AI response)
+   */
+  injectUserMessage(content: string): void {
+    this.voiceAgent.injectUserMessage(content);
+  }
+
+  /**
+   * Coach Whisper - Inject silent context into AI reasoning
+   * The guidance affects AI responses but is not spoken aloud
+   */
+  async sendCoachWhisper(guidance: string, coachId?: string): Promise<void> {
+    return this.whisperManager.sendWhisper(guidance, coachId);
+  }
+
+  /**
+   * Update the AI's system prompt directly
+   */
+  updatePrompt(prompt: string): void {
+    this.voiceAgent.updatePrompt(prompt);
+  }
+
+  /**
+   * Clear Voice Agent response buffer (for barge-in)
    */
   clearVoiceAgentBuffer(): void {
     this.voiceAgent.clearBuffer();
   }
 
   /**
-   * Get all transcripts from the session
+   * Check if AI is currently speaking
+   */
+  isAgentSpeaking(): boolean {
+    return this.voiceAgent.isCurrentlySpeaking();
+  }
+
+  /**
+   * Get all transcripts from Voice Agent (ConversationText)
+   */
+  getVoiceAgentTranscripts(): TranscriptEntry[] {
+    return this.voiceAgent.getTranscriptLog();
+  }
+
+  /**
+   * Get all transcripts from Transcription STT (muted coach audio)
    */
   getTranscripts(): TranscriptResult[] {
     return this.transcription.getTranscriptBuffer();
   }
 
   /**
-   * Clear transcript buffer
+   * Clear Voice Agent transcript log
+   */
+  clearVoiceAgentTranscripts(): void {
+    this.voiceAgent.clearTranscriptLog();
+  }
+
+  /**
+   * Clear Transcription STT buffer
    */
   clearTranscripts(): void {
     this.transcription.clearBuffer();
+  }
+
+  /**
+   * Get coach whisper history
+   */
+  getWhisperHistory(): Array<{ guidance: string; timestamp: Date; coachId?: string }> {
+    return this.whisperManager.getHistory();
+  }
+
+  /**
+   * Get function call log
+   */
+  getFunctionCallLog(): Array<{
+    functionName: string;
+    input: Record<string, unknown>;
+    output: string;
+    timestamp: Date;
+    success: boolean;
+  }> {
+    return this.functionHandler.getCallLog();
   }
 
   /**
@@ -345,6 +470,8 @@ export class DualConnectionManager extends EventEmitter {
     this.router.cleanup();
     this.voiceAgent.close();
     this.transcription.close();
+    this.functionHandler.cleanup();
+    this.whisperManager.cleanup();
     
     this.isInitialized = false;
     console.log('[DualConnection] ✅ Cleanup complete');

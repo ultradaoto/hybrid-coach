@@ -1,25 +1,32 @@
 /**
- * Audio Router
+ * Audio Router (Optimized)
  * 
- * Routes audio frames to appropriate connections:
- * - Voice Agent WebSocket: GATED (respects coach mute)
- * - Transcription WebSocket: ALWAYS receives all audio
+ * Routes audio frames with OPTIMIZED routing based on Deepgram capabilities:
+ * 
+ * OPTIMIZATION:
+ * - Client audio → Voice Agent ONLY (transcripts come from ConversationText events)
+ * - Coach audio → Voice Agent (when unmuted) + Transcription STT (ALWAYS)
+ * 
+ * This eliminates redundant STT for client audio since Voice Agent emits
+ * ConversationText events with transcripts for all audio it processes.
  * 
  * Architecture:
- * ┌─────────────────────────────────────────────────────────────┐
- * │                        Audio Router                          │
- * │                                                              │
- * │   Client Audio ──┬─────────────────────────────────────────▶│──▶ Voice Agent
- * │                  │                                           │    (always)
- * │                  └─────────────────────────────────────────▶│──▶ Transcription
- * │                                                              │    (always)
- * │                                                              │
- * │   Coach Audio ───┬───────[ Gate ]───────────────────────────▶│──▶ Voice Agent
- * │                  │         ▲                                 │    (when unmuted)
- * │                  │         │ mute/unmute                     │
- * │                  └─────────────────────────────────────────▶│──▶ Transcription
- * │                                                              │    (always)
- * └─────────────────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │                        Audio Router (Optimized)                      │
+ * │                                                                      │
+ * │   Client Audio ─────────────────────────────────────────────────────▶│──▶ Voice Agent
+ * │                                    │                                 │    (always)
+ * │                                    └──▶ ConversationText events      │
+ * │                                         (transcripts from VA)        │
+ * │                                                                      │
+ * │   Coach Audio ───┬───────[ Gate ]───────────────────────────────────▶│──▶ Voice Agent
+ * │                  │         ▲                                         │    (when unmuted)
+ * │                  │         │ mute/unmute                             │
+ * │                  │         └──▶ ConversationText (when unmuted)      │
+ * │                  │                                                   │
+ * │                  └──────────────────────────────────────────────────▶│──▶ Transcription STT
+ * │                                                                      │    (ALWAYS - for muted)
+ * └─────────────────────────────────────────────────────────────────────┘
  */
 
 import { EventEmitter } from 'events';
@@ -46,9 +53,12 @@ export interface AudioStats {
   totalFramesToTranscription: number;
   framesBlockedByGate: number;
   invalidFramesDropped: number;
+  clientFrames: number;
+  coachFrames: number;
   byParticipant: Map<string, {
     framesReceived: number;
     framesToVoiceAgent: number;
+    framesToTranscription: number;
     isMuted: boolean;
   }>;
 }
@@ -65,6 +75,7 @@ const DEFAULT_CONFIG: RouterConfig = {
 
 /**
  * Routes audio to Voice Agent and Transcription connections
+ * with optimized routing based on participant role
  */
 export class AudioRouter extends EventEmitter {
   private voiceAgentWs: WebSocket | null = null;
@@ -88,6 +99,8 @@ export class AudioRouter extends EventEmitter {
       totalFramesToTranscription: 0,
       framesBlockedByGate: 0,
       invalidFramesDropped: 0,
+      clientFrames: 0,
+      coachFrames: 0,
       byParticipant: new Map(),
     };
 
@@ -96,7 +109,7 @@ export class AudioRouter extends EventEmitter {
       this.emit('gate-event', event);
     });
 
-    console.log('[AudioRouter] 🔀 Initialized');
+    console.log('[AudioRouter] 🔀 Initialized (Optimized routing)');
   }
 
   private log(message: string): void {
@@ -117,13 +130,15 @@ export class AudioRouter extends EventEmitter {
 
   /**
    * Register a participant with their role
-   * Clients always pass through, Coaches are gated
+   * - Clients: audio → Voice Agent only (transcripts via ConversationText)
+   * - Coaches: audio → Voice Agent (gated) + Transcription STT (always)
    */
   registerParticipant(participantId: string, role: ParticipantRole, name?: string): void {
     this.participantRoles.set(participantId, role);
     this.stats.byParticipant.set(participantId, {
       framesReceived: 0,
       framesToVoiceAgent: 0,
+      framesToTranscription: 0,
       isMuted: false,
     });
     console.log(`[AudioRouter] 👤 Registered: ${name || participantId} (${role})`);
@@ -134,13 +149,16 @@ export class AudioRouter extends EventEmitter {
    */
   unregisterParticipant(participantId: string): void {
     this.participantRoles.delete(participantId);
-    this.gate.unmuteFromVoiceAgent(participantId); // Clean up any mute state
+    this.gate.unmuteFromVoiceAgent(participantId);
     console.log(`[AudioRouter] 👋 Unregistered: ${participantId}`);
   }
 
   /**
    * Route audio frame to appropriate connections
-   * This is the main entry point for all audio
+   * 
+   * OPTIMIZED ROUTING:
+   * - Client audio → Voice Agent ONLY (ConversationText provides transcripts)
+   * - Coach audio → Voice Agent (gated) + Transcription STT (always)
    */
   routeAudio(
     data: Buffer | Uint8Array,
@@ -163,57 +181,79 @@ export class AudioRouter extends EventEmitter {
 
     // Create audio frame
     const frame = createAudioFrame(data, participantId, participantName);
+    const role = this.participantRoles.get(participantId) || 'unknown';
 
-    // ALWAYS send to transcription (for coach review panel)
-    this.sendToTranscription(frame);
-
-    // Route to Voice Agent based on gating rules
-    this.routeToVoiceAgent(frame);
+    // Route based on role
+    switch (role) {
+      case 'client':
+        this.routeClientAudio(frame);
+        break;
+      case 'coach':
+        this.routeCoachAudio(frame);
+        break;
+      case 'ai':
+        // AI audio never routed (it's output, not input)
+        break;
+      default:
+        // Unknown role - treat as client (safe default)
+        this.log(`⚠️ Unknown role for ${participantId}, treating as client`);
+        this.routeClientAudio(frame);
+    }
   }
 
   /**
-   * Send audio to Voice Agent (with gating)
+   * Route CLIENT audio
+   * 
+   * OPTIMIZED: Client audio goes to Voice Agent ONLY
+   * Transcripts come from ConversationText events, not separate STT
    */
-  private routeToVoiceAgent(frame: AudioFrame): void {
-    const role = this.participantRoles.get(frame.participantId) || 'unknown';
+  private routeClientAudio(frame: AudioFrame): void {
+    this.stats.clientFrames++;
     const participantStats = this.stats.byParticipant.get(frame.participantId);
 
-    // AI audio should never go back to Voice Agent
-    if (role === 'ai') {
-      return;
-    }
-
-    // Client audio always passes through
-    if (role === 'client') {
-      if (this.sendToVoiceAgent(frame)) {
-        this.stats.totalFramesToVoiceAgent++;
-        if (participantStats) {
-          participantStats.framesToVoiceAgent++;
-        }
+    // Send to Voice Agent only (no transcription STT needed)
+    if (this.sendToVoiceAgent(frame)) {
+      this.stats.totalFramesToVoiceAgent++;
+      if (participantStats) {
+        participantStats.framesToVoiceAgent++;
       }
-      return;
     }
 
-    // Coach audio is GATED
-    if (role === 'coach') {
-      const sent = this.gate.processAudioForVoiceAgent(frame);
-      if (sent) {
-        this.stats.totalFramesToVoiceAgent++;
-        if (participantStats) {
-          participantStats.framesToVoiceAgent++;
-        }
-      } else {
-        this.stats.framesBlockedByGate++;
-        if (participantStats) {
-          participantStats.isMuted = true;
-        }
+    // NOTE: Client transcripts come from ConversationText events
+    // No need to send to transcription STT
+  }
+
+  /**
+   * Route COACH audio
+   * 
+   * Coach audio is ALWAYS sent to Transcription STT (for muted periods)
+   * Coach audio is sent to Voice Agent only when unmuted (via gate)
+   */
+  private routeCoachAudio(frame: AudioFrame): void {
+    this.stats.coachFrames++;
+    const participantStats = this.stats.byParticipant.get(frame.participantId);
+
+    // ALWAYS send coach audio to Transcription STT
+    // This ensures we capture coach speech even when muted from AI
+    this.sendToTranscription(frame);
+    if (participantStats) {
+      participantStats.framesToTranscription++;
+    }
+
+    // Send to Voice Agent via gate (respects mute state)
+    const sentToVA = this.gate.processAudioForVoiceAgent(frame);
+    if (sentToVA) {
+      this.stats.totalFramesToVoiceAgent++;
+      if (participantStats) {
+        participantStats.framesToVoiceAgent++;
+        participantStats.isMuted = false;
       }
-      return;
+    } else {
+      this.stats.framesBlockedByGate++;
+      if (participantStats) {
+        participantStats.isMuted = true;
+      }
     }
-
-    // Unknown role - pass through but warn
-    this.log(`⚠️ Unknown participant role: ${frame.participantId}`);
-    this.sendToVoiceAgent(frame);
   }
 
   /**
@@ -235,12 +275,12 @@ export class AudioRouter extends EventEmitter {
   }
 
   /**
-   * Send audio frame to Transcription WebSocket
-   * This ALWAYS receives all audio for coach review panel
+   * Send audio frame to Transcription STT WebSocket
+   * Used for COACH audio during muted periods
    */
   private sendToTranscription(frame: AudioFrame): void {
     if (!this.transcriptionWs || this.transcriptionWs.readyState !== 1) {
-      this.log('⚠️ Transcription not ready');
+      this.log('⚠️ Transcription STT not ready');
       return;
     }
 
@@ -258,7 +298,6 @@ export class AudioRouter extends EventEmitter {
   handleMuteCommand(command: MuteCommand): void {
     processMuteCommand(this.gate, command);
     
-    // Update participant stats
     const stats = this.stats.byParticipant.get(command.participantId);
     if (stats) {
       stats.isMuted = command.muted;
