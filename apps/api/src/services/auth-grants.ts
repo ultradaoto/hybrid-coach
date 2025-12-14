@@ -67,10 +67,8 @@ export async function exchangeGrantForJwt(grantToken: string): Promise<string> {
 
 export function buildRedirectUrl(user: DbUser, grantToken: string) {
   const base = getRedirectBaseUrl(user.role);
-  const url = new URL('/auth/callback', base);
-  url.searchParams.set('grant', grantToken);
-  const redirectUrl = url.toString();
+  // Use relative path 'auth/callback' so it appends to the base path correctly
+  const redirectUrl = `${base}/auth/callback?grant=${grantToken}`;
   console.log(`[Auth] Redirect URL for ${user.email} (${user.role}): ${redirectUrl}`);
-  console.log(`[Auth] NODE_ENV=${process.env.NODE_ENV}, base=${base}`);
   return redirectUrl;
 }
