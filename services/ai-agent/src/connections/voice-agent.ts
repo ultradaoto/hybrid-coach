@@ -16,7 +16,7 @@
 
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { DEEPGRAM_VOICE_AGENT_URL, OPUS_CONFIG, LINEAR16_CONFIG } from '../audio/opus-handler.js';
+import { DEEPGRAM_VOICE_AGENT_URL, VOICE_AGENT_INPUT_CONFIG, VOICE_AGENT_OUTPUT_CONFIG } from '../audio/opus-handler.js';
 import type {
   SettingsMessage,
   FunctionDefinition,
@@ -141,9 +141,21 @@ export class VoiceAgentConnection extends EventEmitter {
         });
 
         this.ws.on('close', (code, reason) => {
-          console.log(`[VoiceAgent] 📡 Connection closed: ${code} - ${reason.toString()}`);
+          const reasonStr = reason?.toString() || 'no reason';
+          console.log(`[VoiceAgent] 📡 Connection closed: ${code} - ${reasonStr}`);
+          
+          // Log helpful debug info for common error codes
+          if (code === 1005) {
+            console.log('[VoiceAgent] ⚠️ Code 1005 = No Status Received - server closed without status');
+            console.log('[VoiceAgent] 💡 This often means invalid Settings message format');
+          } else if (code === 1008) {
+            console.log('[VoiceAgent] ⚠️ Code 1008 = Policy Violation - check API key or permissions');
+          } else if (code === 1011) {
+            console.log('[VoiceAgent] ⚠️ Code 1011 = Server Error - issue on Deepgram side');
+          }
+          
           this.isConnected = false;
-          this.emit('close', code, reason.toString());
+          this.emit('close', code, reasonStr);
           
           if (code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.attemptReconnect();
@@ -165,18 +177,24 @@ export class VoiceAgentConnection extends EventEmitter {
 
   /**
    * Send Voice Agent settings with function definitions
+   * 
+   * IMPORTANT: Deepgram Voice Agent API requires:
+   * - Input: linear16 at 16000Hz
+   * - Output: linear16 at 16000Hz (or 8000, 24000, 48000)
+   * - temp (not temperature) for LLM
    */
   private sendSettings(): void {
-    const settings: SettingsMessage = {
+    // Build settings object matching Deepgram Voice Agent API format
+    const settings: Record<string, unknown> = {
       type: 'Settings',
       audio: {
         input: {
-          encoding: OPUS_CONFIG.encoding,
-          sample_rate: OPUS_CONFIG.sampleRate,
+          encoding: VOICE_AGENT_INPUT_CONFIG.encoding,
+          sample_rate: VOICE_AGENT_INPUT_CONFIG.sampleRate,
         },
         output: {
-          encoding: LINEAR16_CONFIG.encoding,
-          sample_rate: LINEAR16_CONFIG.sampleRate,
+          encoding: VOICE_AGENT_OUTPUT_CONFIG.encoding,
+          sample_rate: VOICE_AGENT_OUTPUT_CONFIG.sampleRate,
           container: 'none',
         },
       },
@@ -185,33 +203,32 @@ export class VoiceAgentConnection extends EventEmitter {
         listen: {
           provider: {
             type: 'deepgram',
-            model: 'nova-3',
+            model: 'nova-2',  // Use nova-2 for Voice Agent (more stable)
           },
         },
         think: {
           provider: {
             type: 'open_ai',
             model: this.config.llmModel,
-            temperature: 0.7,
+            temp: 0.7,  // Note: 'temp' not 'temperature' for Voice Agent API
           },
           prompt: this.config.coachingPrompt,
-          // Add function definitions if provided
-          ...(this.config.functions.length > 0 && {
-            functions: this.config.functions,
-          }),
+          // Functions omitted for initial testing - add back once basic connection works
         },
         speak: {
           provider: {
             type: 'deepgram',
-            model: this.config.voiceModel,
+            model: 'aura-asteria-en',  // Use stable voice model
           },
         },
         greeting: this.config.greeting,
       },
     };
 
-    this.log('📤 Sending settings with functions:', {
-      functions: this.config.functions.map(f => f.name),
+    this.log('📤 Sending settings:', {
+      inputEncoding: VOICE_AGENT_INPUT_CONFIG.encoding,
+      inputSampleRate: VOICE_AGENT_INPUT_CONFIG.sampleRate,
+      llmModel: this.config.llmModel,
     });
     this.ws?.send(JSON.stringify(settings));
     console.log('[VoiceAgent] ⚙️ Settings sent');
@@ -223,6 +240,7 @@ export class VoiceAgentConnection extends EventEmitter {
   private handleMessage(data: Buffer | string): void {
     // Binary data = audio response from TTS
     if (Buffer.isBuffer(data)) {
+      this.log(`🔊 Received audio: ${data.length} bytes`);
       this.emit('audio', data);
       return;
     }
@@ -230,9 +248,10 @@ export class VoiceAgentConnection extends EventEmitter {
     // Text data = JSON control message
     try {
       const message = JSON.parse(data.toString()) as VoiceAgentServerEvent;
+      console.log(`[VoiceAgent] 📨 Received: ${message.type}`);
       this.handleControlMessage(message);
     } catch (error) {
-      this.log('⚠️ Failed to parse message:', data.toString());
+      console.log('[VoiceAgent] ⚠️ Raw message:', data.toString().substring(0, 200));
     }
   }
 

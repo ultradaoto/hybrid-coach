@@ -24,15 +24,40 @@ export interface AudioConfig {
   channels: number;
 }
 
+/**
+ * Opus config for LiveKit audio (what we receive from WebRTC)
+ */
 export const OPUS_CONFIG: AudioConfig = {
   encoding: 'opus',
   sampleRate: 48000,
   channels: 1,  // Mono for voice
 };
 
+/**
+ * Linear16 config for Deepgram Voice Agent API
+ * Voice Agent REQUIRES linear16 at 16000Hz for input and output
+ */
 export const LINEAR16_CONFIG: AudioConfig = {
   encoding: 'linear16',
-  sampleRate: 24000,
+  sampleRate: 16000,  // Voice Agent requires 16kHz
+  channels: 1,
+};
+
+/**
+ * Config for Voice Agent input (what we send to Deepgram)
+ */
+export const VOICE_AGENT_INPUT_CONFIG: AudioConfig = {
+  encoding: 'linear16',
+  sampleRate: 16000,
+  channels: 1,
+};
+
+/**
+ * Config for Voice Agent output (what we receive from Deepgram TTS)
+ */
+export const VOICE_AGENT_OUTPUT_CONFIG: AudioConfig = {
+  encoding: 'linear16',
+  sampleRate: 16000,  // Can also use 8000, 24000, or 48000
   channels: 1,
 };
 
