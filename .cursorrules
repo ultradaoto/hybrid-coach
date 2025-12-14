@@ -21,16 +21,177 @@ This file captures the high-level vision, requirements, and working guidelines f
 ---
 
 ## Technical Stack & Conventions
-• Node.js + Express in an MVC architecture.
-• View layer: EJS templates.
-• Real-time: WebSockets (socket.io) for live video/controls.
-• Database: PostgreSQL (via Prisma ORM) unless specified otherwise.
-• Video: Start with WebRTC (Simple-Peer / LiveKit) → can swap in commercial service if needed.
-• Local AI: Containerised model (e.g. llama-cpp-server) + Python micro-service, invoked via REST/GRPC.
-• Scheduler: Integrate with Google Calendar API (coach) + local DB for mapping.
-• Auth: JWT sessions (passport-jwt) + bcrypt.
-• Testing: Jest + Supertest for backend, Cypress for E2E.
-• Repo scripts: npm run dev, test, migrate, etc.
+
+### Runtime & Build
+- **Runtime**: Bun 1.3.4+
+- **Frontend**: React 19 + TypeScript + Vite 6 + Tailwind CSS
+- **Backend**: Bun.serve() (single API server)
+- **Database**: PostgreSQL (via Prisma ORM or direct queries)
+- **Process Manager**: PM2
+
+### Real-Time & Video
+- **WebSockets**: Bun native WebSocket or socket.io
+- **Video**: WebRTC (Simple-Peer / LiveKit) → can swap in commercial service if needed
+
+### AI Integration
+- **Local AI**: Containerised model (e.g. llama-cpp-server) + Python micro-service
+- **Communication**: REST/gRPC from Bun API to AI service
+- **Keep loosely coupled** so we can iterate on models
+
+### External Services
+- **Scheduler**: Google Calendar API (coach) + local DB for mapping
+- **Auth**: JWT sessions + bcrypt (handled in Bun API)
+
+### Testing
+- **Unit/Integration**: Bun test or Vitest
+- **E2E**: Playwright or Cypress
+- **API Testing**: Built-in Bun test with fetch
+
+---
+
+## Architecture Overview
+
+```
+                    ┌─────────────────────────────────────┐
+                    │        Bun API Server (3001)        │
+                    │                                     │
+URL Routes ────────►│  /api/public/*   (landing, info)   │◄──── PostgreSQL
+                    │  /api/coach/*    (coach dashboard) │
+                    │  /api/client/*   (client portal)   │
+                    │  /api/call/*     (video/WebRTC)    │
+                    │  /api/ai/*       (AI proxy)        │◄──── Local LLM
+                    └─────────────────────────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+                    ▼               ▼               ▼
+            ┌───────────┐   ┌───────────┐   ┌───────────┐
+            │  Public   │   │   Coach   │   │  Client   │
+            │  (React)  │   │  (React)  │   │  (React)  │
+            │  :5170    │   │  :5171    │   │  :5172    │
+            └───────────┘   └───────────┘   └───────────┘
+```
+
+### URL Structure (Path-Based)
+| Path | Purpose | Auth |
+|------|---------|------|
+| `myultra.coach/` | Public landing, pricing, info | None |
+| `myultra.coach/coach/*` | Coach dashboard, calendar, client management | Coach JWT |
+| `myultra.coach/client/*` | Client portal, intake forms, call room | Client JWT |
+| `myultra.coach/call/*` | Video call room (shared between coach & client) | Session-based |
+
+---
+
+## Directory Structure
+
+```
+/hybrid-coach
+├── apps/
+│   ├── api/                      # Single Bun API server
+│   │   ├── src/
+│   │   │   ├── index.ts          # Main server entry
+│   │   │   ├── routes/
+│   │   │   │   ├── public.ts     # Landing page API
+│   │   │   │   ├── coach.ts      # Coach endpoints
+│   │   │   │   ├── client.ts     # Client endpoints
+│   │   │   │   ├── call.ts       # Video call signaling
+│   │   │   │   └── ai.ts         # AI proxy routes
+│   │   │   ├── services/
+│   │   │   │   ├── calendar.ts   # Google Calendar integration
+│   │   │   │   ├── ai-client.ts  # Local LLM communication
+│   │   │   │   └── video.ts      # WebRTC signaling logic
+│   │   │   ├── middleware/
+│   │   │   │   ├── auth.ts       # JWT validation
+│   │   │   │   └── cors.ts
+│   │   │   └── db/
+│   │   │       └── prisma.ts     # Prisma client
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   │
+│   ├── web-public/               # Public marketing site
+│   │   ├── src/
+│   │   │   ├── pages/
+│   │   │   │   ├── Home.tsx
+│   │   │   │   ├── Pricing.tsx
+│   │   │   │   └── About.tsx
+│   │   │   └── components/
+│   │   ├── vite.config.ts
+│   │   └── package.json
+│   │
+│   ├── web-coach/                # Coach dashboard
+│   │   ├── src/
+│   │   │   ├── pages/
+│   │   │   │   ├── Login.tsx
+│   │   │   │   ├── Dashboard.tsx
+│   │   │   │   ├── Calendar.tsx
+│   │   │   │   ├── Clients.tsx
+│   │   │   │   └── CallRoom.tsx  # Coach view of call
+│   │   │   └── components/
+│   │   │       ├── AIControlPanel.tsx
+│   │   │       └── ClientDataSidebar.tsx
+│   │   ├── vite.config.ts
+│   │   └── package.json
+│   │
+│   └── web-client/               # Client portal
+│       ├── src/
+│       │   ├── pages/
+│       │   │   ├── Login.tsx
+│       │   │   ├── Dashboard.tsx
+│       │   │   ├── IntakeForm.tsx
+│       │   │   ├── BookCall.tsx
+│       │   │   ├── WaitingRoom.tsx  # With music player
+│       │   │   └── CallRoom.tsx
+│       │   └── components/
+│       │       ├── MusicPlayer.tsx
+│       │       └── IntakeFormFields.tsx
+│       ├── vite.config.ts
+│       └── package.json
+│
+├── packages/                     # Shared code
+│   ├── ui/                       # Shared React components
+│   │   └── src/
+│   │       ├── Button.tsx
+│   │       ├── Card.tsx
+│   │       ├── Modal.tsx
+│   │       ├── VideoPlayer.tsx
+│   │       └── index.ts
+│   ├── types/                    # Shared TypeScript types
+│   │   └── src/
+│   │       ├── user.ts
+│   │       ├── call.ts
+│   │       ├── intake.ts
+│   │       └── index.ts
+│   └── utils/                    # Shared utilities
+│       └── src/
+│           ├── api-client.ts
+│           ├── auth.ts
+│           ├── webrtc.ts
+│           └── index.ts
+│
+├── ai/                           # Local LLM infrastructure
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── prompts/
+│   │   ├── coaching-system.txt
+│   │   └── intake-analysis.txt
+│   └── tools/
+│       └── client-data-tool.py
+│
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+│
+├── docs/
+│   └── ADR/                      # Architecture Decision Records
+│
+├── legacy/                       # Old Node.js code (reference only)
+│
+├── package.json                  # Root workspace config
+├── bun.lockb
+├── tsconfig.base.json
+├── ecosystem.config.js           # PM2 config
+└── .env
+```
 
 ---
 
@@ -44,31 +205,124 @@ This file captures the high-level vision, requirements, and working guidelines f
 
 ---
 
-## Directory Conventions (subject to change)
+## Code Style & Conventions
+
+### React Components
+- Functional components with hooks only
+- TypeScript interfaces for all props
+- Tailwind CSS for styling (no inline styles)
+- Keep components small and focused
+
+### API Response Format
+Always return consistent JSON:
+```typescript
+{ success: boolean, data?: T, error?: string }
 ```
-/HybridCoach
-  |-- src/
-       |-- controllers/
-       |-- models/
-       |-- routes/
-       |-- services/
-       |-- views/
-       |-- middlewares/
-  |-- public/           # static assets
-  |-- prisma/           # schema.prisma & migrations
-  |-- ai/               # local LLM dockerfiles, prompts, tools
-  |-- docs/
-  |-- tests/
+
+### File Naming
+| Type | Convention | Example |
+|------|------------|---------|
+| Components | PascalCase | `CallRoom.tsx` |
+| Hooks | camelCase + use prefix | `useWebRTC.ts` |
+| Utils | camelCase | `formatTime.ts` |
+| Types | PascalCase | `IntakeForm.ts` |
+| Routes | kebab-case | `call-routes.ts` |
+
+### Imports
+```typescript
+// Shared packages
+import { Button, Modal } from '@hybrid/ui';
+import { User, Call } from '@hybrid/types';
+import { apiClient, useAuth } from '@hybrid/utils';
 ```
 
 ---
 
-## Current Milestone (M0)
-1. Create project skeleton (Express, EJS, dotenv, scripts).
-2. Add health-check route & landing page.
-3. Push to Git and setup CI (GitHub Actions → ESLint + tests).
-4. Draft intake form schema.
+## Development Ports
+| Service | Port |
+|---------|------|
+| Bun API | 3001 |
+| Public Site | 5170 |
+| Coach Dashboard | 5171 |
+| Client Portal | 5172 |
+| Local LLM | 8080 |
 
 ---
 
-(Keep this file updated when requirements change.) 
+## Key Features to Build
+
+### Call Room Features
+- [ ] WebRTC 3-way video connection
+- [ ] Coach "AI Switch" toggle (human vs AI speaking)
+- [ ] Real-time AI listening & transcription
+- [ ] Client data sidebar (visible to coach & AI)
+- [ ] 20-minute commercial break with client's song
+- [ ] Call recording & transcription storage
+
+### Waiting Room Features
+- [ ] Client's favorite song playback
+- [ ] Countdown to call start
+- [ ] Quick intake form review
+
+### Coach Dashboard Features
+- [ ] Google Calendar sync
+- [ ] Client list with intake summaries
+- [ ] AI coaching insights per client
+- [ ] Call history & recordings
+
+### Client Portal Features
+- [ ] Book call from available slots
+- [ ] Complete/update intake form
+- [ ] View past call summaries
+- [ ] Access AI-generated recommendations
+
+---
+
+## Current Milestone (M0 - Updated for Bun/React)
+1. ✅ Create project skeleton (Bun workspace, Vite apps, shared packages)
+2. [ ] Add health-check route & landing page (React)
+3. [ ] Push to Git and setup CI (GitHub Actions → TypeScript check + tests)
+4. [ ] Draft intake form schema (Prisma + TypeScript types)
+5. [ ] Basic auth flow (JWT login for coach & client)
+
+---
+
+## Scripts Reference
+```bash
+# Development
+bun run dev              # Start all services
+bun run dev:api          # API only
+bun run dev:coach        # Coach dashboard only
+bun run dev:client       # Client portal only
+
+# Building
+bun run build            # Build everything
+bun run build:packages   # Build shared packages first
+
+# Database
+bunx prisma migrate dev  # Run migrations
+bunx prisma generate     # Generate client
+bunx prisma studio       # Open Prisma Studio
+
+# Testing
+bun test                 # Run all tests
+bun test --watch         # Watch mode
+
+# AI (in /ai directory)
+docker-compose up -d     # Start local LLM
+```
+
+---
+
+## Don't Do
+- ❌ Create multiple API servers (use route prefixes)
+- ❌ Put app-specific code in `packages/`
+- ❌ Use inline styles (use Tailwind)
+- ❌ Skip TypeScript types
+- ❌ Store secrets in code (use `.env`)
+- ❌ Use class components
+- ❌ Forget to update this file when requirements change
+
+---
+
+(Keep this file updated when requirements change.)

@@ -18,7 +18,6 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { DEEPGRAM_VOICE_AGENT_URL, VOICE_AGENT_INPUT_CONFIG, VOICE_AGENT_OUTPUT_CONFIG } from '../audio/opus-handler.js';
 import type {
-  SettingsMessage,
   FunctionDefinition,
   ConversationTextEvent,
   FunctionCallRequestEvent,
@@ -87,6 +86,8 @@ export class VoiceAgentConnection extends EventEmitter {
   private reconnectDelay: number = 1000;
   private transcriptLog: TranscriptEntry[] = [];
   private sessionId: string = '';
+  private keepAliveTimer: NodeJS.Timeout | null = null;
+  private keepAliveIntervalMs: number = 4000;
 
   constructor(config: VoiceAgentConfig) {
     super();
@@ -132,6 +133,7 @@ export class VoiceAgentConnection extends EventEmitter {
           this.reconnectAttempts = 0;
           
           this.sendSettings();
+          this.startKeepAlive();
           this.emit('open');
           resolve();
         });
@@ -155,6 +157,7 @@ export class VoiceAgentConnection extends EventEmitter {
           }
           
           this.isConnected = false;
+          this.stopKeepAlive();
           this.emit('close', code, reasonStr);
           
           if (code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -164,6 +167,7 @@ export class VoiceAgentConnection extends EventEmitter {
 
         this.ws.on('error', (error) => {
           console.error('[VoiceAgent] ❌ WebSocket error:', error);
+          this.stopKeepAlive();
           this.emit('error', error);
           reject(error);
         });
@@ -330,6 +334,11 @@ export class VoiceAgentConnection extends EventEmitter {
         this.emit('error', new Error(errorEvent.message || 'Voice Agent error'));
         break;
 
+      case 'History':
+        // History messages are informational - the conversation history.
+        // We already capture this via ConversationText, so we can ignore History.
+        break;
+
       default:
         this.log(`❓ Unknown message type: ${message.type}`, message);
     }
@@ -478,6 +487,19 @@ export class VoiceAgentConnection extends EventEmitter {
     }
   }
 
+  private startKeepAlive(): void {
+    if (this.keepAliveTimer) return;
+    this.keepAliveTimer = setInterval(() => {
+      this.sendKeepAlive();
+    }, this.keepAliveIntervalMs);
+  }
+
+  private stopKeepAlive(): void {
+    if (!this.keepAliveTimer) return;
+    clearInterval(this.keepAliveTimer);
+    this.keepAliveTimer = null;
+  }
+
   /**
    * Clear the agent's response buffer (for barge-in)
    */
@@ -556,6 +578,7 @@ export class VoiceAgentConnection extends EventEmitter {
    * Close the connection
    */
   close(): void {
+    this.stopKeepAlive();
     if (this.ws) {
       this.ws.close(1000, 'Client closing');
       this.ws = null;

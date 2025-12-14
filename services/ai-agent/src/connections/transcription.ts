@@ -14,7 +14,7 @@
 
 import WebSocket from 'ws';
 import { EventEmitter } from 'events';
-import { getDeepgramSttUrl, OPUS_CONFIG } from '../audio/opus-handler.js';
+import { getDeepgramSttUrl, LINEAR16_CONFIG } from '../audio/opus-handler.js';
 
 // =============================================================================
 // Types
@@ -76,6 +76,8 @@ export class TranscriptionConnection extends EventEmitter {
   private transcriptBuffer: TranscriptResult[] = [];
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 3;
+  private keepAliveTimer: NodeJS.Timeout | null = null;
+  private keepAliveIntervalMs: number = 4000;
 
   constructor(config: TranscriptionConfig) {
     super();
@@ -105,7 +107,7 @@ export class TranscriptionConnection extends EventEmitter {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        const sttUrl = getDeepgramSttUrl(OPUS_CONFIG);
+        const sttUrl = getDeepgramSttUrl(LINEAR16_CONFIG);
         console.log('[Transcription] 🔌 Connecting to Listen API...');
 
         this.ws = new WebSocket(sttUrl, {
@@ -119,6 +121,7 @@ export class TranscriptionConnection extends EventEmitter {
           console.log('[Transcription] ✅ Connected to Listen API');
           this.isConnected = true;
           this.reconnectAttempts = 0;
+          this.startKeepAlive();
           this.emit('open');
           resolve();
         });
@@ -132,6 +135,7 @@ export class TranscriptionConnection extends EventEmitter {
         this.ws.on('close', (code, reason) => {
           console.log(`[Transcription] 📡 Connection closed: ${code} - ${reason.toString()}`);
           this.isConnected = false;
+          this.stopKeepAlive();
           this.emit('close', code, reason.toString());
           
           // Attempt reconnection
@@ -143,6 +147,7 @@ export class TranscriptionConnection extends EventEmitter {
         // Error
         this.ws.on('error', (error) => {
           console.error('[Transcription] ❌ WebSocket error:', error);
+          this.stopKeepAlive();
           this.emit('error', error);
           reject(error);
         });
@@ -328,6 +333,19 @@ export class TranscriptionConnection extends EventEmitter {
     }
   }
 
+  private startKeepAlive(): void {
+    if (this.keepAliveTimer) return;
+    this.keepAliveTimer = setInterval(() => {
+      this.sendKeepAlive();
+    }, this.keepAliveIntervalMs);
+  }
+
+  private stopKeepAlive(): void {
+    if (!this.keepAliveTimer) return;
+    clearInterval(this.keepAliveTimer);
+    this.keepAliveTimer = null;
+  }
+
   /**
    * Request to close the stream gracefully
    * Sends CloseStream message to Deepgram
@@ -400,6 +418,7 @@ export class TranscriptionConnection extends EventEmitter {
    * Close the connection
    */
   close(): void {
+    this.stopKeepAlive();
     this.requestClose();
     
     // Give Deepgram a moment to process CloseStream

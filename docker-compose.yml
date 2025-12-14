@@ -1,12 +1,10 @@
-version: '3.8'
-
 services:
   hybridcoach-pg:
     image: postgres:15
     container_name: hybridcoach-pg
     environment:
       POSTGRES_USER: hybridcoach
-      POSTGRES_PASSWORD: hybridcoach_password
+      POSTGRES_PASSWORD: HybridCoach789878987!asdasdasd
       POSTGRES_DB: hybridcoach_dev
     ports:
       - "5432:5432"

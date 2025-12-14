@@ -1,0 +1,682 @@
+/**
+ * LiveKit AI Agent
+ * 
+ * Joins a LiveKit room as a participant and bridges audio to/from Deepgram.
+ * Replaces the WebSocket bridge approach with native LiveKit integration.
+ * 
+ * Architecture:
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │                          LiveKit Room                                    │
+ * │  ┌──────────┐  ┌──────────┐  ┌──────────┐                              │
+ * │  │  Client  │  │  Coach   │  │ AI Agent │                              │
+ * │  │  (audio) │  │  (audio) │  │ (this)   │                              │
+ * │  └────┬─────┘  └────┬─────┘  └────┬─────┘                              │
+ * │       │             │             │                                     │
+ * │       └─────────────┴─────────────┼──────────────────────────────────── │
+ * │                                   │                                     │
+ * │                            subscribes to all                            │
+ * │                            publishes AI audio                           │
+ * └───────────────────────────────────┼──────────────────────────────────────┘
+ *                                     │
+ *                                     ▼
+ *                    ┌────────────────────────────────────┐
+ *                    │     DualConnectionManager           │
+ *                    │                                    │
+ *                    │  ┌────────────┐  ┌─────────────┐  │
+ *                    │  │ VoiceAgent │  │ Transcription│  │
+ *                    │  │ (Deepgram) │  │ (Deepgram)   │  │
+ *                    │  └────────────┘  └─────────────┘  │
+ *                    └────────────────────────────────────┘
+ */
+
+import { EventEmitter } from 'events';
+import {
+  Room,
+  RoomEvent,
+  RemoteParticipant,
+  RemoteTrack,
+  RemoteTrackPublication,
+  TrackKind,
+  AudioStream,
+  LocalAudioTrack,
+  AudioSource,
+  AudioFrame,
+  ConnectionState,
+} from '@livekit/rtc-node';
+import { AccessToken, VideoGrant } from 'livekit-server-sdk';
+import { DualConnectionManager, createDualConnectionManager } from './connections/connection-manager.js';
+import type { TranscriptEntry } from './types/deepgram-events.js';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface LiveKitAgentConfig {
+  roomName: string;
+  livekitUrl: string;
+  apiKey: string;
+  apiSecret: string;
+  coachingPrompt: string;
+  greeting?: string;
+  voiceModel?: string;
+  llmModel?: string;
+  verbose?: boolean;
+}
+
+export interface AgentStatus {
+  room: {
+    connected: boolean;
+    name: string | null;
+    participantCount: number;
+  };
+  deepgram: {
+    connected: boolean;
+    voiceAgentReady: boolean;
+    transcriptionReady: boolean;
+  };
+  audio: {
+    isPublishing: boolean;
+    isSpeaking: boolean;
+  };
+  participants: {
+    identity: string;
+    isMuted: boolean;
+  }[];
+}
+
+// =============================================================================
+// LiveKit AI Agent
+// =============================================================================
+
+export class LiveKitAgent extends EventEmitter {
+  private config: LiveKitAgentConfig;
+  private room: Room | null = null;
+  private connectionManager: DualConnectionManager | null = null;
+  private audioSource: AudioSource | null = null;
+  private audioTrack: LocalAudioTrack | null = null;
+  private isPublishing: boolean = false;
+  private mutedParticipants: Set<string> = new Set();
+  private participantRoles: Map<string, 'client' | 'coach'> = new Map();
+  private identity: string;
+  private audioStreamsByTrackSid: Map<string, AudioStream> = new Map();
+  private shutdownTimer: NodeJS.Timeout | null = null;
+  private readonly GRACE_PERIOD_MS = 60 * 1000; // 60 seconds
+
+  constructor(config: LiveKitAgentConfig) {
+    super();
+    this.config = config;
+    // Must start with `ai-` so the web coach/client UIs detect the AI participant.
+    // Also matches selective-audio destinationIdentities.
+    this.identity = 'ai-coach-agent';
+  }
+
+  /**
+   * Generate access token for this agent
+   */
+  private async generateToken(): Promise<string> {
+    const token = new AccessToken(this.config.apiKey, this.config.apiSecret, {
+      identity: this.identity,
+      name: 'AI Coach',
+      ttl: '4h',
+    });
+
+    const grant: VideoGrant = {
+      room: this.config.roomName,
+      roomJoin: true,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+      canUpdateOwnMetadata: true,
+    };
+
+    token.addGrant(grant);
+    return await token.toJwt();
+  }
+
+  /**
+   * Connect to room and initialize Deepgram
+   */
+  async connect(): Promise<void> {
+    console.log(`[LiveKitAgent] 🚀 Connecting to room: ${this.config.roomName}`);
+
+    try {
+      // Generate token
+      const token = await this.generateToken();
+
+      // Create room instance
+      this.room = new Room();
+
+      // Set up room event handlers
+      this.setupRoomEvents();
+
+      // Connect to LiveKit
+      await this.room.connect(this.config.livekitUrl, token);
+      console.log(`[LiveKitAgent] ✅ Connected to room as ${this.identity}`);
+
+      // Initialize Deepgram dual connection
+      await this.initializeDeepgram();
+
+      // Set up audio publication
+      await this.setupAudioPublication();
+
+      this.emit('connected');
+
+    } catch (error) {
+      console.error('[LiveKitAgent] ❌ Connection failed:', error);
+      this.emit('error', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set up LiveKit room event handlers
+   */
+  private setupRoomEvents(): void {
+    if (!this.room) return;
+
+    this.room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+      console.log(`[LiveKitAgent] 👤 Participant connected: ${participant.identity}`);
+      
+      // Determine role from identity prefix
+      const role = participant.identity.startsWith('coach-') ? 'coach' : 'client';
+      this.participantRoles.set(participant.identity, role);
+      
+      // Register with connection manager
+      this.connectionManager?.registerParticipant(participant.identity, role, participant.name);
+      
+      this.emit('participant-joined', { identity: participant.identity, role });
+      
+      // Check room status (may cancel grace period if humans joined)
+      this.checkRoomStatus();
+    });
+
+    this.room.on(RoomEvent.ParticipantDisconnected, (participant: RemoteParticipant) => {
+      console.log(`[LiveKitAgent] 👋 Participant disconnected: ${participant.identity}`);
+      
+      this.participantRoles.delete(participant.identity);
+      this.mutedParticipants.delete(participant.identity);
+      this.connectionManager?.unregisterParticipant(participant.identity);
+      
+      this.emit('participant-left', { identity: participant.identity });
+      
+      // Check if room is now empty and should start grace period
+      this.checkRoomStatus();
+    });
+
+    this.room.on(RoomEvent.TrackSubscribed, (
+      track: RemoteTrack,
+      _publication: RemoteTrackPublication,
+      participant: RemoteParticipant
+    ) => {
+      console.log(`[LiveKitAgent] 🎤 Track subscribed: ${track.kind} from ${participant.identity}`);
+      
+      if (track.kind === TrackKind.KIND_AUDIO) {
+        // Ensure participant is registered
+        if (!this.participantRoles.has(participant.identity)) {
+          const role = participant.identity.startsWith('coach-') ? 'coach' : 'client';
+          this.participantRoles.set(participant.identity, role);
+          this.connectionManager?.registerParticipant(participant.identity, role, participant.name);
+        }
+        // Handle audio track (async)
+        this.handleAudioTrack(track, participant).catch((err) => {
+          console.error(`[LiveKitAgent] ❌ Error handling audio track:`, err);
+        });
+      }
+    });
+
+    this.room.on(RoomEvent.TrackUnsubscribed, (
+      track: RemoteTrack,
+      _publication: RemoteTrackPublication,
+      participant: RemoteParticipant
+    ) => {
+      console.log(`[LiveKitAgent] 🔇 Track unsubscribed: ${track.kind} from ${participant.identity}`);
+
+      const stream = this.audioStreamsByTrackSid.get(track.sid);
+      if (stream) {
+        try {
+          stream.close();
+        } catch {
+          // ignore
+        }
+        this.audioStreamsByTrackSid.delete(track.sid);
+      }
+    });
+
+    this.room.on(RoomEvent.DataReceived, (
+      payload: Uint8Array,
+      participant?: RemoteParticipant
+    ) => {
+      this.handleDataMessage(payload, participant);
+    });
+
+    this.room.on(RoomEvent.Disconnected, () => {
+      console.log('[LiveKitAgent] 📴 Disconnected from room');
+      this.emit('disconnected');
+    });
+  }
+
+  /**
+   * Initialize Deepgram dual connection
+   */
+  private async initializeDeepgram(): Promise<void> {
+    console.log('[LiveKitAgent] 🔊 Initializing Deepgram connections...');
+
+    this.connectionManager = createDualConnectionManager({
+      coachingPrompt: this.config.coachingPrompt,
+      greeting: this.config.greeting,
+      voiceModel: this.config.voiceModel,
+      llmModel: this.config.llmModel,
+      verbose: this.config.verbose,
+    });
+
+    // Handle AI audio output
+    this.connectionManager.on('ai-audio', (data: Buffer) => {
+      this.publishAudioData(data);
+    });
+
+    // Handle conversation transcripts
+    this.connectionManager.on('conversation-text', (entry: TranscriptEntry) => {
+      this.broadcastTranscript(entry);
+    });
+
+    // Handle agent speaking state
+    this.connectionManager.on('agent-speaking', () => {
+      this.emit('speaking', true);
+    });
+
+    this.connectionManager.on('agent-done-speaking', () => {
+      this.emit('speaking', false);
+    });
+
+    // Initialize connections
+    await this.connectionManager.initialize();
+    console.log('[LiveKitAgent] ✅ Deepgram connections initialized');
+  }
+
+  /**
+   * Set up audio publication to room
+   */
+  private async setupAudioPublication(): Promise<void> {
+    if (!this.room) return;
+
+    console.log('[LiveKitAgent] 🎙️ Setting up audio publication...');
+
+    // Create audio source (16kHz, mono) with larger queue to prevent overflow
+    // Third parameter is queueSizeMs - 5000ms = 5 seconds of buffer
+    this.audioSource = new AudioSource(16000, 1, 5000);
+
+    // Create local audio track
+    this.audioTrack = LocalAudioTrack.createAudioTrack('ai-voice', this.audioSource);
+
+    // Publish track to room
+    // @ts-expect-error - publishTrack API varies between versions
+    await this.room.localParticipant?.publishTrack(this.audioTrack, {});
+    this.isPublishing = true;
+
+    console.log('[LiveKitAgent] ✅ Audio track published');
+  }
+
+  /**
+   * Handle incoming audio from a participant
+   */
+  private async handleAudioTrack(track: RemoteTrack, participant: RemoteParticipant): Promise<void> {
+    console.log(`[LiveKitAgent] 🎧 Setting up audio stream for ${participant.identity}`);
+
+    // Request 16kHz mono PCM (linear16) so it matches Deepgram Voice Agent + Listen configs.
+    if (this.audioStreamsByTrackSid.has(track.sid)) return;
+
+    const audioStream = new AudioStream(track, 16000, 1);
+    this.audioStreamsByTrackSid.set(track.sid, audioStream);
+
+    try {
+      await this.processAudioStreamIterator(audioStream, participant);
+    } finally {
+      this.audioStreamsByTrackSid.delete(track.sid);
+      try {
+        audioStream.close();
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  /**
+   * Process audio using async iterator
+   */
+  private async processAudioStreamIterator(audioStream: any, participant: RemoteParticipant): Promise<void> {
+    let frameCount = 0;
+    try {
+      for await (const frame of audioStream) {
+        frameCount++;
+        
+        // Log every 100th frame to avoid spam
+        if (frameCount % 100 === 0) {
+          console.log(`[LiveKitAgent] 📊 Processed ${frameCount} frames from ${participant.identity}`);
+        }
+        
+        // frame.data is Int16Array (linear16). Convert to bytes.
+        const buffer = Buffer.from(frame.data.buffer);
+        
+        // Route to Deepgram
+        this.connectionManager?.routeAudio(buffer, participant.identity, participant.name);
+      }
+    } catch (err) {
+      console.error(`[LiveKitAgent] ❌ Audio stream error for ${participant.identity}:`, err);
+    }
+    console.log(`[LiveKitAgent] 🔇 Audio stream ended for ${participant.identity} (${frameCount} frames total)`);
+  }
+
+  /**
+   * Process audio using reader API
+   */
+  private async processAudioStreamReader(audioStream: any, participant: RemoteParticipant): Promise<void> {
+    let frameCount = 0;
+    const reader = audioStream.getReader();
+    
+    try {
+      while (true) {
+        const { done, value: frame } = await reader.read();
+        if (done) break;
+        
+        frameCount++;
+        
+        // Log every 100th frame
+        if (frameCount % 100 === 0) {
+          console.log(`[LiveKitAgent] 📊 Processed ${frameCount} frames from ${participant.identity}`);
+        }
+        
+        // frame.data is Int16Array (linear16). Convert to bytes.
+        const buffer = Buffer.from(frame.data.buffer);
+        
+        // Route to Deepgram
+        this.connectionManager?.routeAudio(buffer, participant.identity, participant.name);
+      }
+    } catch (err) {
+      console.error(`[LiveKitAgent] ❌ Audio stream reader error for ${participant.identity}:`, err);
+    } finally {
+      reader.releaseLock();
+    }
+    console.log(`[LiveKitAgent] 🔇 Audio stream ended for ${participant.identity} (${frameCount} frames total)`);
+  }
+
+  /**
+   * Publish audio data to the room
+   * Note: captureFrame is async, but we fire-and-forget with error handling
+   */
+  private publishAudioData(data: Buffer): void {
+    if (!this.audioSource || !this.isPublishing) return;
+
+    // Capture the audioSource reference to avoid race conditions
+    const audioSource = this.audioSource;
+
+    // Ensure we have an even number of bytes for Int16Array
+    const byteLength = data.byteLength - (data.byteLength % 2);
+    if (byteLength === 0) return;
+
+    // Copy data to a new ArrayBuffer to ensure proper alignment
+    // This avoids "start offset of Int16Array should be a multiple of 2" errors
+    const alignedBuffer = new ArrayBuffer(byteLength);
+    const view = new Uint8Array(alignedBuffer);
+    view.set(new Uint8Array(data.buffer, data.byteOffset, byteLength));
+
+    // Now create Int16Array from the aligned buffer
+    const samples = new Int16Array(alignedBuffer);
+
+    // Create audio frame and capture it (async with error handling)
+    const frame = new AudioFrame(samples, 16000, 1, samples.length);
+    audioSource.captureFrame(frame).catch((error: Error) => {
+      // Only log if we're still supposed to be publishing
+      if (this.isPublishing) {
+        console.warn('[LiveKitAgent] ⚠️ Frame capture failed (normal during disconnect):', error.message);
+      }
+    });
+  }
+
+  /**
+   * Handle data messages from participants
+   */
+  private handleDataMessage(payload: Uint8Array, _participant?: RemoteParticipant): void {
+    try {
+      const message = JSON.parse(new TextDecoder().decode(payload));
+      
+      if (message.type === 'coach_mute') {
+        this.handleCoachMute(message.muted, message.coachIdentity);
+      } else if (message.type === 'coach_whisper') {
+        this.handleCoachWhisper(message.text);
+      }
+    } catch (e) {
+      console.error('[LiveKitAgent] Failed to parse data message:', e);
+    }
+  }
+
+  /**
+   * Handle coach mute command
+   */
+  private handleCoachMute(muted: boolean, coachIdentity: string): void {
+    console.log(`[LiveKitAgent] 🔇 Coach mute: ${muted} for ${coachIdentity}`);
+    
+    if (muted) {
+      this.mutedParticipants.add(coachIdentity);
+      this.connectionManager?.muteParticipant(coachIdentity);
+    } else {
+      this.mutedParticipants.delete(coachIdentity);
+      this.connectionManager?.unmuteParticipant(coachIdentity);
+    }
+    
+    this.emit('mute-changed', { identity: coachIdentity, muted });
+  }
+
+  /**
+   * Handle coach whisper (silent context injection)
+   */
+  private async handleCoachWhisper(text: string): Promise<void> {
+    console.log(`[LiveKitAgent] 💬 Coach whisper: ${text}`);
+    
+    await this.connectionManager?.sendCoachWhisper(text);
+    
+    this.emit('whisper-received', { text });
+  }
+
+  /**
+   * Broadcast transcript to all participants
+   */
+  private broadcastTranscript(entry: TranscriptEntry): void {
+    if (!this.room?.localParticipant) return;
+
+    const message = {
+      type: 'transcript',
+      role: entry.role,
+      content: entry.content,
+      timestamp: new Date().toISOString(),
+    };
+
+    const data = new TextEncoder().encode(JSON.stringify(message));
+    this.room.localParticipant.publishData(data, { reliable: true });
+  }
+
+  /**
+   * Count human participants in the room (excludes AI)
+   */
+  private getHumanCount(): number {
+    if (!this.room) return 0;
+    
+    let count = 0;
+    this.room.remoteParticipants.forEach((participant) => {
+      if (!participant.identity.startsWith('ai-')) {
+        count++;
+      }
+    });
+    return count;
+  }
+
+  /**
+   * Check room status and manage grace period
+   */
+  private checkRoomStatus(): void {
+    if (!this.room) return;
+    
+    const humanCount = this.getHumanCount();
+    console.log(`[LiveKitAgent] 👥 Human participants in room: ${humanCount}`);
+    
+    if (humanCount === 0) {
+      // All humans left - start grace period if not already started
+      if (!this.shutdownTimer) {
+        console.log(`[LiveKitAgent] ⏳ All humans left. Starting ${this.GRACE_PERIOD_MS / 1000}s grace period...`);
+        this.shutdownTimer = setTimeout(() => {
+          this.handleGracePeriodExpired();
+        }, this.GRACE_PERIOD_MS);
+      }
+    } else {
+      // Humans still present - cancel grace period if active
+      if (this.shutdownTimer) {
+        console.log('[LiveKitAgent] ✅ Human rejoined. Cancelling shutdown.');
+        clearTimeout(this.shutdownTimer);
+        this.shutdownTimer = null;
+      }
+    }
+  }
+
+  /**
+   * Handle grace period expiration (no humans returned)
+   */
+  private async handleGracePeriodExpired(): Promise<void> {
+    console.log('[LiveKitAgent] 🛑 Grace period expired. No humans returned to room.');
+    console.log('[LiveKitAgent] 🧹 Cleaning up and shutting down...');
+    
+    this.shutdownTimer = null;
+    
+    // Disconnect gracefully
+    await this.disconnect();
+    
+    // Exit process
+    console.log('[LiveKitAgent] 👋 Goodbye!');
+    process.exit(0);
+  }
+
+  /**
+   * Get current agent status
+   */
+  getStatus(): AgentStatus {
+    const deepgramStatus = this.connectionManager?.getStatus();
+
+    return {
+      room: {
+        connected: this.room?.connectionState === ConnectionState.CONN_CONNECTED,
+        name: this.config.roomName,
+        participantCount: this.room?.remoteParticipants?.size ?? 0,
+      },
+      deepgram: {
+        connected: deepgramStatus?.overall === 'connected',
+        voiceAgentReady: deepgramStatus?.voiceAgent.connected ?? false,
+        transcriptionReady: deepgramStatus?.transcription.connected ?? false,
+      },
+      audio: {
+        isPublishing: this.isPublishing,
+        isSpeaking: this.connectionManager?.isAgentSpeaking() ?? false,
+      },
+      participants: Array.from(this.participantRoles.entries()).map(([identity]) => ({
+        identity,
+        isMuted: this.mutedParticipants.has(identity),
+      })),
+    };
+  }
+
+  /**
+   * Disconnect from room and cleanup
+   */
+  async disconnect(): Promise<void> {
+    console.log('[LiveKitAgent] 🔌 Disconnecting...');
+
+    // Clear any pending shutdown timer
+    if (this.shutdownTimer) {
+      clearTimeout(this.shutdownTimer);
+      this.shutdownTimer = null;
+    }
+
+    this.isPublishing = false;
+
+    // Unpublish track if room is connected
+    if (this.audioTrack && this.room?.localParticipant) {
+      try {
+        await this.room.localParticipant.unpublishTrack(this.audioTrack.sid);
+      } catch (e) {
+        // Track may already be unpublished
+      }
+      this.audioTrack = null;
+    }
+
+    this.audioSource = null;
+    this.connectionManager?.cleanup();
+    this.connectionManager = null;
+
+    await this.room?.disconnect();
+    this.room = null;
+
+    this.mutedParticipants.clear();
+    this.participantRoles.clear();
+
+    console.log('[LiveKitAgent] ✅ Disconnected');
+    this.emit('disconnected');
+  }
+}
+
+// =============================================================================
+// Factory Function
+// =============================================================================
+
+export function createLiveKitAgent(roomName: string, options?: Partial<LiveKitAgentConfig>): LiveKitAgent {
+  const config: LiveKitAgentConfig = {
+    roomName,
+    livekitUrl: process.env.LIVEKIT_URL || '',
+    apiKey: process.env.LIVEKIT_API_KEY || '',
+    apiSecret: process.env.LIVEKIT_API_SECRET || '',
+    coachingPrompt: options?.coachingPrompt || getDefaultCoachingPrompt(),
+    greeting: options?.greeting || "Hello! I'm your Ultra Coach. How are you feeling today?",
+    voiceModel: options?.voiceModel || 'aura-asteria-en',
+    llmModel: options?.llmModel || 'gpt-4o-mini',
+    verbose: options?.verbose ?? false,
+  };
+
+  // Validate required config
+  if (!config.livekitUrl) {
+    throw new Error('LIVEKIT_URL environment variable is required');
+  }
+  if (!config.apiKey) {
+    throw new Error('LIVEKIT_API_KEY environment variable is required');
+  }
+  if (!config.apiSecret) {
+    throw new Error('LIVEKIT_API_SECRET environment variable is required');
+  }
+
+  return new LiveKitAgent(config);
+}
+
+/**
+ * Default coaching prompt
+ */
+function getDefaultCoachingPrompt(): string {
+  return `You are an Ultra Coach - a supportive AI wellness coach specializing in vagus nerve stimulation, 
+breathing techniques, and stress management. You work alongside human coaches to help clients achieve their wellness goals.
+
+Your communication style:
+- Warm, empathetic, and encouraging
+- Use simple, clear language
+- Ask open-ended questions to understand the client's needs
+- Offer practical, actionable guidance
+- Acknowledge emotions and validate experiences
+
+Key areas of focus:
+- Vagus nerve stimulation techniques
+- Breathing exercises (box breathing, 4-7-8, etc.)
+- Stress management strategies
+- Mindfulness and presence
+- Physical relaxation techniques
+
+Remember:
+- You're part of a team with a human coach
+- Keep responses concise for voice conversation
+- Be supportive but not prescriptive about medical issues
+- Encourage clients to consult healthcare providers for medical concerns`;
+}
+
+export default LiveKitAgent;

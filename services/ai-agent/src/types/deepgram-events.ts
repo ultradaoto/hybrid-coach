@@ -106,6 +106,16 @@ export interface MetadataEvent {
 }
 
 /**
+ * History event - conversation history record
+ * Similar to ConversationText but used for historical entries
+ */
+export interface HistoryEvent {
+  type: 'History';
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/**
  * Union type of all server events
  */
 export type VoiceAgentServerEvent =
@@ -119,7 +129,8 @@ export type VoiceAgentServerEvent =
   | PromptUpdatedEvent
   | FunctionCallRequestEvent
   | VoiceAgentErrorEvent
-  | MetadataEvent;
+  | MetadataEvent
+  | HistoryEvent;
 
 // =============================================================================
 // Client → Server Messages

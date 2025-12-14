@@ -7,8 +7,7 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "packages/*",
-    "services/*"
+    "packages/*"
   ],
   "scripts": {
     "dev": "bun scripts/dev.ts dev",
@@ -23,6 +22,7 @@
     "start:pm2": "pm2 start ecosystem.config.js",
     "start:ai-agent": "cd services/ai-agent && npm run start",
     "install:all": "bun install && cd services/ai-agent && npm install",
+    "postinstall": "cd services/ai-agent && npm install",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --detectOpenHandles --runInBand",
     "migrate": "prisma migrate dev --name init",
     "generate": "prisma generate",

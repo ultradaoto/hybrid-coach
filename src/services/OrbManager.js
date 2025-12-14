@@ -716,18 +716,20 @@ export class OrbManager extends EventEmitter {
 // Create singleton instance
 export const orbManager = new OrbManager();
 
-// Start health monitoring
-orbManager.startHealthMonitoring();
+if (!process.env.JEST_WORKER_ID) {
+    // Start health monitoring
+    orbManager.startHealthMonitoring();
 
-// Graceful shutdown on process exit
-process.on('SIGINT', async () => {
-    console.log('\n[OrbManager] Received SIGINT, shutting down...');
-    await orbManager.shutdown();
-    process.exit(0);
-});
+    // Graceful shutdown on process exit
+    process.on('SIGINT', async () => {
+        console.log('\n[OrbManager] Received SIGINT, shutting down...');
+        await orbManager.shutdown();
+        process.exit(0);
+    });
 
-process.on('SIGTERM', async () => {
-    console.log('\n[OrbManager] Received SIGTERM, shutting down...');
-    await orbManager.shutdown();
-    process.exit(0);
-});
+    process.on('SIGTERM', async () => {
+        console.log('\n[OrbManager] Received SIGTERM, shutting down...');
+        await orbManager.shutdown();
+        process.exit(0);
+    });
+}

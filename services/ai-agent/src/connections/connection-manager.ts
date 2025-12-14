@@ -79,12 +79,12 @@ export class DualConnectionManager extends EventEmitter {
   private router: AudioRouter;
   private functionHandler: FunctionCallingHandler;
   private whisperManager: CoachWhisperManager;
-  private config: DualConnectionConfig;
+  private _config: DualConnectionConfig;
   private isInitialized: boolean = false;
 
   constructor(config: DualConnectionConfig) {
     super();
-    this.config = config;
+    this._config = config;
 
     // Get function definitions (use provided or defaults)
     const functions = config.functions || COACHING_FUNCTIONS;
@@ -276,9 +276,16 @@ export class DualConnectionManager extends EventEmitter {
    * Route audio through the system
    * This is the main entry point for all audio from LiveKit
    */
+  // Track if we've warned about uninitialized state
+  private hasWarnedNotInitialized = false;
+
   routeAudio(data: Buffer | Uint8Array, participantId: string, participantName?: string): void {
     if (!this.isInitialized) {
-      console.warn('[DualConnection] ⚠️ Not initialized, dropping audio');
+      // Only warn once to avoid console spam - early audio is expected
+      if (!this.hasWarnedNotInitialized) {
+        console.log('[DualConnection] ⏳ Buffering - Deepgram not ready yet (this is normal)');
+        this.hasWarnedNotInitialized = true;
+      }
       return;
     }
 

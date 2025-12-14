@@ -49,6 +49,12 @@ model Profile {
   preferences  Json?
   lastSummary  String?
   contextNotes String?
+  // 🚀 ONBOARDING FIELDS
+  onboardingCompleted  Boolean   @default(false)
+  onboardingCompletedAt DateTime?
+  intakeCoachingGoals  String?   // What they hope to get from coaching
+  intakeSymptoms       String?   // Health symptoms they experience
+  intakeInitialMood    Int?      // 1-5 star mood rating at onboarding
   user         User     @relation(fields: [userId], references: [id])
 }
 

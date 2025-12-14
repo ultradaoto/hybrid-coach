@@ -12,6 +12,31 @@ import authService from '../services/authService.js';
 
 const router = Router();
 
+function getSafeReturnTo(raw) {
+  if (typeof raw !== 'string') return null;
+  const value = raw.trim();
+  if (!value) return null;
+
+  // Prevent open redirects: only allow same-origin relative paths.
+  if (!value.startsWith('/')) return null;
+  if (value.startsWith('//')) return null;
+  if (value.includes('\\')) return null;
+  if (value.includes('\n') || value.includes('\r')) return null;
+
+  return value;
+}
+
+function maybeStoreReturnTo(req) {
+  const returnTo = getSafeReturnTo(req.query?.returnTo ?? req.query?.next);
+  if (returnTo && req.session) req.session.returnTo = returnTo;
+}
+
+function consumeReturnTo(req) {
+  const returnTo = getSafeReturnTo(req.session?.returnTo);
+  if (req.session) delete req.session.returnTo;
+  return returnTo;
+}
+
 // Apply Skool auth check to all routes
 router.use(checkSkoolAuth);
 
@@ -19,6 +44,9 @@ router.use(checkSkoolAuth);
 router.get('/login', redirectIfAuthenticated, async (req, res) => {
     try {
         const { code, error, message } = req.query;
+
+        // Allow public site to specify the post-login destination.
+        maybeStoreReturnTo(req);
         
         // Add debugging for code processing
         console.log(`🔍 Login route accessed with query:`, req.query);
@@ -104,13 +132,15 @@ async function handleCodeValidation(req, res, code) {
         
         console.log(`✅ Cookie set - proceeding with redirect`);
 
-        // Redirect to dashboard
-        const returnTo = req.session?.returnTo || '/dashboard';
-        delete req.session?.returnTo;
+        const returnTo = consumeReturnTo(req) || '/dashboard';
 
         console.log(`🎉 Successful login for ${session.userData.skoolUsername}, redirecting to ${returnTo}`);
         
-        res.redirect(`${returnTo}?welcome=true&user=${encodeURIComponent(session.userData.skoolUsername)}`);
+        const base = `${req.protocol}://${req.get('host')}`;
+        const redirectUrl = new URL(returnTo, base);
+        redirectUrl.searchParams.set('welcome', 'true');
+        redirectUrl.searchParams.set('user', session.userData.skoolUsername);
+        res.redirect(`${redirectUrl.pathname}${redirectUrl.search}`);
 
     } catch (error) {
         console.error('❌ Error validating auth code:', error);
@@ -120,7 +150,14 @@ async function handleCodeValidation(req, res, code) {
 }
 
 // Google OAuth
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get(
+  '/google',
+  (req, res, next) => {
+    maybeStoreReturnTo(req);
+    next();
+  },
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
 
 router.get(
   '/google/callback',
@@ -168,7 +205,9 @@ router.get(
           console.error('Login error:', loginErr);
           return res.redirect('/auth/login');
         }
-        return res.redirect('/dashboard');
+
+        const returnTo = consumeReturnTo(req) || '/dashboard';
+        return res.redirect(returnTo);
       });
     })(req, res, next);
   }

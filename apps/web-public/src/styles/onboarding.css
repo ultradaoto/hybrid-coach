@@ -1,0 +1,480 @@
+/**
+ * Onboarding Styles
+ * 
+ * Typeform-inspired dark theme onboarding flow.
+ */
+
+/* =============================================================================
+   Layout
+   ============================================================================= */
+
+.onboarding-layout {
+  min-height: 100vh;
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  overflow: auto;
+  z-index: 100;
+}
+
+.onboarding-layout-gradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top, rgba(99, 102, 241, 0.15) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.onboarding-layout-content {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.onboarding-layout *,
+.onboarding-layout *::before,
+.onboarding-layout *::after {
+  box-sizing: border-box;
+}
+
+/* Force dark theme colors within onboarding */
+.onboarding-layout {
+  color: #f8fafc;
+}
+
+.onboarding-layout h1,
+.onboarding-layout h2,
+.onboarding-layout h3,
+.onboarding-layout p {
+  margin: 0;
+}
+
+.onboarding-layout-header {
+  padding: 2rem;
+}
+
+.onboarding-layout-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  padding-bottom: 4rem;
+}
+
+.onboarding-layout-container {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+/* =============================================================================
+   Progress Indicator
+   ============================================================================= */
+
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.onboarding-progress-dot {
+  height: 0.5rem;
+  border-radius: 9999px;
+  transition: all 0.5s ease-out;
+}
+
+.onboarding-progress-dot.completed {
+  width: 2rem;
+  background: #6366f1;
+}
+
+.onboarding-progress-dot.current {
+  width: 2rem;
+  background: #818cf8;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.onboarding-progress-dot.pending {
+  width: 0.5rem;
+  background: #475569;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* =============================================================================
+   Split Layout
+   ============================================================================= */
+
+.onboarding-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  width: 100%;
+  min-height: 60vh;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .onboarding-split {
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+  }
+}
+
+.onboarding-split-left {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.onboarding-split-right {
+  order: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 1024px) {
+  .onboarding-split-right {
+    display: flex;
+  }
+}
+
+/* =============================================================================
+   Question Panel
+   ============================================================================= */
+
+.question-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.question-panel-welcome {
+  margin-bottom: 2.5rem;
+}
+
+.question-panel-title {
+  font-size: 2rem;
+  font-weight: 300;
+  color: #f8fafc !important;
+  margin: 0 0 1rem 0 !important;
+  line-height: 1.3;
+}
+
+@media (min-width: 768px) {
+  .question-panel-title {
+    font-size: 2.5rem;
+  }
+}
+
+.question-panel-name {
+  color: #818cf8 !important;
+  font-weight: 400;
+}
+
+.question-panel-subtitle {
+  color: #94a3b8 !important;
+  font-size: 1rem;
+  line-height: 1.7;
+  margin: 0 !important;
+}
+
+@media (min-width: 768px) {
+  .question-panel-subtitle {
+    font-size: 1.125rem;
+  }
+}
+
+.question-panel-highlight {
+  color: #a5b4fc !important;
+  font-weight: 500;
+}
+
+.question-panel-question {
+  margin-bottom: 1.5rem;
+}
+
+.question-panel-question p {
+  font-size: 1.125rem;
+  color: #e2e8f0 !important;
+  line-height: 1.7;
+  margin: 0 !important;
+}
+
+@media (min-width: 768px) {
+  .question-panel-question p {
+    font-size: 1.25rem;
+  }
+}
+
+.question-panel-input {
+  margin-bottom: 1.5rem;
+}
+
+.question-panel-textarea-wrapper {
+  position: relative;
+  border-radius: 0.75rem;
+  transition: all 0.3s ease;
+  width: 100%;
+  max-width: 500px;
+}
+
+.question-panel-textarea-wrapper.focused {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
+}
+
+.question-panel-textarea {
+  width: 100%;
+  padding: 1.25rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #475569;
+  border-radius: 0.75rem;
+  color: #f8fafc;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 120px;
+  transition: border-color 0.3s ease, background-color 0.3s ease;
+  font-family: inherit;
+}
+
+.question-panel-textarea::placeholder {
+  color: #64748b;
+}
+
+.question-panel-textarea:focus {
+  outline: none;
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.question-panel-textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.question-panel-hint {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: #64748b !important;
+}
+
+.question-panel-hint kbd {
+  padding: 0.25rem 0.5rem;
+  background: #334155;
+  border-radius: 0.25rem;
+  color: #94a3b8 !important;
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+
+.question-panel-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 2.5rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 0.5rem;
+}
+
+.question-panel-button.active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+.question-panel-button.active:hover {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+}
+
+.question-panel-button.active:active {
+  transform: translateY(0);
+}
+
+.question-panel-button.disabled {
+  background: #334155;
+  color: #64748b;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* =============================================================================
+   Star Rating
+   ============================================================================= */
+
+.star-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.star-rating-stars {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.star-rating-star {
+  padding: 0.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  color: #475569;
+}
+
+.star-rating-star:hover {
+  transform: scale(1.1);
+}
+
+.star-rating-star:active {
+  transform: scale(0.95);
+}
+
+.star-rating-star.active {
+  color: #fbbf24;
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.5));
+}
+
+.star-rating-icon {
+  width: 3rem;
+  height: 3rem;
+  transition: all 0.2s ease;
+}
+
+.star-rating-label {
+  height: 2rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  opacity: 0;
+}
+
+.star-rating-label.visible {
+  opacity: 1;
+}
+
+.star-rating-label.mood-poor {
+  color: #f87171;
+}
+
+.star-rating-label.mood-okay {
+  color: #fbbf24;
+}
+
+.star-rating-label.mood-great {
+  color: #34d399;
+}
+
+/* =============================================================================
+   Feature Showcase
+   ============================================================================= */
+
+.feature-showcase {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+}
+
+.feature-showcase-visual {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.feature-showcase-glow {
+  position: absolute;
+  inset: -2rem;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.feature-showcase-orb {
+  position: relative;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 
+    0 0 60px rgba(99, 102, 241, 0.3),
+    inset 0 0 40px rgba(255, 255, 255, 0.1);
+  animation: orb-float 6s ease-in-out infinite;
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.feature-showcase-orb-inner {
+  width: 50%;
+  height: 50%;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.feature-showcase-orb-inner svg {
+  width: 100%;
+  height: 100%;
+}
+
+.feature-showcase-text {
+  text-align: center;
+  max-width: 24rem;
+}
+
+.feature-showcase-headline {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 0 0 0.75rem 0;
+}
+
+.feature-showcase-description {
+  font-size: 1rem;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* =============================================================================
+   Error Message
+   ============================================================================= */
+
+.onboarding-error {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 0.5rem;
+  color: #fca5a5;
+  font-size: 0.875rem;
+}

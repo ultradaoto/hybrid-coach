@@ -1,0 +1,15 @@
+{
+  "name": "@myultra/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "livekit-server-sdk": "^2.15.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.3.4"
+  }
+}

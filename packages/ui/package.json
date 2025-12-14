@@ -1,0 +1,16 @@
+{
+  "name": "@myultra/ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "livekit-client": "^2.16.1"
+  }
+}

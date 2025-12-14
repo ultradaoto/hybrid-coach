@@ -172,15 +172,15 @@ export class AudioRouter extends EventEmitter {
       participantStats.framesReceived++;
     }
 
-    // Validate frame
-    if (!isValidOpusFrame(data)) {
+    // Validate frame (accepts both opus and linear16)
+    if (!data || data.length === 0) {
       this.stats.invalidFramesDropped++;
-      this.log('⚠️ Invalid frame dropped');
+      this.log('⚠️ Empty frame dropped');
       return;
     }
 
-    // Create audio frame
-    const frame = createAudioFrame(data, participantId, participantName);
+    // Create audio frame (LiveKit provides PCM linear16 at 48kHz)
+    const frame = createAudioFrame(data, participantId, participantName, 'linear16');
     const role = this.participantRoles.get(participantId) || 'unknown';
 
     // Route based on role

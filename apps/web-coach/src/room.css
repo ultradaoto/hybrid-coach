@@ -1,0 +1,245 @@
+.coach-room {
+  min-height: 100vh;
+  background: #121212;
+  color: #e5e7eb;
+}
+
+.coach-room-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.coach-room-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.coach-room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: #1a1a1a;
+  border-bottom: 1px solid #2f2f2f;
+}
+
+.coach-room-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.coach-room-subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.coach-room-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.coach-room-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+  background: #10b981;
+}
+
+.coach-room-status-dot.warn {
+  background: #f59e0b;
+}
+
+.coach-room-status-dot.err {
+  background: #ef4444;
+}
+
+.coach-room-video-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  align-content: start;
+}
+
+.coach-room-tile {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #2f2f2f;
+  background: #0b0b0b;
+  aspect-ratio: 16 / 9;
+}
+
+.coach-room-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.coach-room-tile-label {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 12px;
+  color: #fff;
+}
+
+.coach-room-tile-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.95rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.coach-room-tile-speaking {
+  outline: 2px solid rgba(6, 182, 212, 0.8);
+  outline-offset: -2px;
+}
+
+.coach-room-controls {
+  padding: 1rem;
+  background: #1a1a1a;
+  border-top: 1px solid #2f2f2f;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.coach-room-right {
+  width: 420px;
+  min-width: 420px;
+  background: #1e1e1e;
+  border-left: 1px solid #2f2f2f;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.coach-ai-panel-header {
+  padding: 1rem;
+  border-bottom: 1px solid #2f2f2f;
+  background: #242424;
+}
+
+.coach-ai-panel-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.coach-ai-controls {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.coach-ai-controls .btn {
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.coach-transcript {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.coach-transcript-header {
+  padding: 1rem;
+  border-bottom: 1px solid #2f2f2f;
+  background: #242424;
+}
+
+.coach-transcript-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  font-size: 14px;
+}
+
+@media (min-width: 1101px) {
+  /* Constrain the room to the viewport so the transcript becomes an internal scroller. */
+  .coach-room,
+  .coach-room-shell {
+    height: 100vh;
+    overflow: hidden;
+  }
+}
+
+.coach-transcript-item {
+  margin-bottom: 0.75rem;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border-left: 3px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.coach-transcript-item.client {
+  border-left-color: #10b981;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.coach-transcript-item.ai {
+  border-left-color: #06b6d4;
+  background: rgba(6, 182, 212, 0.08);
+}
+
+.coach-transcript-item.coach {
+  border-left-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.coach-transcript-speaker {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.85;
+  margin-bottom: 0.25rem;
+}
+
+.coach-session-timer {
+  padding: 1rem;
+  border-top: 1px solid #2f2f2f;
+  background: #242424;
+  text-align: center;
+}
+
+.coach-session-timer .time {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #06b6d4;
+}
+
+@media (max-width: 1100px) {
+  .coach-room-shell {
+    flex-direction: column;
+  }
+
+  .coach-room-right {
+    width: auto;
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid #2f2f2f;
+  }
+
+  .coach-room-video-grid {
+    grid-template-columns: 1fr;
+  }
+}

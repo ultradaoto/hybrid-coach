@@ -3,6 +3,7 @@ import { chat } from '../services/aiService.js';
 import { synth } from '../services/ttsService.js';
 import { getTwilioIceServers } from '../services/turnService.js';
 import profileRouter from './api/profile.js';
+import coachApiRouter from './api/coach.js';
 import { jwtAuth } from '../middlewares/jwtAuth.js';
 import { ensureAuthenticated } from '../middlewares/auth.js';
 import userService from '../services/userService.js';
@@ -16,6 +17,7 @@ import { prisma } from '../lib/prisma.js';
 const router = Router();
 
 router.use('/profile', profileRouter);
+router.use('/coach', coachApiRouter);
 router.use('/message', messageRouter);
 router.use('/ws-relay', wsRelayRouter);
 router.use('/ws-test', wsTestRouter);

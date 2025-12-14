@@ -1,0 +1,10 @@
+{
+  "name": "@myultra/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants/tiers": "./src/constants/tiers.ts"
+  }
+}

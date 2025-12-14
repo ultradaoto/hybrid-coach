@@ -11,7 +11,7 @@
  * - Always-on transcription stream for coach review
  */
 
-import type { Room, RemoteParticipant, RemoteTrack, Track, DataPacket_Kind } from 'livekit-client';
+import type { Room, RemoteParticipant, RemoteTrack, Track } from 'livekit-client';
 
 // =============================================================================
 // Types and Interfaces
