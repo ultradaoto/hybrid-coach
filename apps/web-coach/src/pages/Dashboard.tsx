@@ -148,11 +148,14 @@ export function CoachDashboardPage() {
       }
 
       const json = (await res.json()) as { success: boolean; data: DashboardResponse };
+      console.log('[CoachDashboard] API Response:', json);
       if (!json?.success) {
         setError('Failed to load dashboard');
         setData(null);
         return;
       }
+      console.log('[CoachDashboard] User role:', json.data?.user?.role);
+      console.log('[CoachDashboard] Appointments:', json.data?.appointments);
       setData(json.data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load dashboard');
@@ -329,7 +332,8 @@ export function CoachDashboardPage() {
           </div>
         ) : null}
 
-        {user?.role === 'coach' ? (
+        {/* Show coach tools - user role from API: {user?.role} */}
+        {(user?.role === 'coach' || data?.appointments) ? (
           <>
             <div className="card fade-in">
               <div className="card-header">
