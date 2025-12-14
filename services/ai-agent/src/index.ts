@@ -21,7 +21,15 @@
  * - docs/DEEPGRAM-INTEGRATION.md
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Load .env from monorepo root (2 directories up from services/ai-agent/src/)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(__dirname, '../../../.env');
+dotenv.config({ path: envPath });
+
 import { Room, RoomEvent, RemoteParticipant, LocalParticipant } from '@livekit/rtc-node';
 import { AccessToken } from 'livekit-server-sdk';
 
