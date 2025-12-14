@@ -270,13 +270,22 @@ export function CallRoomPage() {
     }
   }, [localParticipant?.videoTrack]);
 
-  // Attach coach video
+  // Attach coach video - with better logging
   useEffect(() => {
+    log('📹 Coach video check:', {
+      hasCoachParticipant: !!coachParticipant,
+      coachIdentity: coachParticipant?.identity,
+      hasVideoTrack: !!coachParticipant?.videoTrack,
+      hasVideoRef: !!coachVideoRef.current,
+    });
+    
     if (coachParticipant?.videoTrack && coachVideoRef.current) {
-      log('📹 Attaching coach video');
-      coachVideoRef.current.srcObject = new MediaStream([coachParticipant.videoTrack]);
+      log('📹 Attaching coach video track');
+      const stream = new MediaStream([coachParticipant.videoTrack]);
+      coachVideoRef.current.srcObject = stream;
+      coachVideoRef.current.play().catch((e) => log('Coach video play error:', e));
     }
-  }, [coachParticipant?.videoTrack]);
+  }, [coachParticipant?.videoTrack, coachParticipant?.identity]);
 
   // Update AI/Coach participants from remoteParticipants
   // Always update to capture track changes
@@ -307,8 +316,12 @@ export function CallRoomPage() {
     // Update coach participant
     if (foundCoachParticipant !== undefined) {
       if (!coachParticipant || coachParticipant.identity !== foundCoachParticipant.identity) {
-        log('👨‍🏫 Found coach participant:', foundCoachParticipant.identity);
+        log('👨‍🏫 Found coach participant:', foundCoachParticipant.identity, {
+          hasAudio: !!foundCoachParticipant.audioTrack,
+          hasVideo: !!foundCoachParticipant.videoTrack,
+        });
       }
+      // Always update to capture track changes
       setCoachParticipant(foundCoachParticipant);
     } else if (coachParticipant) {
       log('👨‍🏫 Coach participant left');
