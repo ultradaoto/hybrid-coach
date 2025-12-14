@@ -84,6 +84,9 @@ export class AudioRouter extends EventEmitter {
   private config: RouterConfig;
   private stats: AudioStats;
   private participantRoles: Map<string, ParticipantRole> = new Map();
+  
+  /** When true, AI is paused - client audio goes to transcription only, not Voice Agent */
+  private isAIPaused: boolean = false;
 
   constructor(config: Partial<RouterConfig> = {}) {
     super();
@@ -204,23 +207,32 @@ export class AudioRouter extends EventEmitter {
   /**
    * Route CLIENT audio
    * 
-   * OPTIMIZED: Client audio goes to Voice Agent ONLY
-   * Transcripts come from ConversationText events, not separate STT
+   * Normal mode: Client audio goes to Voice Agent ONLY
+   *              (Transcripts come from ConversationText events)
+   * 
+   * Paused mode: Client audio goes to Transcription STT ONLY
+   *              (AI doesn't hear/respond, but we still get transcripts)
    */
   private routeClientAudio(frame: AudioFrame): void {
     this.stats.clientFrames++;
     const participantStats = this.stats.byParticipant.get(frame.participantId);
 
-    // Send to Voice Agent only (no transcription STT needed)
+    // When AI is PAUSED: route to transcription STT instead of Voice Agent
+    if (this.isAIPaused) {
+      this.sendToTranscription(frame);
+      if (participantStats) {
+        participantStats.framesToTranscription++;
+      }
+      return;
+    }
+
+    // Normal mode: Send to Voice Agent only
     if (this.sendToVoiceAgent(frame)) {
       this.stats.totalFramesToVoiceAgent++;
       if (participantStats) {
         participantStats.framesToVoiceAgent++;
       }
     }
-
-    // NOTE: Client transcripts come from ConversationText events
-    // No need to send to transcription STT
   }
 
   /**
@@ -324,6 +336,40 @@ export class AudioRouter extends EventEmitter {
     if (stats) {
       stats.isMuted = false;
     }
+  }
+
+  // =========================================================================
+  // AI PAUSE FEATURE
+  // =========================================================================
+
+  /**
+   * Pause AI - client audio goes to transcription only, AI won't respond
+   * Coach can talk to client during this time
+   */
+  pauseAI(): void {
+    if (this.isAIPaused) return;
+    
+    this.isAIPaused = true;
+    console.log('[AudioRouter] ⏸️ AI PAUSED - client audio now goes to transcription only');
+    this.emit('ai-paused');
+  }
+
+  /**
+   * Resume AI - client audio goes to Voice Agent, AI can respond again
+   */
+  resumeAI(): void {
+    if (!this.isAIPaused) return;
+    
+    this.isAIPaused = false;
+    console.log('[AudioRouter] ▶️ AI RESUMED - client audio now goes to Voice Agent');
+    this.emit('ai-resumed');
+  }
+
+  /**
+   * Check if AI is currently paused
+   */
+  isAIPausedState(): boolean {
+    return this.isAIPaused;
   }
 
   /**

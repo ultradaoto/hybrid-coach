@@ -101,6 +101,9 @@ export class LiveKitAgent extends EventEmitter {
   private audioStreamsByTrackSid: Map<string, AudioStream> = new Map();
   private shutdownTimer: NodeJS.Timeout | null = null;
   private readonly GRACE_PERIOD_MS = 60 * 1000; // 60 seconds
+  
+  /** When true, AI is paused - won't respond to client but transcription continues */
+  private isAIPaused: boolean = false;
 
   constructor(config: LiveKitAgentConfig) {
     super();
@@ -405,6 +408,11 @@ export class LiveKitAgent extends EventEmitter {
    */
   private publishAudioData(data: Buffer): void {
     if (!this.audioSource || !this.isPublishing) return;
+    
+    // Block AI audio output when paused
+    if (this.isAIPaused) {
+      return;
+    }
 
     // Capture the audioSource reference to avoid race conditions
     const audioSource = this.audioSource;
@@ -443,6 +451,8 @@ export class LiveKitAgent extends EventEmitter {
         this.handleCoachMute(message.muted, message.coachIdentity);
       } else if (message.type === 'coach_whisper') {
         this.handleCoachWhisper(message.text);
+      } else if (message.type === 'pause_ai') {
+        this.handlePauseAI(message.paused);
       }
     } catch (e) {
       console.error('[LiveKitAgent] Failed to parse data message:', e);
@@ -475,6 +485,52 @@ export class LiveKitAgent extends EventEmitter {
     await this.connectionManager?.sendCoachWhisper(text);
     
     this.emit('whisper-received', { text });
+  }
+
+  /**
+   * Handle AI pause command from coach
+   * When paused:
+   * - AI won't respond to client audio (audio routed to transcription only)
+   * - AI audio output is blocked
+   * - Coach can talk to client directly
+   * - Transcription continues working
+   */
+  private handlePauseAI(paused: boolean): void {
+    if (this.isAIPaused === paused) return;
+    
+    this.isAIPaused = paused;
+    
+    if (paused) {
+      console.log('[LiveKitAgent] ⏸️ AI PAUSED by coach - will not respond');
+      this.connectionManager?.pauseAI();
+      
+      // Broadcast pause state to all participants
+      this.broadcastPauseState(true);
+    } else {
+      console.log('[LiveKitAgent] ▶️ AI RESUMED by coach - ready to respond');
+      this.connectionManager?.resumeAI();
+      
+      // Broadcast resume state to all participants
+      this.broadcastPauseState(false);
+    }
+    
+    this.emit('ai-pause-changed', { paused });
+  }
+
+  /**
+   * Broadcast AI pause state to all participants
+   */
+  private broadcastPauseState(paused: boolean): void {
+    if (!this.room?.localParticipant) return;
+
+    const message = {
+      type: 'ai_pause_state',
+      paused,
+      timestamp: new Date().toISOString(),
+    };
+
+    const data = new TextEncoder().encode(JSON.stringify(message));
+    this.room.localParticipant.publishData(data, { reliable: true });
   }
 
   /**

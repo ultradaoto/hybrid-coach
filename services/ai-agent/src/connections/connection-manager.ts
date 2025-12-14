@@ -320,6 +320,41 @@ export class DualConnectionManager extends EventEmitter {
     return this.router.isParticipantMuted(participantId);
   }
 
+  // =========================================================================
+  // AI PAUSE FEATURE
+  // =========================================================================
+
+  /**
+   * Pause AI - stops AI from responding but keeps transcription running
+   * Used by coach to privately talk to client without AI interference
+   */
+  pauseAI(): void {
+    console.log('[DualConnection] ⏸️ Pausing AI...');
+    this.router.pauseAI();
+    
+    // Clear any pending AI speech
+    this.voiceAgent.clearBuffer();
+    
+    this.emit('ai-paused');
+  }
+
+  /**
+   * Resume AI - allows AI to respond again
+   */
+  resumeAI(): void {
+    console.log('[DualConnection] ▶️ Resuming AI...');
+    this.router.resumeAI();
+    
+    this.emit('ai-resumed');
+  }
+
+  /**
+   * Check if AI is currently paused
+   */
+  isAIPaused(): boolean {
+    return this.router.isAIPausedState();
+  }
+
   /**
    * Inject a prompt for the AI to speak (deprecated: use injectAgentMessage)
    */

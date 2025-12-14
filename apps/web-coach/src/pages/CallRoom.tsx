@@ -78,6 +78,7 @@ export function CallRoomPage() {
   const [clientParticipant, setClientParticipant] = useState<ParticipantInfo | null>(null);
   const [seconds, setSeconds] = useState(0);
   const [whisperText, setWhisperText] = useState('');
+  const [isAIPaused, setIsAIPaused] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptItem[]>([
     {
       id: crypto.randomUUID(),
@@ -136,7 +137,7 @@ export function CallRoomPage() {
     transcriptEndRef.current?.scrollIntoView({ block: 'end' });
   }, [transcript.length]);
 
-  // Handle data messages from AI agent (transcripts)
+  // Handle data messages from AI agent (transcripts, pause state)
   const handleDataReceived = useCallback((payload: Uint8Array) => {
     try {
       const text = new TextDecoder().decode(payload);
@@ -153,6 +154,10 @@ export function CallRoomPage() {
         );
       } else if (message.type === 'agent_state') {
         addTranscriptItem('system', 'System', `AI Agent: ${message.state}`);
+      } else if (message.type === 'ai_pause_state') {
+        // Sync pause state from AI agent
+        setIsAIPaused(message.paused);
+        addTranscriptItem('system', 'System', message.paused ? '⏸️ AI Paused' : '▶️ AI Resumed');
       }
     } catch (e) {
       console.error('[CoachRoom] Failed to parse data message:', e);
@@ -411,17 +416,33 @@ export function CallRoomPage() {
     addTranscriptItem('system', 'System', isVideoEnabled ? '📹 Camera OFF' : '📹 Camera ON');
   }, [toggleVideo, isVideoEnabled, addTranscriptItem]);
 
+  // Toggle AI pause state
+  const handleTogglePauseAI = useCallback(() => {
+    const newPaused = !isAIPaused;
+    setIsAIPaused(newPaused);
+    
+    publishData(JSON.stringify({
+      type: 'pause_ai',
+      paused: newPaused,
+    }));
+
+    addTranscriptItem('coach', 'Coach', newPaused 
+      ? '⏸️ Paused AI - you can now speak privately with client' 
+      : '▶️ Resumed AI - AI will respond to client again');
+  }, [isAIPaused, publishData, addTranscriptItem]);
+
   // Status indicators
   const isConnected = connectionState === ConnectionState.Connected;
   const statusDotClass = isConnected ? 'ok' : connectionState === ConnectionState.Connecting ? 'warn' : 'err';
   const statusLabel = isConnected ? 'Connected' : connectionState === ConnectionState.Connecting ? 'Connecting...' : 'Disconnected';
 
   const aiStatusLabel = useMemo(() => {
+    if (isAIPaused) return '⏸️ Paused';
     if (aiParticipant) return aiParticipant.isSpeaking ? '🗣️ Speaking' : '🟢 Ready';
     if (agentStatus === 'spawning') return '🟡 Starting...';
     if (agentStatus === 'failed') return '🔴 Failed';
     return '⚪ Offline';
-  }, [agentStatus, aiParticipant]);
+  }, [agentStatus, aiParticipant, isAIPaused]);
 
   if (error) {
     return (
@@ -555,6 +576,28 @@ export function CallRoomPage() {
           <div className="coach-ai-panel-header">
             <h3>🎯 Coach Panel</h3>
             
+            {/* Pause AI Button */}
+            <div style={{ marginTop: '0.75rem' }}>
+              <button
+                className={`btn btn-block ${isAIPaused ? 'btn-success' : 'btn-warning'}`}
+                type="button"
+                onClick={handleTogglePauseAI}
+                style={{ 
+                  width: '100%', 
+                  padding: '0.75rem',
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                }}
+              >
+                {isAIPaused ? '▶️ Resume AI' : '⏸️ Pause AI'}
+              </button>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4, textAlign: 'center' }}>
+                {isAIPaused 
+                  ? 'AI is paused. Speak privately with client.' 
+                  : 'Pause AI to coach the client privately.'}
+              </div>
+            </div>
+
             {/* Whisper Input */}
             <div style={{ marginTop: '0.75rem' }}>
               <label style={{ display: 'block', fontSize: 11, marginBottom: 4, opacity: 0.7 }}>
