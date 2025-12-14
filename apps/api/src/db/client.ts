@@ -33,6 +33,67 @@ export const db = {
   grantsByToken,
 };
 
+// Pre-seeded user accounts
+export type SeedUser = {
+  email: string;
+  password: string;
+  role: UserRole;
+  displayName: string;
+};
+
+const SEED_USERS: SeedUser[] = [
+  {
+    email: 'sterling.cooley@gmail.com',
+    password: 'MOONshot1!',
+    role: 'client',
+    displayName: 'Sterling Cooley',
+  },
+  {
+    email: 'ultradaoto@gmail.com',
+    password: 'MOONshot1!',
+    role: 'coach',
+    displayName: 'Ultra Coach',
+  },
+];
+
+let seedInitialized = false;
+
+export async function initSeedUsers(hashFn: (password: string, salt: string) => Promise<string>) {
+  if (seedInitialized) return;
+  seedInitialized = true;
+
+  console.log('[Auth] Initializing seed users...');
+  
+  for (const seed of SEED_USERS) {
+    const email = normalizeEmail(seed.email);
+    if (usersByEmail.has(email)) {
+      console.log(`[Auth] User ${email} already exists, skipping`);
+      continue;
+    }
+
+    const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    const passwordHash = await hashFn(seed.password, salt);
+
+    const user: DbUser = {
+      id: crypto.randomUUID(),
+      email,
+      displayName: seed.displayName,
+      role: seed.role,
+      membershipTier: seed.role === 'coach' ? 'PREMIUM' : 'VAGUS_MEMBER',
+      passwordHash,
+      passwordSalt: salt,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+
+    usersByEmail.set(email, user);
+    usersById.set(user.id, user);
+    console.log(`[Auth] Seeded user: ${email} (${seed.role})`);
+  }
+
+  console.log('[Auth] Seed users initialized');
+}
+
 export function nowIso() {
   return new Date().toISOString();
 }

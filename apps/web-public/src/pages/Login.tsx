@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 
 type LoginResponse =
   | {
@@ -14,17 +14,10 @@ type LoginResponse =
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [portal, setPortal] = useState<'client' | 'coach'>('client');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [openedUrl, setOpenedUrl] = useState<string | null>(null);
   const [popupBlocked, setPopupBlocked] = useState(false);
-
-  const subtitle = useMemo(
-    () =>
-      'Sign in once. We will route you to the correct portal (coach or client) based on your account role.',
-    []
-  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,7 +34,7 @@ export function LoginPage() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ email, password, portal }),
+        body: JSON.stringify({ email, password }),
       });
 
       const json = (await res.json().catch(() => null)) as LoginResponse | null;
@@ -85,7 +78,9 @@ export function LoginPage() {
       <div className="login-shell">
         <div className="login-card" style={{ maxWidth: 520 }}>
           <h1 className="logo">MyUltra.Coach</h1>
-          <p className="login-subtitle">{subtitle}</p>
+          <p className="login-subtitle">
+            Sign in with your Vagus Skool email. We'll automatically direct you to the correct portal.
+          </p>
 
           {error ? (
             <div className="alert alert-error" style={{ margin: '0 0 1rem' }}>
@@ -95,32 +90,6 @@ export function LoginPage() {
           ) : null}
 
           <form onSubmit={onSubmit}>
-            <div className="form-group">
-              <div className="form-label">Portal</div>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="radio"
-                    name="portal"
-                    value="client"
-                    checked={portal === 'client'}
-                    onChange={() => setPortal('client')}
-                  />
-                  Client
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="radio"
-                    name="portal"
-                    value="coach"
-                    checked={portal === 'coach'}
-                    onChange={() => setPortal('coach')}
-                  />
-                  Coach
-                </label>
-              </div>
-            </div>
-
             <div className="form-group">
               <label className="form-label" htmlFor="email">
                 Email

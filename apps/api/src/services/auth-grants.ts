@@ -7,6 +7,15 @@ const GRANT_TTL_SECONDS = 5 * 60;
 const SESSION_JWT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export function getRedirectBaseUrl(role: UserRole) {
+  const isProd = process.env.NODE_ENV === 'production';
+  
+  if (isProd) {
+    // Production: use path-based routing on same domain
+    const baseUrl = process.env.PUBLIC_URL ?? 'https://myultra.coach';
+    return role === 'coach' ? `${baseUrl}/coach` : `${baseUrl}/client`;
+  }
+
+  // Development: use port-based routing
   const host = process.env.HOST ?? '127.0.0.1';
   const coachPort = Number(process.env.COACH_PORT ?? 3701);
   const clientPort = Number(process.env.CLIENT_PORT ?? 3702);
