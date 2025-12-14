@@ -1,15 +1,12 @@
 import type { AuthUser } from '../middleware/auth';
 import { jsonResponse } from '../middleware/cors';
-
-type AppointmentStatus = 'scheduled' | 'cancelled';
-
-type Appointment = {
-  id: string;
-  roomId: string;
-  scheduledFor: string;
-  status: AppointmentStatus;
-  createdAt: string;
-};
+import { 
+  createAppointment, 
+  getAppointmentsForClient, 
+  updateAppointment,
+  getDefaultCoachId,
+  type Appointment 
+} from '../db/appointments';
 
 type Slot = { iso: string; label: string };
 
@@ -36,16 +33,7 @@ type WeeklyRecommendation = {
   category: 'breath' | 'cold' | 'movement' | 'reflection' | 'sleep' | 'nutrition';
 };
 
-const appointmentsByUser = new Map<string, Appointment[]>();
 const lastSessionByUser = new Map<string, LastSession>();
-
-function getAppointmentsForUser(userId: string): Appointment[] {
-  return appointmentsByUser.get(userId) ?? [];
-}
-
-function setAppointmentsForUser(userId: string, appts: Appointment[]) {
-  appointmentsByUser.set(userId, appts);
-}
 
 function makeDefaultSlots(): Slot[] {
   const now = Date.now();
@@ -106,9 +94,7 @@ export async function clientRoutes(req: Request, user: AuthUser): Promise<Respon
   const method = req.method;
 
   if (path === '/api/client/dashboard' && method === 'GET') {
-    const appointments = getAppointmentsForUser(user.id).sort(
-      (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
-    );
+    const appointments = getAppointmentsForClient(user.id);
 
     const assignedCoach = makeAssignedCoach(user);
     const lastSession = lastSessionByUser.get(user.id) ?? {
@@ -141,9 +127,7 @@ export async function clientRoutes(req: Request, user: AuthUser): Promise<Respon
   }
 
   if (path === '/api/client/appointments' && method === 'GET') {
-    const appointments = getAppointmentsForUser(user.id).sort(
-      (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
-    );
+    const appointments = getAppointmentsForClient(user.id);
     return jsonResponse({ success: true, data: appointments });
   }
 
@@ -160,16 +144,19 @@ export async function clientRoutes(req: Request, user: AuthUser): Promise<Respon
       return jsonResponse({ success: false, error: 'Missing slot' }, { status: 400 });
     }
 
-    const appt: Appointment = {
-      id: crypto.randomUUID(),
+    // Create appointment with client info and assign to default coach
+    const appt = createAppointment({
       roomId: crypto.randomUUID(),
       scheduledFor: slot,
       status: 'scheduled',
-      createdAt: new Date().toISOString(),
-    };
-
-    const current = getAppointmentsForUser(user.id);
-    setAppointmentsForUser(user.id, [...current, appt]);
+      clientId: user.id,
+      clientEmail: user.email,
+      clientName: user.email?.split('@')[0] ?? 'Client',
+      // Assign to default coach so it shows on their dashboard
+      coachId: getDefaultCoachId(),
+      coachEmail: 'ultradaoto@gmail.com',
+      coachName: 'Ultra Coach',
+    });
 
     return jsonResponse({ success: true, data: appt }, { status: 201 });
   }
@@ -177,9 +164,7 @@ export async function clientRoutes(req: Request, user: AuthUser): Promise<Respon
   const cancelMatch = path.match(/^\/api\/client\/appointments\/([^/]+)\/cancel$/);
   if (cancelMatch && method === 'POST') {
     const appointmentId = cancelMatch[1];
-    const current = getAppointmentsForUser(user.id);
-    const next = current.map((a): Appointment => (a.id === appointmentId ? { ...a, status: 'cancelled' } : a));
-    setAppointmentsForUser(user.id, next);
+    updateAppointment(appointmentId, { status: 'cancelled' });
     return jsonResponse({ success: true });
   }
 

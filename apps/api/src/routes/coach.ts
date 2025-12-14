@@ -1,5 +1,11 @@
 import type { AuthUser } from '../middleware/auth';
 import { jsonResponse } from '../middleware/cors';
+import { 
+  getAppointmentsForCoach, 
+  unassignCoachFromAppointment,
+  getDefaultCoachId,
+  type Appointment 
+} from '../db/appointments';
 
 type CoachUser = AuthUser & {
   displayName?: string;
@@ -8,23 +14,29 @@ type CoachUser = AuthUser & {
 
 type Meeting = { summary: string; start: string };
 
-type Appointment = {
+// Format appointment for coach view (includes client info)
+type CoachAppointmentView = {
   id: string;
   roomId: string;
   scheduledFor: string;
-  status: 'scheduled' | 'cancelled' | 'reassigned';
+  status: string;
   client?: { id: string; displayName?: string; email?: string };
 };
 
 const coachAvailability = new Map<string, boolean>();
-const coachAppointments = new Map<string, Appointment[]>();
 
-function getAppointments(coachId: string) {
-  return coachAppointments.get(coachId) ?? [];
-}
-
-function setAppointments(coachId: string, appts: Appointment[]) {
-  coachAppointments.set(coachId, appts);
+function formatAppointmentForCoach(appt: Appointment): CoachAppointmentView {
+  return {
+    id: appt.id,
+    roomId: appt.roomId,
+    scheduledFor: appt.scheduledFor,
+    status: appt.status,
+    client: {
+      id: appt.clientId,
+      displayName: appt.clientName,
+      email: appt.clientEmail,
+    },
+  };
 }
 
 export async function coachRoutes(req: Request, user: AuthUser): Promise<Response> {
@@ -41,11 +53,31 @@ export async function coachRoutes(req: Request, user: AuthUser): Promise<Respons
       isAvailable,
     };
 
-    const appointments = getAppointments(user.id).sort(
-      (a, b) => new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime()
-    );
+    // Get appointments assigned to this coach OR to the default coach ID
+    // This handles the case where appointments are assigned via email or ID
+    const defaultCoachId = getDefaultCoachId();
+    let rawAppointments = getAppointmentsForCoach(user.id);
+    
+    // Also check if this is the default coach email (ultradaoto@gmail.com)
+    if (user.email === 'ultradaoto@gmail.com') {
+      const defaultAppointments = getAppointmentsForCoach(defaultCoachId);
+      // Merge, avoiding duplicates
+      const seen = new Set(rawAppointments.map(a => a.id));
+      for (const appt of defaultAppointments) {
+        if (!seen.has(appt.id)) {
+          rawAppointments.push(appt);
+        }
+      }
+    }
+    
+    // Format for coach view
+    const appointments = rawAppointments
+      .filter(a => a.status !== 'cancelled') // Only show active appointments
+      .map(formatAppointmentForCoach);
 
     const meetings: Meeting[] = [];
+
+    console.log('[Coach Dashboard]', user.email, 'has', appointments.length, 'appointments');
 
     return jsonResponse({
       success: true,
@@ -77,9 +109,8 @@ export async function coachRoutes(req: Request, user: AuthUser): Promise<Respons
       return jsonResponse({ success: false, error: 'Missing appointmentId' }, { status: 400 });
     }
 
-    const current = getAppointments(user.id);
-    const next = current.map((a) => (a.id === appointmentId ? { ...a, status: 'reassigned' as const } : a));
-    setAppointments(user.id, next);
+    // Remove coach assignment (returns to pool)
+    unassignCoachFromAppointment(appointmentId);
     return jsonResponse({ success: true });
   }
 

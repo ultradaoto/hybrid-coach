@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ConnectionState } from 'livekit-client';
-import { Orb, useLiveKitRoom, type ParticipantInfo } from '@myultra/ui';
+import { useLiveKitRoom, type ParticipantInfo } from '@myultra/ui';
+import { Orb3D } from '../components/Orb3D';
 import '../dashboard.css';
 import '../room.css';
 
@@ -451,7 +452,7 @@ export function CallRoomPage() {
             {/* AI Orb */}
             <div className="coach-room-tile">
               <div className="coach-room-tile-placeholder" style={{ flexDirection: 'column', gap: 16 }}>
-                <Orb label="AI Orb" stream={aiAudioStream ?? undefined} />
+                <Orb3D stream={aiAudioStream ?? undefined} size={150} />
                 <div>{aiStatusLabel}</div>
               </div>
               <div className="coach-room-tile-label">AI Coach</div>
