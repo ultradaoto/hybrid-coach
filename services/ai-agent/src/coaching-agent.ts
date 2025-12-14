@@ -1,28 +1,36 @@
 /**
- * Coaching Agent with Deepgram Integration
+ * Coaching Agent with Dual-Connection Architecture
  * 
- * Main voice AI agent for coaching sessions.
- * Uses LiveKit Agents framework with Deepgram STT/TTS.
+ * Orchestrates the dual Deepgram WebSocket connections:
+ * 1. Voice Agent - For AI responses (client audio + gated coach audio)
+ * 2. Transcription - For always-on logging (all audio)
  * 
- * Referenced from:
- * - /Archive/Hybrid-Coach-GPU/services/streamingSTT.js (audio processing patterns)
- * - /Archive/Hybrid-Coach-GPU/services/webrtcManager.js (connection management)
- * - docs/HYBRID-COACH-ARCHITECTURE.md (agent specification)
+ * Integrates with LiveKit for:
+ * - Receiving audio from room participants
+ * - Publishing AI audio responses
+ * - Handling data channel messages (mute commands)
+ * 
+ * References:
+ * - docs/HYBRID-COACH-ARCHITECTURE.md
+ * - docs/DEEPGRAM-INTEGRATION.md
  */
 
-import { type JobContext, voice, llm } from '@livekit/agents';
-import * as deepgram from '@livekit/agents-plugin-deepgram';
-import type { RemoteParticipant, Track, Room } from '@livekit/rtc-node';
-
-import { createSttInstance, createTtsInstance, KeepAliveManager } from './deepgram-config.js';
-import { SelectiveAudioManager, DualAudioRouter, type TranscriptionEvent } from './selective-audio.js';
-import { agentMetrics } from './config/deepgram.js';
+import { EventEmitter } from 'events';
+import type { Room, RemoteParticipant, LocalParticipant, AudioFrame } from '@livekit/rtc-node';
+import {
+  DualConnectionManager,
+  createDualConnectionManager,
+  type ConnectionStatus,
+} from './connections/connection-manager.js';
+import type { MuteCommand } from './audio/gating.js';
+import type { TranscriptResult } from './connections/transcription.js';
+import type { ParticipantRole } from './audio/router.js';
 
 // =============================================================================
 // Coaching Personality Configuration
 // =============================================================================
 
-const COACHING_INSTRUCTIONS = `You are a supportive AI wellness coach specializing in vagus nerve health and stress management.
+const DEFAULT_COACHING_PROMPT = `You are a supportive AI wellness coach specializing in vagus nerve health and stress management.
 
 Your approach:
 - Listen actively and reflect back what you hear
@@ -40,229 +48,457 @@ Techniques you can suggest:
 - Meditation and mindfulness practices
 - Social connection and laughter
 
-Remember: You're here to support wellness, not provide medical advice.
+Remember: You're here to support wellness, not provide medical advice.`;
 
-Start each session by warmly greeting the client and asking how they're feeling today.`;
+const DEFAULT_GREETING = "Hi there! I'm your AI wellness coach. How are you feeling today?";
 
-const GREETING_MESSAGE = "Hi there! I'm your AI wellness coach. How are you feeling today?";
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface CoachingAgentConfig {
+  /** Custom coaching personality prompt */
+  coachingPrompt?: string;
+  /** Initial greeting message */
+  greeting?: string;
+  /** Deepgram voice model (e.g., 'aura-2-thalia-en') */
+  voiceModel?: string;
+  /** LLM model for thinking (e.g., 'gpt-4o-mini') */
+  llmModel?: string;
+  /** Enable verbose logging */
+  verbose?: boolean;
+}
+
+export interface SessionTranscript {
+  participantId: string;
+  participantName?: string;
+  text: string;
+  timestamp: Date;
+  isMutedFromAI: boolean;
+  role: ParticipantRole;
+}
 
 // =============================================================================
 // Coaching Agent Class
 // =============================================================================
 
-export interface CoachingAgentOptions {
-  /** Custom instructions to override default coaching personality */
-  instructions?: string;
-  /** Custom greeting message */
-  greeting?: string;
-  /** Voice model to use (see AVAILABLE_VOICES) */
-  voiceModel?: string;
-  /** Enable verbose logging */
-  verbose?: boolean;
-}
-
-export class CoachingAgent {
-  private ctx: JobContext;
-  private session: voice.VoicePipelineAgent | null = null;
-  private selectiveAudioManager: SelectiveAudioManager;
-  private dualAudioRouter: DualAudioRouter;
-  private keepAliveManager: KeepAliveManager;
-  private options: CoachingAgentOptions;
+export class CoachingAgent extends EventEmitter {
+  private room: Room | null = null;
+  private connectionManager: DualConnectionManager | null = null;
+  private config: CoachingAgentConfig;
   private isRunning: boolean = false;
-  private transcripts: TranscriptionEvent[] = [];
+  private sessionTranscripts: SessionTranscript[] = [];
+  private participantMap: Map<string, { name: string; role: ParticipantRole }> = new Map();
 
-  constructor(ctx: JobContext, options: CoachingAgentOptions = {}) {
-    this.ctx = ctx;
-    this.options = options;
-    this.selectiveAudioManager = new SelectiveAudioManager();
-    this.dualAudioRouter = new DualAudioRouter(this.selectiveAudioManager);
-    this.keepAliveManager = new KeepAliveManager(3000); // 3 second interval
+  constructor(config: CoachingAgentConfig = {}) {
+    super();
+    this.config = {
+      coachingPrompt: DEFAULT_COACHING_PROMPT,
+      greeting: DEFAULT_GREETING,
+      voiceModel: 'aura-2-thalia-en',
+      llmModel: 'gpt-4o-mini',
+      verbose: false,
+      ...config,
+    };
 
-    this.log('🤖 Coaching agent created');
+    console.log('[CoachingAgent] 🤖 Created with config:', {
+      voiceModel: this.config.voiceModel,
+      llmModel: this.config.llmModel,
+      verbose: this.config.verbose,
+    });
   }
 
   private log(message: string, data?: unknown): void {
-    const timestamp = new Date().toISOString();
-    if (data && this.options.verbose) {
-      console.log(`[${timestamp}] [CoachingAgent] ${message}`, data);
-    } else {
-      console.log(`[${timestamp}] [CoachingAgent] ${message}`);
+    if (this.config.verbose) {
+      if (data) {
+        console.log(`[CoachingAgent] ${message}`, data);
+      } else {
+        console.log(`[CoachingAgent] ${message}`);
+      }
     }
-  }
-
-  private error(message: string, err?: unknown): void {
-    const timestamp = new Date().toISOString();
-    console.error(`[${timestamp}] [CoachingAgent] ❌ ${message}`, err);
-    agentMetrics.recordError();
   }
 
   /**
-   * Start the coaching agent
+   * Start the coaching agent with a LiveKit room
    */
-  async start(): Promise<void> {
+  async start(room: Room): Promise<void> {
     if (this.isRunning) {
-      this.log('⚠️ Agent already running');
+      console.warn('[CoachingAgent] ⚠️ Already running');
       return;
     }
 
+    console.log('[CoachingAgent] 🚀 Starting...');
+    this.room = room;
+
     try {
-      this.log('🚀 Starting coaching agent...');
-
-      // Initialize selective audio with the room
-      this.selectiveAudioManager.initialize(this.ctx.room as unknown as import('livekit-client').Room);
-
-      // Set up transcription callback for coach review panel
-      this.selectiveAudioManager.onTranscription((event) => {
-        this.transcripts.push(event);
-        this.log(`📝 Transcript: [${event.participantName}] "${event.transcript}"${event.isMutedFromAI ? ' (muted from AI)' : ''}`);
+      // Create and initialize dual connection manager
+      this.connectionManager = createDualConnectionManager({
+        coachingPrompt: this.config.coachingPrompt,
+        greeting: this.config.greeting,
+        voiceModel: this.config.voiceModel,
+        llmModel: this.config.llmModel,
+        verbose: this.config.verbose,
       });
 
-      // Configure STT with Deepgram Nova-3
-      const stt = createSttInstance({
-        model: 'nova-3',
-        language: 'en-US',
-        punctuate: true,
-        interimResults: true,
-      });
+      // Set up connection event handlers
+      this.setupConnectionEvents();
 
-      // Configure TTS with Deepgram Aura-2
-      const tts = createTtsInstance({
-        model: this.options.voiceModel || 'aura-2-thalia-en',
-        sampleRate: 24000,
-      });
+      // Set up room event handlers
+      this.setupRoomEvents();
 
-      // Configure LLM (OpenAI GPT-4o-mini for fast, cost-effective responses)
-      const chatCtx = new llm.ChatContext();
-      chatCtx.append({
-        role: 'system',
-        content: this.options.instructions || COACHING_INSTRUCTIONS,
-      });
+      // Initialize connections
+      await this.connectionManager.initialize();
 
-      // Create voice pipeline agent
-      this.session = new voice.VoicePipelineAgent(
-        voice.defaultVadOptions,
-        stt,
-        llm.LLM.withOpenAI({ model: 'gpt-4o-mini' }),
-        tts,
-        chatCtx,
-      );
-
-      // Set up event handlers
-      this.setupEventHandlers();
-
-      // Start the voice pipeline
-      this.session.start(this.ctx.room);
+      // Register existing participants
+      this.registerExistingParticipants();
 
       this.isRunning = true;
-      this.log('✅ Coaching agent started successfully');
+      console.log('[CoachingAgent] ✅ Started successfully');
+      this.emit('started');
 
-      // Say greeting
-      await this.sayGreeting();
-
-    } catch (err) {
-      this.error('Failed to start coaching agent', err);
-      throw err;
+    } catch (error) {
+      console.error('[CoachingAgent] ❌ Failed to start:', error);
+      this.emit('error', error);
+      throw error;
     }
   }
 
   /**
-   * Set up event handlers for the voice pipeline
+   * Set up event handlers for the dual connection manager
    */
-  private setupEventHandlers(): void {
-    if (!this.session) return;
+  private setupConnectionEvents(): void {
+    if (!this.connectionManager) return;
 
-    // Handle user speech started
-    this.session.on('user_speech_started', () => {
-      this.log('🎤 User started speaking');
-      // Stop keepAlive when user speaks
-      this.keepAliveManager.stop();
+    // AI audio output -> publish to LiveKit room
+    this.connectionManager.on('ai-audio', (data: Buffer) => {
+      this.publishAIAudio(data);
     });
 
-    // Handle user speech stopped
-    this.session.on('user_speech_stopped', () => {
-      this.log('🔇 User stopped speaking');
-      // Could restart keepAlive here if implementing silence detection
+    // Transcription results -> store and emit
+    this.connectionManager.on('transcription', (result: TranscriptResult) => {
+      this.handleTranscription(result);
     });
 
-    // Handle transcription
-    this.session.on('user_speech_committed', (transcript: string) => {
-      const startTime = Date.now();
-      this.log(`📝 User said: "${transcript}"`);
-      
-      // Record STT latency
-      const latency = Date.now() - startTime;
-      agentMetrics.recordSttLatency(latency);
+    // Agent state events
+    this.connectionManager.on('agent-speaking', () => {
+      this.log('🔊 Agent speaking');
+      this.emit('agent-speaking');
     });
 
-    // Handle agent response
-    this.session.on('agent_speech_started', () => {
-      this.log('🔊 Agent speaking...');
+    this.connectionManager.on('agent-done-speaking', () => {
+      this.log('🔇 Agent done speaking');
+      this.emit('agent-done-speaking');
     });
 
-    this.session.on('agent_speech_stopped', () => {
-      this.log('🔇 Agent finished speaking');
+    this.connectionManager.on('user-speaking', () => {
+      this.log('🎤 User speaking');
+      this.emit('user-speaking');
     });
 
-    // Handle errors
-    this.session.on('error', (err: Error) => {
-      this.error('Voice pipeline error', err);
+    this.connectionManager.on('user-done-speaking', () => {
+      this.log('🔇 User done speaking');
+      this.emit('user-done-speaking');
+    });
+
+    // Gate events (mute/unmute)
+    this.connectionManager.on('gate-event', (event) => {
+      this.log('🚪 Gate event:', event);
+      this.emit('gate-event', event);
+    });
+
+    // Error handling
+    this.connectionManager.on('voice-agent-error', (error: Error) => {
+      console.error('[CoachingAgent] ❌ Voice Agent error:', error);
+      this.emit('error', error);
+    });
+
+    this.connectionManager.on('transcription-error', (error: Error) => {
+      console.error('[CoachingAgent] ❌ Transcription error:', error);
+      // Transcription errors are less critical, just log
     });
   }
 
   /**
-   * Say the initial greeting
+   * Set up LiveKit room event handlers
    */
-  private async sayGreeting(): Promise<void> {
-    if (!this.session) return;
+  private setupRoomEvents(): void {
+    if (!this.room) return;
 
-    const greeting = this.options.greeting || GREETING_MESSAGE;
-    this.log(`👋 Saying greeting: "${greeting}"`);
+    // Participant joined
+    this.room.on('participantConnected', (participant: RemoteParticipant) => {
+      this.handleParticipantJoined(participant);
+    });
+
+    // Participant left
+    this.room.on('participantDisconnected', (participant: RemoteParticipant) => {
+      this.handleParticipantLeft(participant);
+    });
+
+    // Audio track subscribed -> route to Deepgram
+    this.room.on('trackSubscribed', (track, publication, participant) => {
+      if (track.kind === 'audio') {
+        this.handleAudioTrackSubscribed(track, participant);
+      }
+    });
+
+    // Data channel messages (for mute commands)
+    this.room.on('dataReceived', (payload: Uint8Array, participant?: RemoteParticipant) => {
+      this.handleDataMessage(payload, participant);
+    });
+
+    // Room disconnected
+    this.room.on('disconnected', () => {
+      console.log('[CoachingAgent] 📡 Room disconnected');
+      this.stop();
+    });
+  }
+
+  /**
+   * Register existing participants in the room
+   */
+  private registerExistingParticipants(): void {
+    if (!this.room || !this.connectionManager) return;
+
+    const participants = this.room.remoteParticipants;
     
-    try {
-      await this.session.say(greeting);
-    } catch (err) {
-      this.error('Failed to say greeting', err);
+    for (const [id, participant] of participants) {
+      const role = this.determineParticipantRole(participant);
+      this.connectionManager.registerParticipant(id, role, participant.name);
+      this.participantMap.set(id, { name: participant.name || id, role });
+      console.log(`[CoachingAgent] 👤 Registered existing: ${participant.name || id} (${role})`);
     }
   }
 
   /**
-   * Inject a prompt for the AI to respond to
+   * Handle new participant joining
+   */
+  private handleParticipantJoined(participant: RemoteParticipant): void {
+    const role = this.determineParticipantRole(participant);
+    
+    this.connectionManager?.registerParticipant(
+      participant.identity,
+      role,
+      participant.name
+    );
+    
+    this.participantMap.set(participant.identity, {
+      name: participant.name || participant.identity,
+      role,
+    });
+
+    console.log(`[CoachingAgent] 👤 Participant joined: ${participant.name || participant.identity} (${role})`);
+    this.emit('participant-joined', { id: participant.identity, name: participant.name, role });
+  }
+
+  /**
+   * Handle participant leaving
+   */
+  private handleParticipantLeft(participant: RemoteParticipant): void {
+    this.connectionManager?.unregisterParticipant(participant.identity);
+    this.participantMap.delete(participant.identity);
+
+    console.log(`[CoachingAgent] 👋 Participant left: ${participant.name || participant.identity}`);
+    this.emit('participant-left', { id: participant.identity, name: participant.name });
+  }
+
+  /**
+   * Determine participant role from metadata or name
+   */
+  private determineParticipantRole(participant: RemoteParticipant): ParticipantRole {
+    // Check metadata first
+    const metadata = participant.metadata;
+    if (metadata) {
+      try {
+        const parsed = JSON.parse(metadata);
+        if (parsed.role === 'coach') return 'coach';
+        if (parsed.role === 'client') return 'client';
+      } catch {
+        // Metadata not JSON, check raw value
+        if (metadata === 'coach') return 'coach';
+        if (metadata === 'client') return 'client';
+      }
+    }
+
+    // Check identity pattern
+    const identity = participant.identity.toLowerCase();
+    if (identity.includes('coach')) return 'coach';
+    if (identity.includes('client')) return 'client';
+
+    // Default to client for unknown participants
+    return 'client';
+  }
+
+  /**
+   * Handle audio track subscribed
+   */
+  private handleAudioTrackSubscribed(
+    track: { kind: string; on: (event: string, callback: (frame: AudioFrame) => void) => void },
+    participant: RemoteParticipant
+  ): void {
+    console.log(`[CoachingAgent] 🎧 Audio track subscribed: ${participant.name || participant.identity}`);
+
+    // Listen for audio frames
+    track.on('audioFrame', (frame: AudioFrame) => {
+      this.routeAudioFrame(frame, participant);
+    });
+  }
+
+  /**
+   * Route audio frame to Deepgram connections
+   */
+  private routeAudioFrame(frame: AudioFrame, participant: RemoteParticipant): void {
+    if (!this.connectionManager) return;
+
+    // Convert AudioFrame to buffer
+    // LiveKit AudioFrame has samples as Int16Array
+    const buffer = Buffer.from(frame.data.buffer);
+
+    // Route through connection manager
+    this.connectionManager.routeAudio(
+      buffer,
+      participant.identity,
+      participant.name
+    );
+  }
+
+  /**
+   * Handle data channel message (mute commands, etc.)
+   */
+  private handleDataMessage(payload: Uint8Array, participant?: RemoteParticipant): void {
+    try {
+      const message = JSON.parse(new TextDecoder().decode(payload));
+
+      if (message.type === 'mute-from-ai') {
+        const command: MuteCommand = {
+          type: 'mute-from-ai',
+          muted: message.muted,
+          participantId: message.participantId || participant?.identity || '',
+        };
+        
+        this.connectionManager?.handleMuteCommand(command);
+        console.log(`[CoachingAgent] 🔇 Mute command: ${command.muted ? 'mute' : 'unmute'} ${command.participantId}`);
+      }
+
+      if (message.type === 'inject-prompt') {
+        this.injectPrompt(message.text);
+      }
+
+    } catch {
+      // Not a JSON message, ignore
+    }
+  }
+
+  /**
+   * Handle transcription result
+   */
+  private handleTranscription(result: TranscriptResult): void {
+    const currentSpeaker = this.getCurrentSpeaker();
+    const participantInfo = currentSpeaker 
+      ? this.participantMap.get(currentSpeaker)
+      : null;
+
+    const transcript: SessionTranscript = {
+      participantId: currentSpeaker || 'unknown',
+      participantName: participantInfo?.name,
+      text: result.transcript,
+      timestamp: new Date(),
+      isMutedFromAI: currentSpeaker 
+        ? this.connectionManager?.isParticipantMuted(currentSpeaker) || false
+        : false,
+      role: participantInfo?.role || 'unknown',
+    };
+
+    this.sessionTranscripts.push(transcript);
+
+    // Log final transcripts
+    if (result.isFinal) {
+      const prefix = transcript.isMutedFromAI ? '🔇' : '📝';
+      console.log(`[CoachingAgent] ${prefix} [${transcript.participantName || transcript.participantId}]: "${transcript.text}"`);
+    }
+
+    this.emit('transcript', transcript);
+  }
+
+  /**
+   * Get current speaker (placeholder - needs VAD integration)
+   */
+  private getCurrentSpeaker(): string | null {
+    // TODO: Implement speaker detection using VAD
+    // For now, return the first client participant
+    for (const [id, info] of this.participantMap) {
+      if (info.role === 'client') {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Publish AI audio response to LiveKit room
+   */
+  private publishAIAudio(data: Buffer): void {
+    if (!this.room) return;
+
+    // TODO: Implement audio publishing to LiveKit
+    // This requires creating an audio source and publishing frames
+    this.log('📤 Publishing AI audio:', { bytes: data.length });
+    this.emit('ai-audio-chunk', data);
+  }
+
+  /**
+   * Inject a prompt for the AI to speak
    * Used by coaches to guide the conversation
    */
-  async injectPrompt(prompt: string): Promise<void> {
-    if (!this.session) {
-      this.error('Cannot inject prompt - session not active');
+  injectPrompt(text: string): void {
+    if (!this.connectionManager) {
+      console.error('[CoachingAgent] ❌ Cannot inject prompt - not initialized');
       return;
     }
 
-    this.log(`💉 Injecting prompt: "${prompt}"`);
-    
-    try {
-      // Add the prompt as a system message and trigger response
-      await this.session.say(prompt);
-    } catch (err) {
-      this.error('Failed to inject prompt', err);
-    }
+    this.connectionManager.injectPrompt(text);
+    console.log(`[CoachingAgent] 💉 Injected prompt: "${text}"`);
   }
 
   /**
-   * Get all transcripts from the session
-   * Includes transcripts from muted coaches
+   * Mute a participant from AI perception
    */
-  getTranscripts(): TranscriptionEvent[] {
-    return [...this.transcripts];
+  muteParticipant(participantId: string): void {
+    this.connectionManager?.muteParticipant(participantId);
   }
 
   /**
-   * Get current session metrics
+   * Unmute a participant for AI perception
    */
-  getMetrics() {
-    return {
-      ...agentMetrics.getMetrics(),
-      transcriptCount: this.transcripts.length,
-      mutedParticipants: this.selectiveAudioManager.getMutedParticipants(),
-      isRunning: this.isRunning,
-    };
+  unmuteParticipant(participantId: string): void {
+    this.connectionManager?.unmuteParticipant(participantId);
+  }
+
+  /**
+   * Get all session transcripts
+   */
+  getTranscripts(): SessionTranscript[] {
+    return [...this.sessionTranscripts];
+  }
+
+  /**
+   * Get connection status
+   */
+  getStatus(): ConnectionStatus | null {
+    return this.connectionManager?.getStatus() || null;
+  }
+
+  /**
+   * Get routing statistics
+   */
+  getStats() {
+    return this.connectionManager?.getStats();
+  }
+
+  /**
+   * Check if agent is running
+   */
+  isAgentRunning(): boolean {
+    return this.isRunning;
   }
 
   /**
@@ -274,46 +510,35 @@ export class CoachingAgent {
       return;
     }
 
-    this.log('🛑 Stopping coaching agent...');
+    console.log('[CoachingAgent] 🛑 Stopping...');
 
-    try {
-      // Stop keepAlive
-      this.keepAliveManager.cleanup();
+    // Cleanup connection manager
+    this.connectionManager?.cleanup();
+    this.connectionManager = null;
 
-      // Cleanup selective audio
-      this.selectiveAudioManager.cleanup();
+    // Clear state
+    this.room = null;
+    this.participantMap.clear();
+    this.isRunning = false;
 
-      // Close the voice session
-      if (this.session) {
-        await this.session.close();
-        this.session = null;
-      }
-
-      this.isRunning = false;
-      this.log('✅ Coaching agent stopped');
-
-    } catch (err) {
-      this.error('Error stopping agent', err);
-    }
+    console.log('[CoachingAgent] ✅ Stopped');
+    this.emit('stopped');
   }
 }
 
 // =============================================================================
-// Simple Agent Factory
+// Factory Function
 // =============================================================================
 
 /**
- * Create a minimal coaching agent for testing
- * Joins room, transcribes audio, responds with greeting
+ * Create a coaching agent with default configuration
  */
-export async function createMinimalAgent(ctx: JobContext): Promise<CoachingAgent> {
-  const agent = new CoachingAgent(ctx, {
-    verbose: true,
-    greeting: "Hello! I'm here to help. How are you feeling today?",
-  });
-  
-  await agent.start();
-  return agent;
+export function createCoachingAgent(config?: CoachingAgentConfig): CoachingAgent {
+  return new CoachingAgent(config);
 }
+
+// =============================================================================
+// Exports
+// =============================================================================
 
 export default CoachingAgent;

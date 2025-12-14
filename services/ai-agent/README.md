@@ -1,10 +1,54 @@
-# AI Agent Service
+# AI Agent Service - Dual Connection Architecture
 
-Voice coaching AI agent using LiveKit Agents framework with Deepgram STT/TTS.
+Voice coaching AI agent using LiveKit with Deepgram dual WebSocket connections.
 
 ## ⚠️ Important: Node.js Only
 
 **This service must run on Node.js, NOT Bun.** LiveKit agents have compatibility issues with the Bun runtime.
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           LiveKit Room                                       │
+│                                                                              │
+│   ┌──────────┐      ┌──────────┐      ┌──────────┐                         │
+│   │  Client  │      │  Coach   │      │ AI Agent │                         │
+│   │  Audio   │      │  Audio   │      │ (speaks) │                         │
+│   └────┬─────┘      └────┬─────┘      └────▲─────┘                         │
+└────────┼─────────────────┼──────────────────┼───────────────────────────────┘
+         │                 │                  │
+         ▼                 ▼                  │
+┌────────────────────────────────────────────────────────────────────────────┐
+│                        AI Agent Service (Node.js)                           │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                    Audio Router / Gating Layer                       │  │
+│   │                                                                      │  │
+│   │   Client Audio ───────────────────┬─────────────────────────────────│  │
+│   │                                    │                                 │  │
+│   │   Coach Audio ────┬────────────────┼─────────────────────────────────│  │
+│   │                   │                │                                 │  │
+│   │          [Mute Gate]               │                                 │  │
+│   └───────────────────┼────────────────┼─────────────────────────────────┘  │
+│                       │                │                                     │
+│                       ▼                ▼                                     │
+│   ┌──────────────────────────┐   ┌──────────────────────────┐              │
+│   │   VOICE AGENT WebSocket  │   │    STT WebSocket         │              │
+│   │   (Deepgram Agent API)   │   │    (Deepgram Listen)     │              │
+│   │                          │   │                          │              │
+│   │ • Client audio: ALWAYS   │   │ • Client audio: ALWAYS   │              │
+│   │ • Coach audio: GATED     │   │ • Coach audio: ALWAYS    │              │
+│   │                          │   │                          │              │
+│   │ When coach muted:        │   │ Outputs:                 │              │
+│   │ → Stop coach audio       │   │ → Full transcript log    │              │
+│   │ → Send KeepAlive q/8s    │   │ → Speaker attribution    │              │
+│   │                          │   │                          │              │
+│   │ Outputs:                 │   │                          │              │
+│   │ → AI voice responses ────┼───┼──────────────────────────┼──► LiveKit  │
+│   └──────────────────────────┘   └──────────────────────────┘              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Features
 
@@ -13,7 +57,8 @@ Voice coaching AI agent using LiveKit Agents framework with Deepgram STT/TTS.
 - 🤖 **GPT-4o-mini LLM** - Fast, cost-effective AI responses
 - 🔇 **Coach Mute** - Coaches can mute their audio from AI perception
 - 📝 **Always-On Transcription** - All audio is transcribed for coach review
-- 💰 **Cost-Optimized** - KeepAlive pattern to avoid billing for silence
+- 💰 **KeepAlive Pattern** - Prevents disconnection during silence/mute (8s interval)
+- 🎵 **Opus Passthrough** - No decoding needed, direct to Deepgram
 
 ## Quick Start
 
@@ -25,91 +70,83 @@ npm install
 cp .env.example .env
 
 # Edit .env with your API keys
-# Required: DEEPGRAM_API_KEY, LIVEKIT_*, OPENAI_API_KEY
 
 # Development (with hot reload)
-npm run dev
+npm run dev -- --room my-coaching-session
 
 # Production
 npm run build
-npm run start
+npm run start -- --room production-session-123
 ```
 
-## Architecture
+## File Structure
 
 ```
 src/
 ├── config/
-│   └── deepgram.ts      # SDK client setup, environment validation
-├── deepgram-config.ts   # STT/TTS configuration, KeepAlive pattern
-├── selective-audio.ts   # Coach mute implementation
-├── coaching-agent.ts    # Main agent with Deepgram integration
-└── index.ts             # Agent worker entry point
+│   └── deepgram.ts              # SDK client setup, environment validation
+├── connections/
+│   ├── voice-agent.ts           # Voice Agent WebSocket (AI responses)
+│   ├── transcription.ts         # STT WebSocket (always-on logging)
+│   └── connection-manager.ts    # Dual connection lifecycle
+├── audio/
+│   ├── router.ts                # Routes audio to appropriate connections
+│   ├── gating.ts                # Coach mute logic with KeepAlive
+│   └── opus-handler.ts          # Opus frame handling (no decode needed)
+├── coaching-agent.ts            # Main agent orchestration
+└── index.ts                     # Entry point with CLI
 ```
+
+## Dual Connection Pattern
+
+### Voice Agent Connection
+- URL: `wss://agent.deepgram.com/v1/agent/converse`
+- Purpose: AI responses (STT + LLM + TTS in one WebSocket)
+- Input: Client audio (always) + Coach audio (when unmuted)
+- Output: AI voice responses to LiveKit
+
+### Transcription Connection
+- URL: `wss://api.deepgram.com/v1/listen`
+- Purpose: Always-on transcription for coach review panel
+- Input: ALL audio (client + coach, regardless of mute state)
+- Output: Transcript events with speaker attribution
 
 ## Coach Mute Feature
 
 Coaches can mute their audio from AI perception while maintaining transcription:
 
 ```typescript
-// From coach's client
-import { sendMuteCommand } from './selective-audio';
-
-// Mute coach from AI
-await sendMuteCommand(room, true, 'coach-user-id');
-
-// Unmute coach for AI
-await sendMuteCommand(room, false, 'coach-user-id');
+// From coach's client (via LiveKit data channel)
+const command = {
+  type: 'mute-from-ai',
+  muted: true,
+  participantId: 'coach-user-id'
+};
+room.localParticipant.publishData(JSON.stringify(command), { reliable: true });
 ```
 
 **Dual Routing:**
-- AI Stream: Filters out muted participants
-- Transcription Stream: Receives ALL audio (for coach review panel)
+- Voice Agent: Receives filtered audio (excludes muted participants)
+- Transcription: Receives ALL audio (for coach review panel)
 
-## Configuration
+## Audio Configuration
 
-### STT (Speech-to-Text)
+| Setting | Value | Description |
+|---------|-------|-------------|
+| Encoding | opus | WebRTC native, no decoding needed |
+| Sample Rate | 48000 | WebRTC default for voice |
+| Channels | 1 | Mono |
+| Frame Size | 20-60ms | Within Deepgram's 20-80ms recommendation |
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| model | nova-3 | Deepgram model |
-| language | en-US | Recognition language |
-| interimResults | true | Streaming transcription |
-| encoding | linear16 | Audio format |
-| sampleRate | 24000 | Sample rate (Hz) |
+## KeepAlive Pattern
 
-### TTS (Text-to-Speech)
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| model | aura-2-thalia-en | Voice model |
-| sampleRate | 24000 | Output sample rate |
-
-### Available Voices
-
-| Voice | ID | Description |
-|-------|-----|-------------|
-| Thalia | aura-2-thalia-en | Warm, professional (default) |
-| Athena | aura-2-athena-en | Confident, authoritative |
-| Luna | aura-2-luna-en | Calm, soothing |
-| Stella | aura-2-stella-en | Energetic, motivational |
-| Orion | aura-2-orion-en | Deep, reassuring |
-| Arcas | aura-2-arcas-en | Friendly, approachable |
-
-## Cost Control
-
-The KeepAlive pattern prevents billing for silence:
+Prevents Voice Agent disconnection during silence/mute:
 
 ```typescript
-import { KeepAliveManager } from './deepgram-config';
-
-const keepAlive = new KeepAliveManager(3000); // 3 second interval
-
-// When user stops speaking
-keepAlive.start(() => connection.keepAlive());
-
-// When user starts speaking again
-keepAlive.stop();
+// When coach is muted and no client audio:
+// → Stop sending audio chunks
+// → Send KeepAlive every 8 seconds
+// → Resume sending when audio resumes
 ```
 
 ## Environment Variables
@@ -121,6 +158,28 @@ keepAlive.stop();
 | LIVEKIT_API_KEY | Yes | LiveKit API key |
 | LIVEKIT_API_SECRET | Yes | LiveKit API secret |
 | OPENAI_API_KEY | Yes | OpenAI API key |
+| LIVEKIT_ROOM | No | Default room name |
+
+## CLI Options
+
+```bash
+node dist/index.js [options]
+
+Options:
+  --room <name>   LiveKit room name to join (default: test-room)
+  --quiet         Reduce logging verbosity
+  --help          Show help message
+```
+
+## Testing Milestones
+
+- [ ] Voice Agent connection opens and responds to "hello"
+- [ ] Transcription connection logs all audio to console
+- [ ] Both connections receive the same client audio simultaneously
+- [ ] Coach mute stops Voice Agent from responding to coach
+- [ ] Transcription continues during coach mute
+- [ ] KeepAlive prevents Voice Agent disconnection during extended mute
+- [ ] Coach unmute resumes normal Voice Agent behavior
 
 ## PM2 Deployment
 
@@ -129,11 +188,10 @@ keepAlive.stop();
 {
   name: 'ai-agent',
   script: 'node',
-  args: 'dist/index.js',
+  args: 'dist/index.js --room production-session',
   interpreter: 'node',  // NOT Bun!
   env: {
-    NODE_ENV: 'production',
-    LIVEKIT_URL: 'wss://livekit.myultra.coach'
+    NODE_ENV: 'production'
   }
 }
 ```
@@ -148,23 +206,12 @@ npm run typecheck
 npm run build
 
 # Dev with hot reload
-npm run dev
-```
-
-## Logs
-
-The agent logs all activity with timestamps:
-
-```
-[2024-12-13T10:00:00.000Z] [CoachingAgent] 🤖 Coaching agent created
-[2024-12-13T10:00:01.000Z] [CoachingAgent] 🚀 Starting coaching agent...
-[2024-12-13T10:00:02.000Z] [CoachingAgent] ✅ Coaching agent started successfully
-[2024-12-13T10:00:02.500Z] [CoachingAgent] 👋 Saying greeting...
-[2024-12-13T10:00:05.000Z] [CoachingAgent] 📝 User said: "Hello, I'm feeling stressed"
+npm run dev -- --room test-room
 ```
 
 ## References
 
-- [LiveKit Agents Documentation](https://docs.livekit.io/agents/)
-- [Deepgram Plugin](https://github.com/livekit/agents-js/tree/main/plugins/deepgram)
-- [Deepgram API Documentation](https://developers.deepgram.com/docs)
+- [Deepgram Voice Agent API](https://developers.deepgram.com/docs/voice-agent-api)
+- [Deepgram Listen API](https://developers.deepgram.com/docs/live-streaming-audio)
+- [Deepgram KeepAlive](https://developers.deepgram.com/docs/audio-keep-alive)
+- [LiveKit RTC Node](https://docs.livekit.io/realtime/client-sdks/livekit-rtc/)
