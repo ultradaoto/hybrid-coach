@@ -16,19 +16,11 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [openedUrl, setOpenedUrl] = useState<string | null>(null);
-  const [popupBlocked, setPopupBlocked] = useState(false);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    setOpenedUrl(null);
-    setPopupBlocked(false);
     setLoading(true);
-
-    // Open a blank tab synchronously to avoid popup blockers.
-    const popup = window.open('', '_blank');
-    if (!popup) setPopupBlocked(true);
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -39,34 +31,17 @@ export function LoginPage() {
 
       const json = (await res.json().catch(() => null)) as LoginResponse | null;
       if (!res.ok || !json) {
-        try {
-          popup?.close();
-        } catch {}
         setError('Login failed. Please try again.');
         return;
       }
       if (!json.success) {
-        try {
-          popup?.close();
-        } catch {}
         setError(json.error || 'Login failed.');
         return;
       }
 
-      setOpenedUrl(json.data.redirectUrl);
-      if (popup) {
-        try {
-          popup.location.href = json.data.redirectUrl;
-        } catch {
-          setPopupBlocked(true);
-        }
-      } else {
-        setPopupBlocked(true);
-      }
+      // Redirect to the appropriate portal in the same window
+      window.location.href = json.data.redirectUrl;
     } catch (err) {
-      try {
-        popup?.close();
-      } catch {}
       setError(err instanceof Error ? err.message : 'Network error');
     } finally {
       setLoading(false);
@@ -126,24 +101,6 @@ export function LoginPage() {
               {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
-
-          {openedUrl ? (
-            <div className="alert alert-success" style={{ marginTop: '1rem' }}>
-              <strong>Opened in a new tab.</strong>
-              <div style={{ marginTop: '0.5rem' }}>
-                <a className="link" href={openedUrl} target="_blank" rel="noreferrer">
-                  Click here if it didn’t open
-                </a>
-              </div>
-            </div>
-          ) : null}
-
-          {popupBlocked && !openedUrl ? (
-            <div className="alert alert-warning" style={{ marginTop: '1rem' }}>
-              <strong>Popup blocked.</strong>
-              <div style={{ marginTop: '0.5rem' }}>Allow popups for this site, then try again.</div>
-            </div>
-          ) : null}
 
           <div className="login-footer">
             <a className="link" href="/home">
