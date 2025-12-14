@@ -69,5 +69,8 @@ export function buildRedirectUrl(user: DbUser, grantToken: string) {
   const base = getRedirectBaseUrl(user.role);
   const url = new URL('/auth/callback', base);
   url.searchParams.set('grant', grantToken);
-  return url.toString();
+  const redirectUrl = url.toString();
+  console.log(`[Auth] Redirect URL for ${user.email} (${user.role}): ${redirectUrl}`);
+  console.log(`[Auth] NODE_ENV=${process.env.NODE_ENV}, base=${base}`);
+  return redirectUrl;
 }
