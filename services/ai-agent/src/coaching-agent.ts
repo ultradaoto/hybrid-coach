@@ -351,7 +351,12 @@ export class CoachingAgent extends EventEmitter {
 
     // Convert AudioFrame to buffer
     // LiveKit AudioFrame has samples as Int16Array
-    const buffer = Buffer.from(frame.data.buffer);
+    // Use byteOffset and byteLength to correctly handle TypedArray views
+    const buffer = Buffer.from(
+      frame.data.buffer,
+      frame.data.byteOffset,
+      frame.data.byteLength
+    );
 
     // Route through connection manager
     this.connectionManager.routeAudio(
