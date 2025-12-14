@@ -183,6 +183,7 @@ export class VoiceAgentConnection extends EventEmitter {
    */
   private sendSettings(): void {
     // Build settings object matching Deepgram Voice Agent API format
+    // All provider configs need nested { provider: { type, model } } structure
     const settings: Record<string, unknown> = {
       type: 'Settings',
       audio: {
@@ -198,17 +199,23 @@ export class VoiceAgentConnection extends EventEmitter {
       },
       agent: {
         listen: {
-          model: 'nova-2',
+          provider: {
+            type: 'deepgram',
+            model: 'nova-2',
+          },
         },
         think: {
           provider: {
             type: 'open_ai',
+            model: this.config.llmModel,
           },
-          model: this.config.llmModel,
           instructions: this.config.coachingPrompt,
         },
         speak: {
-          model: 'aura-asteria-en',
+          provider: {
+            type: 'deepgram',
+            model: 'aura-asteria-en',
+          },
         },
       },
     };
