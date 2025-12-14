@@ -180,10 +180,14 @@ export class VoiceAgentConnection extends EventEmitter {
    * 
    * Deepgram Voice Agent API v1 Settings format
    * Reference: https://developers.deepgram.com/docs/configure-voice-agent
+   * 
+   * Key format notes (from Deepgram support):
+   * - model goes INSIDE provider object
+   * - use "prompt" not "instructions" 
+   * - temperature goes inside provider for think
    */
   private sendSettings(): void {
-    // Build settings object matching Deepgram Voice Agent API format
-    // All provider configs need nested { provider: { type, model } } structure
+    // Build settings object matching Deepgram Voice Agent API v1 format
     const settings: Record<string, unknown> = {
       type: 'Settings',
       audio: {
@@ -208,8 +212,9 @@ export class VoiceAgentConnection extends EventEmitter {
           provider: {
             type: 'open_ai',
             model: this.config.llmModel,
+            temperature: 0.7,
           },
-          instructions: this.config.coachingPrompt,
+          prompt: this.config.coachingPrompt,
         },
         speak: {
           provider: {
