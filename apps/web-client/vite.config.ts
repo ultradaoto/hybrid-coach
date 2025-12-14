@@ -8,6 +8,7 @@ const port = Number(process.env.CLIENT_PORT ?? 3702);
 export default defineConfig({
   plugins: [react()],
   appType: 'spa',
+  base: process.env.NODE_ENV === 'production' ? '/client/' : '/',
   server: {
     host,
     port,

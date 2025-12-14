@@ -7,6 +7,7 @@ const port = Number(process.env.COACH_PORT ?? 3701);
 
 export default defineConfig({
   plugins: [react()],
+  base: process.env.NODE_ENV === 'production' ? '/coach/' : '/',
   server: {
     host,
     port,
