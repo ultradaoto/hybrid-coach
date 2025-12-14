@@ -225,11 +225,8 @@ export class VoiceAgentConnection extends EventEmitter {
       },
     };
 
-    this.log('📤 Sending settings:', {
-      inputEncoding: VOICE_AGENT_INPUT_CONFIG.encoding,
-      inputSampleRate: VOICE_AGENT_INPUT_CONFIG.sampleRate,
-      llmModel: this.config.llmModel,
-    });
+    const settingsJson = JSON.stringify(settings, null, 2);
+    console.log('[VoiceAgent] 📤 Sending settings:', settingsJson);
     this.ws?.send(JSON.stringify(settings));
     console.log('[VoiceAgent] ⚙️ Settings sent');
   }
@@ -238,21 +235,35 @@ export class VoiceAgentConnection extends EventEmitter {
    * Handle incoming messages from Voice Agent
    */
   private handleMessage(data: Buffer | string): void {
-    // Binary data = audio response from TTS
-    if (Buffer.isBuffer(data)) {
-      this.log(`🔊 Received audio: ${data.length} bytes`);
-      this.emit('audio', data);
-      return;
+    // Convert to buffer for consistent handling
+    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    
+    // Log raw data for debugging small messages
+    if (buffer.length < 200) {
+      const dataStr = buffer.toString('utf8');
+      console.log(`[VoiceAgent] 📥 Small message (${buffer.length} bytes): ${dataStr.substring(0, 150)}`);
+    }
+    
+    // Try to parse as JSON first (control messages)
+    // Deepgram sends both JSON text and binary audio over the same connection
+    const dataStr = buffer.toString('utf8');
+    if (dataStr.trim().startsWith('{')) {
+      try {
+        const message = JSON.parse(dataStr) as VoiceAgentServerEvent;
+        console.log(`[VoiceAgent] 📨 Received: ${message.type}`);
+        this.handleControlMessage(message);
+        return;
+      } catch (error) {
+        // Not valid JSON, might be binary that happens to start with '{'
+        console.log('[VoiceAgent] ⚠️ Looks like JSON but failed to parse');
+      }
     }
 
-    // Text data = JSON control message
-    try {
-      const message = JSON.parse(data.toString()) as VoiceAgentServerEvent;
-      console.log(`[VoiceAgent] 📨 Received: ${message.type}`);
-      this.handleControlMessage(message);
-    } catch (error) {
-      console.log('[VoiceAgent] ⚠️ Raw message:', data.toString().substring(0, 200));
+    // Binary audio data
+    if (buffer.length > 100) {
+      this.log(`🔊 Received audio: ${buffer.length} bytes`);
     }
+    this.emit('audio', buffer);
   }
 
   /**
