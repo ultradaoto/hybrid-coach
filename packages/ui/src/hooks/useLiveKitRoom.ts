@@ -234,11 +234,19 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
       
       // For audio tracks, ensure they're attached so we can access mediaStreamTrack
       if (track.kind === Track.Kind.Audio) {
-        // Attach creates an audio element and makes the stream accessible
         const audioElements = track.attachedElements;
         if (!audioElements || audioElements.length === 0) {
           console.log('[LiveKit] 🔊 Attaching audio track from', participant.identity);
-          track.attach(); // This attaches and makes mediaStreamTrack available
+          track.attach();
+        }
+      }
+      
+      // For video tracks, also attach to ensure mediaStreamTrack is available
+      if (track.kind === Track.Kind.Video) {
+        const videoElements = track.attachedElements;
+        if (!videoElements || videoElements.length === 0) {
+          console.log('[LiveKit] 📹 Attaching video track from', participant.identity);
+          track.attach();
         }
       }
       
@@ -250,6 +258,17 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
 
     room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, _publication: RemoteTrackPublication, participant: RemoteParticipant) => {
       console.log('[LiveKit] Track unsubscribed from', participant.identity);
+      updateRemoteParticipants();
+    });
+
+    // Handle track muted/unmuted events to update participant state
+    room.on(RoomEvent.TrackMuted, (_publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[LiveKit] Track muted from', participant.identity);
+      updateRemoteParticipants();
+    });
+
+    room.on(RoomEvent.TrackUnmuted, (_publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      console.log('[LiveKit] Track unmuted from', participant.identity);
       updateRemoteParticipants();
     });
 
