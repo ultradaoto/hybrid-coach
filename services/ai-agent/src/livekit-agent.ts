@@ -42,6 +42,7 @@ import {
   AudioSource,
   AudioFrame,
   ConnectionState,
+  TrackPublishOptions,
 } from '@livekit/rtc-node';
 import { AccessToken, VideoGrant } from 'livekit-server-sdk';
 import { DualConnectionManager, createDualConnectionManager } from './connections/connection-manager.js';
@@ -373,7 +374,7 @@ export class LiveKitAgent extends EventEmitter {
     console.log('[LiveKitAgent] 🎙️ Audio track created:', this.audioTrack.sid);
 
     // Publish track to room
-    const publication = await this.room.localParticipant?.publishTrack(this.audioTrack, {});
+    const publication = await this.room.localParticipant?.publishTrack(this.audioTrack, new TrackPublishOptions());
     this.isPublishing = true;
 
     console.log('[LiveKitAgent] ✅ Audio track published at 24kHz');
