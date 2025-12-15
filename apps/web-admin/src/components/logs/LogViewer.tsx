@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Title } from '@tremor/react';
+import { Card } from '@tremor/react';
 import type { LogLevel, PM2Process, LogEntry } from '@/types/logs';
 import LogFilters from './LogFilters';
 import ProcessSelector from './ProcessSelector';
