@@ -248,8 +248,9 @@ export class AudioRouter extends EventEmitter {
   /**
    * Route COACH audio
    * 
-   * Coach audio is ALWAYS sent to Transcription STT (for muted periods)
-   * Coach audio is sent to Voice Agent only when unmuted (via gate)
+   * Coach audio is ONLY sent to Transcription STT for transcript capture.
+   * Coach audio is NOT sent to Voice Agent to avoid confusing the AI 
+   * (AI should only listen to client, not coach).
    */
   private routeCoachAudio(frame: AudioFrame): void {
     this.stats.coachFrames++;
@@ -258,30 +259,19 @@ export class AudioRouter extends EventEmitter {
     // Log first coach frame routing decision
     if (!this.firstCoachFrameRouted) {
       this.firstCoachFrameRouted = true;
-      console.log(`[AudioRouter] 🎯 FIRST COACH FRAME: Routing to Transcription (ALWAYS) + Voice Agent (if unmuted)`);
+      console.log(`[AudioRouter] 🎯 FIRST COACH FRAME: Routing to Transcription ONLY (not Voice Agent)`);
     }
 
-    // ALWAYS send coach audio to Transcription STT
-    // This ensures we capture coach speech even when muted from AI
+    // Send coach audio ONLY to Transcription STT
+    // This ensures we capture coach speech for transcripts
+    // but the AI only responds to the CLIENT, not the coach
     this.sendToTranscription(frame);
     if (participantStats) {
       participantStats.framesToTranscription++;
     }
-
-    // Send to Voice Agent via gate (respects mute state)
-    const sentToVA = this.gate.processAudioForVoiceAgent(frame);
-    if (sentToVA) {
-      this.stats.totalFramesToVoiceAgent++;
-      if (participantStats) {
-        participantStats.framesToVoiceAgent++;
-        participantStats.isMuted = false;
-      }
-    } else {
-      this.stats.framesBlockedByGate++;
-      if (participantStats) {
-        participantStats.isMuted = true;
-      }
-    }
+    
+    // NOTE: Coach audio is NOT sent to Voice Agent anymore
+    // This prevents the AI from being interrupted when coach speaks
   }
 
   // Track first successful sends to each destination
