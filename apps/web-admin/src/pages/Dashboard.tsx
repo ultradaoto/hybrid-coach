@@ -4,7 +4,6 @@ import {
   Radio,
   UserCheck,
   Clock,
-  AlertTriangle,
 } from 'lucide-react';
 import { useMetrics } from '@/hooks/useMetrics';
 import { MetricCard, ActivityChart, CoachActivityGrid } from '@/components/dashboard';

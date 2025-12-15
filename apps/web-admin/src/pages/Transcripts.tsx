@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Title, Text, Badge } from '@tremor/react';
+import { Title, Text } from '@tremor/react';
 import { createColumnHelper } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { FileText, Clock, MessageSquare } from 'lucide-react';

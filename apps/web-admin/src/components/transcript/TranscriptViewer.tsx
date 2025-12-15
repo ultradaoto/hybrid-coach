@@ -107,9 +107,10 @@ export default function TranscriptViewer({
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const message = filteredMessages[virtualRow.index];
-            const isMatch =
+            const isMatch = Boolean(
               searchQuery &&
-              message.content.toLowerCase().includes(searchQuery.toLowerCase());
+              message.content.toLowerCase().includes(searchQuery.toLowerCase())
+            );
             const isActiveMatch =
               searchMatches[activeMatchIndex]?.msg.id === message.id;
 

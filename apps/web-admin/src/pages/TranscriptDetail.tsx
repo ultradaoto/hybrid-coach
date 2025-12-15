@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Title, Text } from '@tremor/react';
-import { ArrowLeft, Clock, Users, MessageSquare } from 'lucide-react';
+import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { useTranscript } from '@/hooks/useTranscript';
 import { TranscriptViewer } from '@/components/transcript';
 

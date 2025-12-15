@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Title, Text, Badge } from '@tremor/react';
+import { Title, Text } from '@tremor/react';
 import { createColumnHelper } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { Eye, Calendar, Users } from 'lucide-react';

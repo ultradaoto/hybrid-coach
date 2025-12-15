@@ -13,7 +13,8 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 interface DataTableProps<T> {
   data: T[];
-  columns: ColumnDef<T, unknown>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  columns: ColumnDef<T, any>[];
   searchColumn?: string;
   pageSize?: number;
 }
