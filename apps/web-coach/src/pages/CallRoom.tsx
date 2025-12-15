@@ -79,6 +79,7 @@ export function CallRoomPage() {
   const [seconds, setSeconds] = useState(0);
   const [whisperText, setWhisperText] = useState('');
   const [isAIPaused, setIsAIPaused] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptItem[]>([
     {
       id: crypto.randomUUID(),
@@ -99,6 +100,7 @@ export function CallRoomPage() {
   const hasConnectedRef = useRef(false);
   const hasFetchedTokenRef = useRef(false);
   const hasDisabledMicRef = useRef(false);
+  const roomRef = useRef<any>(null); // Expose room from useLiveKitRoom
 
   const roomShort = useMemo(() => (roomId ?? '').slice(0, 8), [roomId]);
 
@@ -206,6 +208,7 @@ export function CallRoomPage() {
 
   // LiveKit room connection
   const {
+    room,
     connectionState,
     localParticipant,
     remoteParticipants,
@@ -227,6 +230,11 @@ export function CallRoomPage() {
     onDataReceived: handleDataReceived,
     onError: handleError,
   });
+
+  // Store room reference for mic control
+  useEffect(() => {
+    roomRef.current = room;
+  }, [room]);
 
   // Fetch token from API
   useEffect(() => {
@@ -297,14 +305,29 @@ export function CallRoomPage() {
 
   // IMPORTANT: Disable coach microphone by default after connection
   // Coach should observe, not interfere with AI-client conversation
+  // More robust approach using direct room API
   useEffect(() => {
-    if (connectionState === ConnectionState.Connected && isAudioEnabled && !hasDisabledMicRef.current) {
-      hasDisabledMicRef.current = true;
-      console.log('[CoachRoom] 🔇 Disabling coach microphone by default');
-      toggleAudio().catch(console.error);
-      addTranscriptItem('system', 'System', 'Your mic is off by default. Toggle to speak to client.');
-    }
-  }, [connectionState, isAudioEnabled, toggleAudio, addTranscriptItem]);
+    if (connectionState !== ConnectionState.Connected) return;
+    if (hasDisabledMicRef.current) return;
+    
+    const currentRoom = roomRef.current;
+    if (!currentRoom?.localParticipant) return;
+    
+    hasDisabledMicRef.current = true;
+    
+    console.log('[CoachRoom] 🔇 Disabling coach microphone by default');
+    
+    // Disable mic directly via room API
+    currentRoom.localParticipant.setMicrophoneEnabled(false)
+      .then(() => {
+        console.log('[CoachRoom] ✅ Mic disabled successfully');
+        addTranscriptItem('system', 'System', 'Your mic is off by default. Toggle to speak to client.');
+      })
+      .catch((e: Error) => {
+        console.error('[CoachRoom] Failed to disable mic:', e);
+        hasDisabledMicRef.current = false; // Allow retry
+      });
+  }, [connectionState, addTranscriptItem]);
 
   // Session timer
   useEffect(() => {
@@ -314,19 +337,76 @@ export function CallRoomPage() {
 
   // Attach local video
   useEffect(() => {
-    if (localParticipant?.videoTrack && localVideoRef.current) {
+    const videoEl = localVideoRef.current;
+    const track = localParticipant?.videoTrack;
+    
+    if (!videoEl) return;
+    
+    // Clear previous
+    videoEl.srcObject = null;
+    
+    if (track) {
       console.log('[CoachRoom] 📹 Attaching local video');
-      localVideoRef.current.srcObject = new MediaStream([localParticipant.videoTrack]);
+      // Use LiveKit's native attach method
+      track.attach(videoEl);
+      videoEl.play().catch((e) => {
+        console.warn('[CoachRoom] Local video play failed:', e);
+      });
     }
+    
+    return () => {
+      if (track) {
+        track.detach(videoEl);
+      }
+    };
   }, [localParticipant?.videoTrack]);
 
   // Attach client video
   useEffect(() => {
-    if (clientParticipant?.videoTrack && clientVideoRef.current) {
+    const videoEl = clientVideoRef.current;
+    const track = clientParticipant?.videoTrack;
+    
+    if (!videoEl) return;
+    
+    // Clear previous
+    videoEl.srcObject = null;
+    
+    if (track) {
       console.log('[CoachRoom] 📹 Attaching client video');
-      clientVideoRef.current.srcObject = new MediaStream([clientParticipant.videoTrack]);
+      // Use LiveKit's native attach method
+      track.attach(videoEl);
+      videoEl.play().catch((e) => {
+        console.warn('[CoachRoom] Client video play failed:', e);
+        // Retry after short delay
+        setTimeout(() => videoEl.play().catch(() => {}), 500);
+      });
     }
+    
+    return () => {
+      if (track) {
+        track.detach(videoEl);
+      }
+    };
   }, [clientParticipant?.videoTrack]);
+
+  // Handle autoplay-blocked audio with one-time click handler
+  useEffect(() => {
+    const resumeAudio = () => {
+      document.querySelectorAll('audio').forEach((audio) => {
+        if (audio.paused) {
+          audio.play().catch(() => {});
+        }
+      });
+      setAudioBlocked(false);
+    };
+    
+    // Resume on any user interaction
+    document.addEventListener('click', resumeAudio, { once: true });
+    
+    return () => {
+      document.removeEventListener('click', resumeAudio);
+    };
+  }, []);
 
   // Update participants from remoteParticipants
   useEffect(() => {
@@ -666,15 +746,56 @@ export function CallRoomPage() {
             <audio
               key={participant.identity}
               autoPlay
+              playsInline
               ref={(el) => {
-                if (el && participant.audioTrack) {
-                  el.srcObject = new MediaStream([participant.audioTrack]);
-                  el.play().catch(() => {}); // Ensure playback starts
+                if (!el) return;
+                
+                const track = participant.audioTrack;
+                if (track) {
+                  // Use LiveKit's attach method
+                  track.attach(el);
+                  
+                  // Explicitly start playback with error handling
+                  el.play().catch((error) => {
+                    console.warn(`[CoachRoom] Audio play failed for ${participant.identity}:`, error.message);
+                    
+                    // If autoplay blocked, show notification
+                    if (error.name === 'NotAllowedError') {
+                      console.log('[CoachRoom] Audio blocked by autoplay policy');
+                      setAudioBlocked(true);
+                    }
+                  });
                 }
               }}
             />
           )
         ))}
+
+        {/* Click-to-enable audio UI when blocked by autoplay policy */}
+        {audioBlocked && (
+          <div 
+            onClick={() => {
+              document.querySelectorAll('audio').forEach(a => a.play().catch(() => {}));
+              setAudioBlocked(false);
+            }}
+            style={{
+              position: 'fixed',
+              bottom: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#3b82f6',
+              color: 'white',
+              padding: '12px 24px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              zIndex: 1000,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              fontWeight: 600,
+            }}
+          >
+            🔊 Click to Enable Audio
+          </div>
+        )}
       </div>
     </div>
   );

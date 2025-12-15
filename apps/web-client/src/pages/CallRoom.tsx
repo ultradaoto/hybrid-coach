@@ -72,6 +72,7 @@ export function CallRoomPage() {
   const [toast, setToast] = useState<{ kind: ToastKind; text: string } | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [agentStatus, setAgentStatus] = useState<string>('unknown');
+  const [audioBlocked, setAudioBlocked] = useState(false);
 
   // Refs to prevent duplicate operations
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -264,28 +265,83 @@ export function CallRoomPage() {
 
   // Attach local video
   useEffect(() => {
-    if (localParticipant?.videoTrack && localVideoRef.current) {
+    const videoEl = localVideoRef.current;
+    const track = localParticipant?.videoTrack;
+    
+    if (!videoEl) return;
+    
+    // Clear previous
+    videoEl.srcObject = null;
+    
+    if (track) {
       log('📹 Attaching local video');
-      localVideoRef.current.srcObject = new MediaStream([localParticipant.videoTrack]);
+      // Use LiveKit's native attach method
+      track.attach(videoEl);
+      videoEl.play().catch((e) => {
+        log('Local video play failed:', e);
+      });
     }
+    
+    return () => {
+      if (track) {
+        track.detach(videoEl);
+      }
+    };
   }, [localParticipant?.videoTrack]);
 
-  // Attach coach video - with better logging
+  // Attach coach video
   useEffect(() => {
+    const videoEl = coachVideoRef.current;
+    const track = coachParticipant?.videoTrack;
+    
     log('📹 Coach video check:', {
       hasCoachParticipant: !!coachParticipant,
       coachIdentity: coachParticipant?.identity,
-      hasVideoTrack: !!coachParticipant?.videoTrack,
-      hasVideoRef: !!coachVideoRef.current,
+      hasVideoTrack: !!track,
+      hasVideoRef: !!videoEl,
     });
     
-    if (coachParticipant?.videoTrack && coachVideoRef.current) {
+    if (!videoEl) return;
+    
+    // Clear previous
+    videoEl.srcObject = null;
+    
+    if (track) {
       log('📹 Attaching coach video track');
-      const stream = new MediaStream([coachParticipant.videoTrack]);
-      coachVideoRef.current.srcObject = stream;
-      coachVideoRef.current.play().catch((e) => log('Coach video play error:', e));
+      // Use LiveKit's native attach method
+      track.attach(videoEl);
+      videoEl.play().catch((e) => {
+        log('Coach video play error:', e);
+        // Retry after short delay
+        setTimeout(() => videoEl.play().catch(() => {}), 500);
+      });
     }
+    
+    return () => {
+      if (track) {
+        track.detach(videoEl);
+      }
+    };
   }, [coachParticipant?.videoTrack, coachParticipant?.identity]);
+
+  // Handle autoplay-blocked audio with one-time click handler
+  useEffect(() => {
+    const resumeAudio = () => {
+      document.querySelectorAll('audio').forEach((audio) => {
+        if (audio.paused) {
+          audio.play().catch(() => {});
+        }
+      });
+      setAudioBlocked(false);
+    };
+    
+    // Resume on any user interaction
+    document.addEventListener('click', resumeAudio, { once: true });
+    
+    return () => {
+      document.removeEventListener('click', resumeAudio);
+    };
+  }, []);
 
   // Update AI/Coach participants from remoteParticipants
   // Always update to capture track changes
@@ -518,14 +574,56 @@ export function CallRoomPage() {
             <audio
               key={participant.identity}
               autoPlay
+              playsInline
               ref={(el) => {
-                if (el && participant.audioTrack) {
-                  el.srcObject = new MediaStream([participant.audioTrack]);
+                if (!el) return;
+                
+                const track = participant.audioTrack;
+                if (track) {
+                  // Use LiveKit's attach method
+                  track.attach(el);
+                  
+                  // Explicitly start playback with error handling
+                  el.play().catch((error) => {
+                    log(`Audio play failed for ${participant.identity}:`, error.message);
+                    
+                    // If autoplay blocked, show notification
+                    if (error.name === 'NotAllowedError') {
+                      log('Audio blocked by autoplay policy');
+                      setAudioBlocked(true);
+                    }
+                  });
                 }
               }}
             />
           )
         ))}
+
+        {/* Click-to-enable audio UI when blocked by autoplay policy */}
+        {audioBlocked && (
+          <div 
+            onClick={() => {
+              document.querySelectorAll('audio').forEach(a => a.play().catch(() => {}));
+              setAudioBlocked(false);
+            }}
+            style={{
+              position: 'fixed',
+              bottom: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: '#3b82f6',
+              color: 'white',
+              padding: '12px 24px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              zIndex: 1000,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              fontWeight: 600,
+            }}
+          >
+            🔊 Click to Enable Audio
+          </div>
+        )}
 
         {toast ? <div className={`client-room-toast ${toast.kind}`}>{toast.text}</div> : null}
       </div>

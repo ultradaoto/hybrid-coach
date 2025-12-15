@@ -104,6 +104,16 @@ export class LiveKitAgent extends EventEmitter {
   
   /** When true, AI is paused - won't respond to client but transcription continues */
   private isAIPaused: boolean = false;
+  
+  // Non-blocking audio processing queue
+  private audioQueue: Array<{
+    buffer: Buffer;
+    participantId: string;
+    participantName: string;
+    priority: number;
+  }> = [];
+  private isProcessingAudio = false;
+  private readonly MAX_QUEUE_SIZE = 100;
 
   constructor(config: LiveKitAgentConfig) {
     super();
@@ -331,42 +341,114 @@ export class LiveKitAgent extends EventEmitter {
     const audioStream = new AudioStream(track, 16000, 1);
     this.audioStreamsByTrackSid.set(track.sid, audioStream);
 
-    try {
-      await this.processAudioStreamIterator(audioStream, participant);
-    } finally {
-      this.audioStreamsByTrackSid.delete(track.sid);
+    // Use non-blocking audio handler instead of blocking for-await
+    this.setupAudioStreamHandler(audioStream, participant);
+  }
+
+  /**
+   * Setup non-blocking audio stream handler (CRITICAL FIX)
+   * Replaces blocking for-await loop that starves the Node.js event loop
+   */
+  private setupAudioStreamHandler(audioStream: AsyncIterable<any>, participant: RemoteParticipant): void {
+    const participantId = participant.identity;
+    const participantName = participant.name || participantId;
+    const isCoach = participantId.startsWith('coach-');
+    
+    // Priority: client=1 (highest), coach unmuted=2, coach muted=3
+    const getPriority = () => {
+      if (!isCoach) return 1;
+      return this.mutedParticipants.has(participantId) ? 3 : 2;
+    };
+    
+    let frameCount = 0;
+    
+    // Non-blocking async IIFE
+    (async () => {
       try {
-        audioStream.close();
-      } catch {
-        // ignore
+        for await (const frame of audioStream) {
+          frameCount++;
+          
+          // Log every 100th frame to avoid spam
+          if (frameCount % 100 === 0) {
+            console.log(`[LiveKitAgent] 📊 Processed ${frameCount} frames from ${participantId}`);
+          }
+          
+          // frame.data is Int16Array (linear16). Convert to bytes.
+          const buffer = Buffer.from(frame.data.buffer);
+          
+          // Enqueue instead of processing directly
+          this.enqueueAudio({
+            buffer,
+            participantId,
+            participantName,
+            priority: getPriority(),
+          });
+          
+          // CRITICAL: Yield to event loop every frame
+          await new Promise(resolve => setImmediate(resolve));
+        }
+      } catch (err) {
+        console.error(`[LiveKitAgent] ❌ Audio stream error for ${participantId}:`, err);
+      } finally {
+        console.log(`[LiveKitAgent] 🔇 Audio stream ended for ${participantId} (${frameCount} frames total)`);
+        
+        // Cleanup
+        const stream = this.audioStreamsByTrackSid.get(participant.sid);
+        if (stream) {
+          this.audioStreamsByTrackSid.delete(participant.sid);
+          try {
+            stream.close();
+          } catch {
+            // ignore
+          }
+        }
       }
+    })();
+    
+    // Start processor if not running
+    if (!this.isProcessingAudio) {
+      this.startAudioProcessor();
     }
   }
 
   /**
-   * Process audio using async iterator
+   * Enqueue audio frame for processing
    */
-  private async processAudioStreamIterator(audioStream: any, participant: RemoteParticipant): Promise<void> {
-    let frameCount = 0;
-    try {
-      for await (const frame of audioStream) {
-        frameCount++;
-        
-        // Log every 100th frame to avoid spam
-        if (frameCount % 100 === 0) {
-          console.log(`[LiveKitAgent] 📊 Processed ${frameCount} frames from ${participant.identity}`);
-        }
-        
-        // frame.data is Int16Array (linear16). Convert to bytes.
-        const buffer = Buffer.from(frame.data.buffer);
-        
-        // Route to Deepgram
-        this.connectionManager?.routeAudio(buffer, participant.identity, participant.name);
-      }
-    } catch (err) {
-      console.error(`[LiveKitAgent] ❌ Audio stream error for ${participant.identity}:`, err);
+  private enqueueAudio(item: typeof this.audioQueue[0]): void {
+    if (this.audioQueue.length >= this.MAX_QUEUE_SIZE) {
+      // Drop lowest priority (highest number) frame
+      this.audioQueue.sort((a, b) => a.priority - b.priority);
+      this.audioQueue.pop();
     }
-    console.log(`[LiveKitAgent] 🔇 Audio stream ended for ${participant.identity} (${frameCount} frames total)`);
+    this.audioQueue.push(item);
+  }
+
+  /**
+   * Start non-blocking audio processor
+   */
+  private startAudioProcessor(): void {
+    this.isProcessingAudio = true;
+    
+    const processNext = () => {
+      if (this.audioQueue.length === 0) {
+        setImmediate(processNext);
+        return;
+      }
+      
+      // Sort by priority (lower number = higher priority)
+      this.audioQueue.sort((a, b) => a.priority - b.priority);
+      
+      // Process up to 10 frames per tick to batch work
+      const batch = this.audioQueue.splice(0, 10);
+      for (const item of batch) {
+        this.connectionManager?.routeAudio(item.buffer, item.participantId, item.participantName);
+      }
+      
+      // Yield to event loop
+      setImmediate(processNext);
+    };
+    
+    processNext();
   }
 
   /**

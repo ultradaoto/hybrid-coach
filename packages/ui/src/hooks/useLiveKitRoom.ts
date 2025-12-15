@@ -25,8 +25,8 @@ export interface ParticipantInfo {
   identity: string;
   name: string;
   isSpeaking: boolean;
-  audioTrack: MediaStreamTrack | null;
-  videoTrack: MediaStreamTrack | null;
+  audioTrack: Track | null;  // LiveKit Track object (not MediaStreamTrack)
+  videoTrack: Track | null;  // LiveKit Track object (not MediaStreamTrack)
   isLocal: boolean;
   metadata?: string;
 }
@@ -97,6 +97,7 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
 
   const roomRef = useRef<Room | null>(null);
   const connectingRef = useRef(false);
+  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [localParticipant, setLocalParticipant] = useState<ParticipantInfo | null>(null);
   const [remoteParticipants, setRemoteParticipants] = useState<Map<string, ParticipantInfo>>(new Map());
@@ -105,15 +106,16 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
 
   // Convert LiveKit participant to our ParticipantInfo
   const toParticipantInfo = useCallback((participant: Participant, isLocal: boolean): ParticipantInfo => {
-    let audioTrack: MediaStreamTrack | null = null;
-    let videoTrack: MediaStreamTrack | null = null;
+    let audioTrack: Track | null = null;
+    let videoTrack: Track | null = null;
 
+    // Store LiveKit Track objects (not mediaStreamTrack) for proper lifecycle management
     participant.trackPublications.forEach((pub) => {
       if (pub.track) {
         if (pub.track.kind === Track.Kind.Audio) {
-          audioTrack = pub.track.mediaStreamTrack;
+          audioTrack = pub.track;  // Store Track object
         } else if (pub.track.kind === Track.Kind.Video) {
-          videoTrack = pub.track.mediaStreamTrack;
+          videoTrack = pub.track;  // Store Track object
         }
       }
     });
@@ -147,6 +149,14 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
       roomRef.current.disconnect();
       roomRef.current = null;
     }
+    
+    // Clean up managed audio elements
+    audioElementsRef.current.forEach((el) => {
+      el.pause();
+      el.srcObject = null;
+    });
+    audioElementsRef.current.clear();
+    
     connectingRef.current = false;
     setConnectionState(ConnectionState.Disconnected);
     setLocalParticipant(null);
@@ -232,13 +242,24 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
         hasMediaStreamTrack: !!track.mediaStreamTrack,
       });
       
-      // For audio tracks, ensure they're attached so we can access mediaStreamTrack
+      // For audio tracks, create/reuse managed audio element for reliable stream access
       if (track.kind === Track.Kind.Audio) {
-        const audioElements = track.attachedElements;
-        if (!audioElements || audioElements.length === 0) {
-          console.log('[LiveKit] 🔊 Attaching audio track from', participant.identity);
-          track.attach();
+        let audioEl = audioElementsRef.current.get(participant.identity);
+        if (!audioEl) {
+          console.log('[LiveKit] 🔊 Creating audio element for', participant.identity);
+          audioEl = document.createElement('audio');
+          audioEl.autoplay = true;
+          audioEl.playsInline = true;
+          audioElementsRef.current.set(participant.identity, audioEl);
         }
+        
+        // Use LiveKit's attach method
+        track.attach(audioEl);
+        audioEl.play().catch((e) => {
+          console.warn('[LiveKit] Audio play failed for', participant.identity, ':', e.message);
+        });
+        
+        console.log('[LiveKit] ✅ Audio attached for', participant.identity);
       }
       
       // For video tracks, also attach to ensure mediaStreamTrack is available
@@ -253,7 +274,7 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
       // Small delay to allow track to be fully initialized
       setTimeout(() => {
         updateRemoteParticipants();
-      }, 100);
+      }, 50);
     });
 
     room.on(RoomEvent.TrackUnsubscribed, (_track: RemoteTrack, _publication: RemoteTrackPublication, participant: RemoteParticipant) => {
@@ -344,110 +365,40 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
     setIsVideoEnabled(!enabled);
   }, []);
 
-  // Store audio streams we've captured for Orb visualization
-  const capturedStreamsRef = useRef<Map<string, MediaStream>>(new Map());
-
   // Get audio stream for a participant (for Orb visualization)
+  // Uses managed audio elements for reliable stream access
   const getParticipantAudioStream = useCallback((identity: string): MediaStream | null => {
-    if (!roomRef.current) {
+    // First check our managed audio elements - most reliable method
+    const audioEl = audioElementsRef.current.get(identity);
+    if (audioEl?.srcObject instanceof MediaStream && audioEl.srcObject.active) {
+      console.log('[LiveKit] ✅ Audio stream from managed element for', identity);
+      return audioEl.srcObject;
+    }
+    
+    // Fallback: Get from room participant directly
+    const room = roomRef.current;
+    if (!room) {
       console.log('[LiveKit] getParticipantAudioStream: no room');
       return null;
     }
-
-    // Check if we already have a captured stream for this participant
-    const existingStream = capturedStreamsRef.current.get(identity);
-    if (existingStream && existingStream.active) {
-      return existingStream;
-    }
-
-    const participant = identity === roomRef.current.localParticipant?.identity
-      ? roomRef.current.localParticipant
-      : roomRef.current.remoteParticipants.get(identity);
-
+    
+    const participant = room.remoteParticipants.get(identity);
     if (!participant) {
       console.log('[LiveKit] getParticipantAudioStream: participant not found:', identity);
       return null;
     }
-
-    // Find audio track and try to get stream
-    const publications: Array<{ track: typeof Track.prototype | null; isSubscribed: boolean }> = [];
-    participant.trackPublications.forEach((pub) => {
-      if (pub.track?.kind === Track.Kind.Audio) {
-        publications.push({ track: pub.track, isSubscribed: pub.isSubscribed });
-      }
-    });
-
-    for (const pub of publications) {
-      if (!pub.track) continue;
-      const track = pub.track;
-      console.log('[LiveKit] getParticipantAudioStream: checking audio track', {
-        identity,
-        isSubscribed: pub.isSubscribed,
-        hasMediaStreamTrack: !!track.mediaStreamTrack,
-        trackSid: track.sid,
-        attachedElementsCount: (track as any).attachedElements?.length ?? 0,
-      });
-
-      // Approach 1: Direct mediaStreamTrack property
-      if (track.mediaStreamTrack) {
-        console.log('[LiveKit] ✅ Method 1: Using mediaStreamTrack for', identity);
-        const stream = new MediaStream([track.mediaStreamTrack]);
-        capturedStreamsRef.current.set(identity, stream);
-        return stream;
-      }
-
-      // Approach 2: Get from attached audio element
-      const attachedElements = (track as any).attachedElements as HTMLMediaElement[] | undefined;
-      if (attachedElements && attachedElements.length > 0) {
-        const audioElement = attachedElements[0];
-        
-        // Try srcObject first
-        if (audioElement.srcObject instanceof MediaStream) {
-          console.log('[LiveKit] ✅ Method 2: Using attached element srcObject for', identity);
-          capturedStreamsRef.current.set(identity, audioElement.srcObject);
-          return audioElement.srcObject;
+    
+    for (const pub of participant.trackPublications.values()) {
+      if (pub.kind === Track.Kind.Audio && pub.track) {
+        // Create stream from track
+        const mediaStreamTrack = pub.track.mediaStreamTrack;
+        if (mediaStreamTrack) {
+          console.log('[LiveKit] ✅ Audio stream from mediaStreamTrack for', identity);
+          return new MediaStream([mediaStreamTrack]);
         }
-        
-        // Try captureStream() - captures audio from playing element
-        if ('captureStream' in audioElement) {
-          try {
-            const captured = (audioElement as any).captureStream() as MediaStream;
-            if (captured && captured.getAudioTracks().length > 0) {
-              console.log('[LiveKit] ✅ Method 3: Using captureStream() for', identity);
-              capturedStreamsRef.current.set(identity, captured);
-              return captured;
-            }
-          } catch (e) {
-            console.log('[LiveKit] captureStream() failed:', e);
-          }
-        }
-      }
-
-      // Approach 3: Create our own audio element and attach
-      console.log('[LiveKit] 🔧 Method 4: Creating new audio element for', identity);
-      try {
-        const newAudioEl = track.attach();
-        if (newAudioEl.srcObject instanceof MediaStream) {
-          console.log('[LiveKit] ✅ Method 4 success: Got stream from new attachment');
-          capturedStreamsRef.current.set(identity, newAudioEl.srcObject);
-          return newAudioEl.srcObject;
-        }
-        
-        if ('captureStream' in newAudioEl) {
-          // Ensure audio is playing
-          newAudioEl.play().catch(() => {});
-          const captured = (newAudioEl as any).captureStream() as MediaStream;
-          if (captured) {
-            console.log('[LiveKit] ✅ Method 4 success: Got stream via captureStream');
-            capturedStreamsRef.current.set(identity, captured);
-            return captured;
-          }
-        }
-      } catch (e) {
-        console.log('[LiveKit] Method 4 failed:', e);
       }
     }
-
+    
     console.log('[LiveKit] ❌ No audio stream available for', identity);
     return null;
   }, []);
