@@ -228,7 +228,7 @@ export class LiveKitAgent extends EventEmitter {
       publication: RemoteTrackPublication,
       participant: RemoteParticipant
     ) => {
-      console.log(`[LiveKitAgent] 🎤 Track subscribed: ${track.kind} from ${participant.identity} (muted: ${publication.isMuted})`);
+      console.log(`[LiveKitAgent] 🎤 Track subscribed: ${track.kind} from ${participant.identity} (muted: ${publication.muted})`);
       
       if (track.kind === TrackKind.KIND_AUDIO) {
         // Ensure participant is registered
@@ -241,7 +241,7 @@ export class LiveKitAgent extends EventEmitter {
         const isCoach = participant.identity.startsWith('coach-');
         
         // For coach, check if track is muted at subscription time
-        if (isCoach && publication.isMuted) {
+        if (isCoach && publication.muted) {
           console.log(`[LiveKitAgent] 🔇 Coach mic is muted at subscription, will wait for unmute`);
           // Don't set up audio processing yet - wait for unmute event
           return;
@@ -273,7 +273,7 @@ export class LiveKitAgent extends EventEmitter {
     });
 
     // Handle coach muting/unmuting their mic
-    this.room.on(RoomEvent.TrackMuted, (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+    this.room.on(RoomEvent.TrackMuted, (publication, participant) => {
       if (publication.kind === TrackKind.KIND_AUDIO) {
         console.log(`[LiveKitAgent] 🔇 Track muted: ${participant.identity}`);
         
@@ -285,7 +285,7 @@ export class LiveKitAgent extends EventEmitter {
       }
     });
 
-    this.room.on(RoomEvent.TrackUnmuted, (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+    this.room.on(RoomEvent.TrackUnmuted, (publication, participant) => {
       if (publication.kind === TrackKind.KIND_AUDIO) {
         console.log(`[LiveKitAgent] 🎤 Track unmuted: ${participant.identity}`);
         
@@ -296,7 +296,7 @@ export class LiveKitAgent extends EventEmitter {
           // Check if we need to set up audio stream (if it wasn't set up during subscription)
           if (publication.track && !this.audioStreamsByTrackSid.has(publication.track.sid)) {
             console.log(`[LiveKitAgent] 🔊 Setting up audio stream for unmuted coach`);
-            this.handleAudioTrack(publication.track, participant).catch((err) => {
+            this.handleAudioTrack(publication.track as RemoteTrack, participant as RemoteParticipant).catch((err) => {
               console.error(`[LiveKitAgent] ❌ Error handling unmuted audio track:`, err);
             });
           }
