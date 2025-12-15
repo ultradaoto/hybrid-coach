@@ -71,7 +71,7 @@ const SEED_USERS: SeedUser[] = [
   {
     email: 'demo@gmail.com',
     password: 'password',
-    role: 'coach',
+    role: 'client',
     displayName: 'Demo Judge',
   },
 ];
