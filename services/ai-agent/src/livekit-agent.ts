@@ -118,6 +118,24 @@ export class LiveKitAgent extends EventEmitter {
   private readonly SAMPLES_PER_FRAME = (24000 * 20) / 1000; // 480 samples per 20ms frame
   private readonly MIN_BUFFER_FRAMES = 5;           // Keep at least 5 frames to prevent pops
   
+  // DC offset filter to eliminate pops/clicks (high-pass filter at ~10Hz)
+  private dcOffsetFilter = {
+    prevInput: 0,
+    prevOutput: 0,
+    alpha: 0.995  // ~10Hz cutoff at 24kHz sample rate
+  };
+  
+  // Audio diagnostics for identifying pop/click sources
+  private frameCount = 0;
+  private lastFrameTime = 0;
+  private maxSampleSeen = 0;
+  private playbackStartTime = 0;
+  private framesPlayed = 0;
+  
+  // Optional audio capture for debugging (set to true to capture raw audio)
+  private readonly DEBUG_CAPTURE_AUDIO = false;
+  private capturedFrames: Int16Array[] = [];
+  
   // Phase 2: Performance monitoring
   private audioProcessingStats = {
     totalFramesProcessed: 0,
@@ -359,6 +377,8 @@ export class LiveKitAgent extends EventEmitter {
 
     // Handle agent speaking state
     this.connectionManager.on('agent-speaking', () => {
+      // Prepare audio state for new response (reset DC filter, diagnostics)
+      this.prepareForNewResponse();
       this.emit('speaking', true);
     });
 
@@ -650,12 +670,21 @@ export class LiveKitAgent extends EventEmitter {
     // Convert Buffer to Int16Array
     const samples = new Int16Array(alignedBuffer);
     
+    // Optional: Capture raw audio for debugging (before any processing)
+    if (this.DEBUG_CAPTURE_AUDIO) {
+      this.capturedFrames.push(new Int16Array(samples));
+      
+      // Save after ~10 seconds of audio
+      if (this.capturedFrames.length >= 500) {
+        this.saveDebugAudio();
+      }
+    }
+    
     // Add to jitter buffer
     this.audioOutputBuffer.push(samples);
     
     // Start playback if buffer is full enough and not already playing
     if (!this.isPlaybackActive && this.audioOutputBuffer.length >= this.FRAMES_TO_BUFFER) {
-      console.log(`[LiveKitAgent] 🔊 Starting buffered playback (${this.audioOutputBuffer.length} frames buffered, ~${this.audioOutputBuffer.length * this.FRAME_DURATION_MS}ms)`);
       this.startBufferedPlayback();
     }
   }
@@ -666,32 +695,59 @@ export class LiveKitAgent extends EventEmitter {
 
   /**
    * Start draining the buffer at a constant 20ms interval.
+   * Uses a self-correcting timer for more precise timing than setInterval.
    * This ensures smooth playback regardless of when frames arrive.
    */
   private startBufferedPlayback(): void {
-    if (this.playbackInterval) return;
+    if (this.isPlaybackActive) return;
     
     this.isPlaybackActive = true;
     this.emptyFrameCount = 0;
+    this.playbackStartTime = Date.now();
+    this.framesPlayed = 0;
+    this.frameCount = 0;  // Reset diagnostics
+    this.maxSampleSeen = 0;
     
-    this.playbackInterval = setInterval(() => {
+    console.log(`[LiveKitAgent] 🔊 Starting buffered playback (${this.audioOutputBuffer.length} frames buffered, ~${this.audioOutputBuffer.length * this.FRAME_DURATION_MS}ms)`);
+    
+    // Self-correcting timer for precise 20ms intervals
+    const playNextFrame = () => {
+      if (!this.isPlaybackActive) return;
+      
       if (this.audioOutputBuffer.length > 0) {
         const samples = this.audioOutputBuffer.shift()!;
-        this.publishAudioFrame(samples);
-        this.emptyFrameCount = 0; // Reset empty counter
+        
+        // Apply audio processing: diagnostics + DC offset removal
+        this.logAudioDiagnostics(samples);
+        const cleanedSamples = this.removeDCOffset(samples);
+        
+        // Publish to LiveKit
+        this.publishAudioFrame(cleanedSamples);
+        this.framesPlayed++;
+        this.emptyFrameCount = 0;
+        
+        // Calculate next frame time based on wall clock (self-correcting)
+        const expectedTime = this.playbackStartTime + (this.framesPlayed * this.FRAME_DURATION_MS);
+        const now = Date.now();
+        const delay = Math.max(1, expectedTime - now);
+        
+        setTimeout(playNextFrame, delay);
       } else {
-        // Buffer is empty - output silence to maintain timing continuity
+        // Buffer is empty - wait for more data
         this.emptyFrameCount++;
         
         if (this.emptyFrameCount >= this.MAX_EMPTY_FRAMES) {
-          // Only stop after sustained silence (agent truly finished speaking)
+          // Sustained silence - stop playback
           console.log('[LiveKitAgent] 🔇 Sustained silence detected, stopping playback');
           this.stopBufferedPlayback();
+        } else {
+          // Wait a bit for more frames
+          setTimeout(playNextFrame, this.FRAME_DURATION_MS);
         }
-        // Otherwise: don't output anything, just wait for more frames
-        // This prevents pops from silence frames
       }
-    }, this.FRAME_DURATION_MS);
+    };
+    
+    playNextFrame();
   }
 
   /**
@@ -746,6 +802,134 @@ export class LiveKitAgent extends EventEmitter {
     if (droppedFrames > 0) {
       console.log(`[LiveKitAgent] 🔄 Audio buffer reset (dropped ${droppedFrames} frames)`);
     }
+  }
+
+  /**
+   * Remove DC offset using a simple high-pass filter.
+   * DC offset causes pops when audio starts/stops.
+   * This is a first-order high-pass IIR filter with ~10Hz cutoff.
+   */
+  private removeDCOffset(samples: Int16Array): Int16Array {
+    const result = new Int16Array(samples.length);
+    
+    for (let i = 0; i < samples.length; i++) {
+      const input = samples[i];
+      // High-pass filter: y[n] = alpha * (y[n-1] + x[n] - x[n-1])
+      const output = this.dcOffsetFilter.alpha * (
+        this.dcOffsetFilter.prevOutput + input - this.dcOffsetFilter.prevInput
+      );
+      
+      // Clamp to Int16 range
+      result[i] = Math.round(Math.max(-32768, Math.min(32767, output)));
+      
+      this.dcOffsetFilter.prevInput = input;
+      this.dcOffsetFilter.prevOutput = output;
+    }
+    
+    return result;
+  }
+
+  /**
+   * Reset DC offset filter state (call between AI responses).
+   */
+  private resetDCOffsetFilter(): void {
+    this.dcOffsetFilter.prevInput = 0;
+    this.dcOffsetFilter.prevOutput = 0;
+  }
+
+  /**
+   * Log audio diagnostics to find source of pops/clicks.
+   * Checks for timing issues, clipping, and DC offset.
+   */
+  private logAudioDiagnostics(samples: Int16Array): void {
+    this.frameCount++;
+    const now = Date.now();
+    const timeSinceLastFrame = this.lastFrameTime ? now - this.lastFrameTime : 0;
+    this.lastFrameTime = now;
+    
+    // Check for timing issues (should be ~20ms between frames)
+    if (timeSinceLastFrame > 30 && this.frameCount > 1) {
+      console.warn(`[AudioDiag] ⚠️ Frame gap: ${timeSinceLastFrame}ms (expected ~20ms) at frame ${this.frameCount}`);
+    }
+    
+    // Check for hot/clipping samples and DC offset
+    let maxInFrame = 0;
+    let dcSum = 0;
+    for (let i = 0; i < samples.length; i++) {
+      const abs = Math.abs(samples[i]);
+      if (abs > maxInFrame) maxInFrame = abs;
+      dcSum += samples[i];
+    }
+    
+    const dcOffset = dcSum / samples.length;
+    
+    if (maxInFrame > this.maxSampleSeen) {
+      this.maxSampleSeen = maxInFrame;
+    }
+    
+    // Log if clipping or significant DC offset
+    if (maxInFrame > 32000) {
+      console.warn(`[AudioDiag] ⚠️ Near clipping: peak ${maxInFrame}/32767 at frame ${this.frameCount}`);
+    }
+    
+    if (Math.abs(dcOffset) > 500) {
+      console.warn(`[AudioDiag] ⚠️ DC offset detected: ${dcOffset.toFixed(0)} at frame ${this.frameCount}`);
+    }
+    
+    // Log buffer state every 50 frames (~1 second)
+    if (this.frameCount % 50 === 0) {
+      console.log(`[AudioDiag] Frame ${this.frameCount}: buffer=${this.audioOutputBuffer.length}, maxPeak=${this.maxSampleSeen}, lastGap=${timeSinceLastFrame}ms`);
+    }
+  }
+
+  /**
+   * Save captured audio frames for debugging (Audacity analysis).
+   * Only called when DEBUG_CAPTURE_AUDIO is true.
+   */
+  private saveDebugAudio(): void {
+    if (!this.DEBUG_CAPTURE_AUDIO || this.capturedFrames.length === 0) return;
+    
+    try {
+      const fs = require('fs');
+      const totalSamples = this.capturedFrames.reduce((sum, f) => sum + f.length, 0);
+      const combined = new Int16Array(totalSamples);
+      
+      let offset = 0;
+      for (const frame of this.capturedFrames) {
+        combined.set(frame, offset);
+        offset += frame.length;
+      }
+      
+      // Save as raw PCM (can open in Audacity: Import Raw, 16-bit signed, 24000Hz, mono)
+      const filePath = '/tmp/debug_audio.raw';
+      fs.writeFileSync(filePath, Buffer.from(combined.buffer));
+      
+      console.log(`[AudioDiag] 📁 Saved ${totalSamples} samples (${(totalSamples / 24000).toFixed(1)}s) to ${filePath}`);
+      console.log('[AudioDiag] 💡 Open in Audacity: File > Import > Raw Data');
+      console.log('[AudioDiag]    Settings: 16-bit signed PCM, Little-endian, 1 channel (Mono), 24000 Hz');
+      
+      this.capturedFrames = [];
+    } catch (err) {
+      console.error('[AudioDiag] Failed to save debug audio:', err);
+    }
+  }
+
+  /**
+   * Prepare for a new AI response (reset state for clean audio).
+   */
+  private prepareForNewResponse(): void {
+    this.resetDCOffsetFilter();
+    this.frameCount = 0;
+    this.maxSampleSeen = 0;
+    this.lastFrameTime = 0;
+    this.framesPlayed = 0;
+    
+    // Save debug audio if capture was enabled
+    if (this.DEBUG_CAPTURE_AUDIO && this.capturedFrames.length > 0) {
+      this.saveDebugAudio();
+    }
+    
+    console.log('[LiveKitAgent] 🎬 Prepared for new AI response (reset audio state)');
   }
 
   /**
