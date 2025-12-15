@@ -180,7 +180,7 @@ export class VoiceAgentConnection extends EventEmitter {
   }
 
   /**
-   * Send Voice Agent settings with function definitions
+   * Send Voice Agent settings with function definitions (Phase 2: Optimized)
    * 
    * Deepgram Voice Agent API v1 Settings format
    * Reference: https://developers.deepgram.com/docs/configure-voice-agent
@@ -189,6 +189,8 @@ export class VoiceAgentConnection extends EventEmitter {
    * - model goes INSIDE provider object
    * - use "prompt" not "instructions" 
    * - temperature goes inside provider for think
+   * 
+   * Phase 2: Added endpointing and VAD settings for faster responses
    */
   private sendSettings(): void {
     // Build settings object matching Deepgram Voice Agent API v1 format
@@ -211,6 +213,9 @@ export class VoiceAgentConnection extends EventEmitter {
             type: 'deepgram',
             model: 'nova-2',
           },
+          // Phase 2: Faster endpointing for quicker turn detection
+          endpointing: 300, // 300ms instead of default 500ms
+          utterance_end_ms: 500, // 500ms instead of default 1000ms
         },
         think: {
           provider: {
@@ -230,9 +235,9 @@ export class VoiceAgentConnection extends EventEmitter {
     };
 
     const settingsJson = JSON.stringify(settings, null, 2);
-    console.log('[VoiceAgent] 📤 Sending settings:', settingsJson);
+    console.log('[VoiceAgent] 📤 Sending settings (Phase 2: optimized):', settingsJson);
     this.ws?.send(JSON.stringify(settings));
-    console.log('[VoiceAgent] ⚙️ Settings sent');
+    console.log('[VoiceAgent] ⚙️ Settings sent with faster endpointing');
   }
 
   /**

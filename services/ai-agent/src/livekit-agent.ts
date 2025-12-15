@@ -102,10 +102,17 @@ export class LiveKitAgent extends EventEmitter {
   private shutdownTimer: NodeJS.Timeout | null = null;
   private readonly GRACE_PERIOD_MS = 60 * 1000; // 60 seconds
   
+  // Phase 2: Performance monitoring
+  private audioProcessingStats = {
+    totalFramesProcessed: 0,
+    lastReportTime: Date.now(),
+    maxQueueSize: 0,
+  };
+  
   /** When true, AI is paused - won't respond to client but transcription continues */
   private isAIPaused: boolean = false;
   
-  // Non-blocking audio processing queue
+  // Non-blocking audio processing queue (Phase 2: Increased capacity)
   private audioQueue: Array<{
     buffer: Buffer;
     participantId: string;
@@ -113,7 +120,7 @@ export class LiveKitAgent extends EventEmitter {
     priority: number;
   }> = [];
   private isProcessingAudio = false;
-  private readonly MAX_QUEUE_SIZE = 100;
+  private readonly MAX_QUEUE_SIZE = 500; // Phase 2: Increased from 100 to 500
 
   constructor(config: LiveKitAgentConfig) {
     super();
@@ -307,16 +314,16 @@ export class LiveKitAgent extends EventEmitter {
   }
 
   /**
-   * Set up audio publication to room
+   * Set up audio publication to room (Phase 2: Increased buffer)
    */
   private async setupAudioPublication(): Promise<void> {
     if (!this.room) return;
 
     console.log('[LiveKitAgent] 🎙️ Setting up audio publication...');
 
-    // Create audio source (16kHz, mono) with larger queue to prevent overflow
-    // Third parameter is queueSizeMs - 5000ms = 5 seconds of buffer
-    this.audioSource = new AudioSource(16000, 1, 5000);
+    // Phase 2: Create audio source (16kHz, mono) with even larger queue to prevent overflow
+    // Third parameter is queueSizeMs - 10000ms = 10 seconds of buffer (increased from 5s)
+    this.audioSource = new AudioSource(16000, 1, 10000);
 
     // Create local audio track
     this.audioTrack = LocalAudioTrack.createAudioTrack('ai-voice', this.audioSource);
@@ -346,7 +353,7 @@ export class LiveKitAgent extends EventEmitter {
   }
 
   /**
-   * Setup non-blocking audio stream handler (CRITICAL FIX)
+   * Setup non-blocking audio stream handler (Phase 2: Further optimized)
    * Replaces blocking for-await loop that starves the Node.js event loop
    */
   private setupAudioStreamHandler(audioStream: AsyncIterable<any>, participant: RemoteParticipant): void {
@@ -365,8 +372,10 @@ export class LiveKitAgent extends EventEmitter {
     // Non-blocking async IIFE
     (async () => {
       try {
+        let batchCount = 0;
         for await (const frame of audioStream) {
           frameCount++;
+          batchCount++;
           
           // Log every 100th frame to avoid spam
           if (frameCount % 100 === 0) {
@@ -384,8 +393,12 @@ export class LiveKitAgent extends EventEmitter {
             priority: getPriority(),
           });
           
-          // CRITICAL: Yield to event loop every frame
-          await new Promise(resolve => setImmediate(resolve));
+          // Phase 2: Only yield every 20 frames instead of every frame
+          // This dramatically reduces overhead while still preventing event loop starvation
+          if (batchCount >= 20) {
+            await new Promise(resolve => setImmediate(resolve));
+            batchCount = 0;
+          }
         }
       } catch (err) {
         console.error(`[LiveKitAgent] ❌ Audio stream error for ${participantId}:`, err);
@@ -424,28 +437,56 @@ export class LiveKitAgent extends EventEmitter {
   }
 
   /**
-   * Start non-blocking audio processor
+   * Start non-blocking audio processor (Phase 2: Optimized for lower latency)
    */
   private startAudioProcessor(): void {
     this.isProcessingAudio = true;
     
     const processNext = () => {
+      // Phase 2: Track queue size for monitoring
+      if (this.audioQueue.length > this.audioProcessingStats.maxQueueSize) {
+        this.audioProcessingStats.maxQueueSize = this.audioQueue.length;
+      }
+      
+      // Phase 2: Log performance metrics every 10 seconds
+      const now = Date.now();
+      if (now - this.audioProcessingStats.lastReportTime > 10000) {
+        const framesPerSecond = this.audioProcessingStats.totalFramesProcessed / 10;
+        console.log(`[LiveKitAgent] 📊 Audio Processing Stats:`);
+        console.log(`   - Frames/sec: ${framesPerSecond.toFixed(0)}`);
+        console.log(`   - Current queue: ${this.audioQueue.length}`);
+        console.log(`   - Max queue: ${this.audioProcessingStats.maxQueueSize}`);
+        
+        // Reset stats for next interval
+        this.audioProcessingStats.totalFramesProcessed = 0;
+        this.audioProcessingStats.lastReportTime = now;
+        this.audioProcessingStats.maxQueueSize = 0;
+      }
+      
       if (this.audioQueue.length === 0) {
-        setImmediate(processNext);
+        // Phase 2: Use shorter interval when queue is empty to reduce latency
+        setTimeout(processNext, 5); // Check every 5ms instead of immediate
         return;
       }
       
       // Sort by priority (lower number = higher priority)
       this.audioQueue.sort((a, b) => a.priority - b.priority);
       
-      // Process up to 10 frames per tick to batch work
-      const batch = this.audioQueue.splice(0, 10);
+      // Phase 2: Process up to 50 frames per tick (increased from 10)
+      // This significantly reduces the time it takes to drain the queue
+      const batch = this.audioQueue.splice(0, 50);
       for (const item of batch) {
         this.connectionManager?.routeAudio(item.buffer, item.participantId, item.participantName);
+        this.audioProcessingStats.totalFramesProcessed++;
       }
       
-      // Yield to event loop
-      setImmediate(processNext);
+      // Phase 2: If queue still has many frames, process immediately
+      // Otherwise yield to event loop
+      if (this.audioQueue.length > 100) {
+        setImmediate(processNext);
+      } else {
+        setTimeout(processNext, 1); // 1ms delay for smoother processing
+      }
     };
     
     processNext();
