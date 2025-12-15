@@ -22,3 +22,6 @@ coverage/
 
 myultracoach
 myultracoach.pub
+# Large video files
+playwright-videos/
+*.webm
