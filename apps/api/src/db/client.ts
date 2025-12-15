@@ -67,6 +67,13 @@ const SEED_USERS: SeedUser[] = [
     role: 'client',
     displayName: 'Mom',
   },
+  // Demo account for hackathon judges
+  {
+    email: 'demo@gmail.com',
+    password: 'password',
+    role: 'coach',
+    displayName: 'Demo Judge',
+  },
 ];
 
 let seedInitialized = false;
