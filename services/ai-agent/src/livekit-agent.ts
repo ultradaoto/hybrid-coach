@@ -372,18 +372,14 @@ export class LiveKitAgent extends EventEmitter {
     this.audioTrack = LocalAudioTrack.createAudioTrack('ai-voice', this.audioSource);
     console.log('[LiveKitAgent] 🎙️ Audio track created:', this.audioTrack.sid);
 
-    // Publish track to room with explicit options
-    // @ts-expect-error - publishTrack API varies between versions
-    const publication = await this.room.localParticipant?.publishTrack(this.audioTrack, {
-      name: 'ai-voice',
-      // Ensure track is audible to all participants
-    });
+    // Publish track to room
+    const publication = await this.room.localParticipant?.publishTrack(this.audioTrack);
     this.isPublishing = true;
 
     console.log('[LiveKitAgent] ✅ Audio track published at 24kHz');
     console.log('[LiveKitAgent] 📢 Track publication:', {
-      sid: publication?.trackSid,
-      name: publication?.trackName,
+      sid: publication?.sid,
+      track: publication?.track?.sid,
       kind: publication?.kind,
     });
   }
