@@ -104,6 +104,19 @@ export class LiveKitAgent extends EventEmitter {
   private shutdownTimer: NodeJS.Timeout | null = null;
   private readonly GRACE_PERIOD_MS = 60 * 1000; // 60 seconds
   
+  // Jitter buffer for smooth AI audio playback
+  // Deepgram sends TTS frames in bursts; we buffer and drain at constant rate
+  private audioOutputBuffer: Int16Array[] = [];
+  private playbackInterval: ReturnType<typeof setInterval> | null = null;
+  private isPlaybackActive = false;
+  
+  // Buffer configuration (based on Deepgram recommendation: 100-200ms)
+  private readonly FRAME_DURATION_MS = 20;          // Each frame is 20ms
+  private readonly BUFFER_TARGET_MS = 150;          // Buffer 150ms before starting
+  private readonly FRAMES_TO_BUFFER = Math.ceil(150 / 20); // ~8 frames (can't use this. in field initializers)
+  private readonly OUTPUT_SAMPLE_RATE = 24000;
+  private readonly SAMPLES_PER_FRAME = (24000 * 20) / 1000; // 480 samples per 20ms frame
+  
   // Phase 2: Performance monitoring
   private audioProcessingStats = {
     totalFramesProcessed: 0,
@@ -333,9 +346,9 @@ export class LiveKitAgent extends EventEmitter {
       verbose: this.config.verbose,
     });
 
-    // Handle AI audio output
+    // Handle AI audio output - now using jitter buffer for smooth playback
     this.connectionManager.on('ai-audio', (data: Buffer) => {
-      this.publishAudioData(data);
+      this.handleAIAudioOutput(data);
     });
 
     // Handle conversation transcripts
@@ -350,6 +363,18 @@ export class LiveKitAgent extends EventEmitter {
 
     this.connectionManager.on('agent-done-speaking', () => {
       this.emit('speaking', false);
+      // Let buffer drain naturally, then reset after a short delay
+      setTimeout(() => {
+        if (this.audioOutputBuffer.length === 0) {
+          this.resetAudioBuffer();
+        }
+      }, 200);
+    });
+
+    // Handle barge-in (user interrupts AI) - immediately stop AI audio
+    this.connectionManager.on('barge-in', () => {
+      console.log('[LiveKitAgent] 🛑 Barge-in detected - stopping AI audio immediately');
+      this.resetAudioBuffer();
     });
 
     // Initialize connections
@@ -597,58 +622,116 @@ export class LiveKitAgent extends EventEmitter {
   }
 
   /**
-   * Publish audio data to the room
-   * Note: captureFrame is async, but we fire-and-forget with error handling
+   * Handle incoming audio from Deepgram Voice Agent.
+   * Buffers audio and drains at a constant rate for smooth playback.
+   * This eliminates jitter caused by bursty TTS delivery.
    */
-  private publishAudioData(data: Buffer): void {
-    if (!this.audioSource || !this.isPublishing) {
-      // Debug: Log why we're not publishing
-      if (!this.audioSource) {
-        console.log('[LiveKitAgent] ⚠️ Cannot publish audio: audioSource is null');
-      } else if (!this.isPublishing) {
-        console.log('[LiveKitAgent] ⚠️ Cannot publish audio: isPublishing is false');
-      }
+  private handleAIAudioOutput(audioData: Buffer): void {
+    if (!this.audioSource) {
+      console.warn('[LiveKitAgent] No audio source available');
       return;
     }
     
     // Block AI audio output when paused
     if (this.isAIPaused) {
-      console.log('[LiveKitAgent] ⚠️ Cannot publish audio: AI is paused');
       return;
     }
-
-    // Capture the audioSource reference to avoid race conditions
-    const audioSource = this.audioSource;
-
+    
     // Ensure we have an even number of bytes for Int16Array
-    const byteLength = data.byteLength - (data.byteLength % 2);
+    const byteLength = audioData.byteLength - (audioData.byteLength % 2);
     if (byteLength === 0) return;
 
     // Copy data to a new ArrayBuffer to ensure proper alignment
-    // This avoids "start offset of Int16Array should be a multiple of 2" errors
     const alignedBuffer = new ArrayBuffer(byteLength);
     const view = new Uint8Array(alignedBuffer);
-    view.set(new Uint8Array(data.buffer, data.byteOffset, byteLength));
+    view.set(new Uint8Array(audioData.buffer, audioData.byteOffset, byteLength));
 
-    // Now create Int16Array from the aligned buffer
+    // Convert Buffer to Int16Array
     const samples = new Int16Array(alignedBuffer);
-
-    // Create audio frame and capture it (async with error handling)
-    // Sample rate must match AudioSource (24000 Hz)
-    const frame = new AudioFrame(samples, 24000, 1, samples.length);  // ✅ Changed from 16000 to 24000
     
-    // Track successful captures for debugging
-    this.audioFramesSent = (this.audioFramesSent || 0) + 1;
-    if (this.audioFramesSent % 100 === 1) {
-      console.log(`[LiveKitAgent] 🔊 Publishing AI audio: frame ${this.audioFramesSent} (${samples.length} samples)`);
+    // Add to jitter buffer
+    this.audioOutputBuffer.push(samples);
+    
+    // Start playback if buffer is full enough and not already playing
+    if (!this.isPlaybackActive && this.audioOutputBuffer.length >= this.FRAMES_TO_BUFFER) {
+      console.log(`[LiveKitAgent] 🔊 Starting buffered playback (${this.audioOutputBuffer.length} frames buffered, ~${this.audioOutputBuffer.length * this.FRAME_DURATION_MS}ms)`);
+      this.startBufferedPlayback();
     }
+  }
+
+  /**
+   * Start draining the buffer at a constant 20ms interval.
+   * This ensures smooth playback regardless of when frames arrive.
+   */
+  private startBufferedPlayback(): void {
+    if (this.playbackInterval) return;
     
-    audioSource.captureFrame(frame).catch((error: Error) => {
-      // Only log if we're still supposed to be publishing
-      if (this.isPublishing) {
-        console.warn('[LiveKitAgent] ⚠️ Frame capture failed (normal during disconnect):', error.message);
+    this.isPlaybackActive = true;
+    
+    this.playbackInterval = setInterval(() => {
+      if (this.audioOutputBuffer.length > 0) {
+        const samples = this.audioOutputBuffer.shift()!;
+        this.publishAudioFrame(samples);
+      } else {
+        // Buffer underrun - stop playback, will restart when buffer refills
+        console.log('[LiveKitAgent] ⚠️ Buffer underrun, pausing playback until buffer refills');
+        this.stopBufferedPlayback();
       }
-    });
+    }, this.FRAME_DURATION_MS);
+  }
+
+  /**
+   * Stop the playback interval (on silence or end of response).
+   */
+  private stopBufferedPlayback(): void {
+    if (this.playbackInterval) {
+      clearInterval(this.playbackInterval);
+      this.playbackInterval = null;
+    }
+    this.isPlaybackActive = false;
+  }
+
+  /**
+   * Publish a single audio frame to LiveKit.
+   */
+  private publishAudioFrame(samples: Int16Array): void {
+    if (!this.audioSource || !this.isPublishing) return;
+    
+    try {
+      const frame = new AudioFrame(
+        samples,
+        this.OUTPUT_SAMPLE_RATE,  // 24000
+        1,                         // mono
+        samples.length             // number of samples
+      );
+      
+      // Track successful captures for debugging
+      this.audioFramesSent = (this.audioFramesSent || 0) + 1;
+      if (this.audioFramesSent % 100 === 1) {
+        console.log(`[LiveKitAgent] 🔊 Publishing AI audio: frame ${this.audioFramesSent} (${samples.length} samples, buffer: ${this.audioOutputBuffer.length})`);
+      }
+      
+      this.audioSource.captureFrame(frame).catch((error: Error) => {
+        // Only log if we're still supposed to be publishing
+        if (this.isPublishing) {
+          console.warn('[LiveKitAgent] ⚠️ Frame capture failed:', error.message);
+        }
+      });
+    } catch (err) {
+      console.error('[LiveKitAgent] Error publishing audio frame:', err);
+    }
+  }
+
+  /**
+   * Reset the audio buffer (call when AI finishes speaking or on barge-in).
+   */
+  private resetAudioBuffer(): void {
+    this.stopBufferedPlayback();
+    const droppedFrames = this.audioOutputBuffer.length;
+    this.audioOutputBuffer = [];
+    if (droppedFrames > 0) {
+      console.log(`[LiveKitAgent] 🔄 Audio buffer reset (dropped ${droppedFrames} frames)`);
+    }
   }
 
   /**
@@ -859,6 +942,9 @@ export class LiveKitAgent extends EventEmitter {
       clearTimeout(this.shutdownTimer);
       this.shutdownTimer = null;
     }
+
+    // Stop audio playback and reset buffer
+    this.resetAudioBuffer();
 
     this.isPublishing = false;
 
