@@ -529,13 +529,15 @@ export class VoiceAgentConnection extends EventEmitter {
 
   /**
    * Clear the agent's response buffer (for barge-in)
+   * Note: Deepgram Voice Agent handles barge-in automatically when user speaks.
+   * We just need to track state locally - no special message needed.
    */
   clearBuffer(): void {
-    if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'Clear' }));
-      this.isAgentSpeaking = false;
-      this.log('🧹 Buffer cleared');
-    }
+    // Deepgram doesn't have a "Clear" message type.
+    // Barge-in is handled automatically when user audio interrupts.
+    // We just reset our local state.
+    this.isAgentSpeaking = false;
+    this.log('🧹 Buffer cleared (local state only)');
   }
 
   /**
