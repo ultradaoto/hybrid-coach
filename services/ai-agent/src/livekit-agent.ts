@@ -225,10 +225,10 @@ export class LiveKitAgent extends EventEmitter {
 
     this.room.on(RoomEvent.TrackSubscribed, (
       track: RemoteTrack,
-      _publication: RemoteTrackPublication,
+      publication: RemoteTrackPublication,
       participant: RemoteParticipant
     ) => {
-      console.log(`[LiveKitAgent] 🎤 Track subscribed: ${track.kind} from ${participant.identity}`);
+      console.log(`[LiveKitAgent] 🎤 Track subscribed: ${track.kind} from ${participant.identity} (muted: ${publication.isMuted})`);
       
       if (track.kind === TrackKind.KIND_AUDIO) {
         // Ensure participant is registered
@@ -237,6 +237,16 @@ export class LiveKitAgent extends EventEmitter {
           this.participantRoles.set(participant.identity, role);
           this.connectionManager?.registerParticipant(participant.identity, role, participant.name);
         }
+        
+        const isCoach = participant.identity.startsWith('coach-');
+        
+        // For coach, check if track is muted at subscription time
+        if (isCoach && publication.isMuted) {
+          console.log(`[LiveKitAgent] 🔇 Coach mic is muted at subscription, will wait for unmute`);
+          // Don't set up audio processing yet - wait for unmute event
+          return;
+        }
+        
         // Handle audio track (async)
         this.handleAudioTrack(track, participant).catch((err) => {
           console.error(`[LiveKitAgent] ❌ Error handling audio track:`, err);
@@ -259,6 +269,38 @@ export class LiveKitAgent extends EventEmitter {
           // ignore
         }
         this.audioStreamsByTrackSid.delete(track.sid);
+      }
+    });
+
+    // Handle coach muting/unmuting their mic
+    this.room.on(RoomEvent.TrackMuted, (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      if (publication.kind === TrackKind.KIND_AUDIO) {
+        console.log(`[LiveKitAgent] 🔇 Track muted: ${participant.identity}`);
+        
+        const isCoach = participant.identity.startsWith('coach-');
+        if (isCoach) {
+          console.log(`[LiveKitAgent] 🎙️ Coach muted their mic - audio stream will naturally stop`);
+          // Audio stream will stop producing frames, no need to tear down
+        }
+      }
+    });
+
+    this.room.on(RoomEvent.TrackUnmuted, (publication: RemoteTrackPublication, participant: RemoteParticipant) => {
+      if (publication.kind === TrackKind.KIND_AUDIO) {
+        console.log(`[LiveKitAgent] 🎤 Track unmuted: ${participant.identity}`);
+        
+        const isCoach = participant.identity.startsWith('coach-');
+        if (isCoach) {
+          console.log(`[LiveKitAgent] 🎙️ Coach unmuted their mic`);
+          
+          // Check if we need to set up audio stream (if it wasn't set up during subscription)
+          if (publication.track && !this.audioStreamsByTrackSid.has(publication.track.sid)) {
+            console.log(`[LiveKitAgent] 🔊 Setting up audio stream for unmuted coach`);
+            this.handleAudioTrack(publication.track, participant).catch((err) => {
+              console.error(`[LiveKitAgent] ❌ Error handling unmuted audio track:`, err);
+            });
+          }
+        }
       }
     });
 
@@ -340,13 +382,19 @@ export class LiveKitAgent extends EventEmitter {
    * Handle incoming audio from a participant
    */
   private async handleAudioTrack(track: RemoteTrack, participant: RemoteParticipant): Promise<void> {
-    console.log(`[LiveKitAgent] 🎧 Setting up audio stream for ${participant.identity}`);
+    const role = this.participantRoles.get(participant.identity) || 'unknown';
+    console.log(`[LiveKitAgent] 🎧 Setting up audio stream for ${participant.identity} (${role})`);
 
     // Request 16kHz mono PCM (linear16) so it matches Deepgram Voice Agent + Listen configs.
-    if (this.audioStreamsByTrackSid.has(track.sid)) return;
+    if (this.audioStreamsByTrackSid.has(track.sid)) {
+      console.log(`[LiveKitAgent] ⚠️ Audio stream already exists for track ${track.sid}, skipping`);
+      return;
+    }
 
     const audioStream = new AudioStream(track, 16000, 1);
     this.audioStreamsByTrackSid.set(track.sid, audioStream);
+    
+    console.log(`[LiveKitAgent] ✅ Audio stream created for ${participant.identity} (track: ${track.sid})`);
 
     // Use non-blocking audio handler instead of blocking for-await
     this.setupAudioStreamHandler(audioStream, participant);
@@ -360,6 +408,7 @@ export class LiveKitAgent extends EventEmitter {
     const participantId = participant.identity;
     const participantName = participant.name || participantId;
     const isCoach = participantId.startsWith('coach-');
+    const role = this.participantRoles.get(participantId) || 'unknown';
     
     // Priority: client=1 (highest), coach unmuted=2, coach muted=3
     const getPriority = () => {
@@ -368,6 +417,9 @@ export class LiveKitAgent extends EventEmitter {
     };
     
     let frameCount = 0;
+    let firstFrameReceived = false;
+    
+    console.log(`[LiveKitAgent] 🎬 Starting audio stream handler for ${participantId} (${role})`);
     
     // Non-blocking async IIFE
     (async () => {
@@ -377,9 +429,15 @@ export class LiveKitAgent extends EventEmitter {
           frameCount++;
           batchCount++;
           
+          // Log first frame to confirm audio is flowing
+          if (!firstFrameReceived) {
+            firstFrameReceived = true;
+            console.log(`[LiveKitAgent] ✅ FIRST FRAME received from ${participantId} (${role}) - audio is flowing!`);
+          }
+          
           // Log every 100th frame to avoid spam
           if (frameCount % 100 === 0) {
-            console.log(`[LiveKitAgent] 📊 Processed ${frameCount} frames from ${participantId}`);
+            console.log(`[LiveKitAgent] 📊 Processed ${frameCount} frames from ${participantId} (${role})`);
           }
           
           // frame.data is Int16Array (linear16). Convert to bytes.
@@ -401,9 +459,13 @@ export class LiveKitAgent extends EventEmitter {
           }
         }
       } catch (err) {
-        console.error(`[LiveKitAgent] ❌ Audio stream error for ${participantId}:`, err);
+        console.error(`[LiveKitAgent] ❌ Audio stream error for ${participantId} (${role}):`, err);
       } finally {
-        console.log(`[LiveKitAgent] 🔇 Audio stream ended for ${participantId} (${frameCount} frames total)`);
+        if (!firstFrameReceived) {
+          console.warn(`[LiveKitAgent] ⚠️ Audio stream ended for ${participantId} (${role}) WITHOUT receiving any frames!`);
+        } else {
+          console.log(`[LiveKitAgent] 🔇 Audio stream ended for ${participantId} (${role}) - processed ${frameCount} frames total`);
+        }
         
         // Cleanup
         const stream = this.audioStreamsByTrackSid.get(participant.sid);
@@ -420,6 +482,7 @@ export class LiveKitAgent extends EventEmitter {
     
     // Start processor if not running
     if (!this.isProcessingAudio) {
+      console.log(`[LiveKitAgent] 🔄 Starting audio processor`);
       this.startAudioProcessor();
     }
   }

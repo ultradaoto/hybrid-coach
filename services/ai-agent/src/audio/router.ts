@@ -204,6 +204,10 @@ export class AudioRouter extends EventEmitter {
     }
   }
 
+  // Track first frame routing for diagnostic logging
+  private firstClientFrameRouted = false;
+  private firstCoachFrameRouted = false;
+
   /**
    * Route CLIENT audio
    * 
@@ -216,6 +220,12 @@ export class AudioRouter extends EventEmitter {
   private routeClientAudio(frame: AudioFrame): void {
     this.stats.clientFrames++;
     const participantStats = this.stats.byParticipant.get(frame.participantId);
+
+    // Log first client frame routing decision
+    if (!this.firstClientFrameRouted) {
+      this.firstClientFrameRouted = true;
+      console.log(`[AudioRouter] 🎤 FIRST CLIENT FRAME: Routing to ${this.isAIPaused ? 'Transcription (AI PAUSED)' : 'Voice Agent'}`);
+    }
 
     // When AI is PAUSED: route to transcription STT instead of Voice Agent
     if (this.isAIPaused) {
@@ -245,6 +255,12 @@ export class AudioRouter extends EventEmitter {
     this.stats.coachFrames++;
     const participantStats = this.stats.byParticipant.get(frame.participantId);
 
+    // Log first coach frame routing decision
+    if (!this.firstCoachFrameRouted) {
+      this.firstCoachFrameRouted = true;
+      console.log(`[AudioRouter] 🎯 FIRST COACH FRAME: Routing to Transcription (ALWAYS) + Voice Agent (if unmuted)`);
+    }
+
     // ALWAYS send coach audio to Transcription STT
     // This ensures we capture coach speech even when muted from AI
     this.sendToTranscription(frame);
@@ -268,6 +284,10 @@ export class AudioRouter extends EventEmitter {
     }
   }
 
+  // Track first successful sends to each destination
+  private firstSendToVoiceAgent = false;
+  private firstSendToTranscription = false;
+
   /**
    * Send audio frame to Voice Agent WebSocket
    */
@@ -279,6 +299,13 @@ export class AudioRouter extends EventEmitter {
 
     try {
       this.voiceAgentWs.send(frame.data);
+      
+      // Log first successful send to Voice Agent
+      if (!this.firstSendToVoiceAgent) {
+        this.firstSendToVoiceAgent = true;
+        console.log(`[AudioRouter] ✅ FIRST FRAME sent to Deepgram Voice Agent (${frame.data.length} bytes from ${frame.participantId})`);
+      }
+      
       return true;
     } catch (error) {
       console.error('[AudioRouter] ❌ Failed to send to Voice Agent:', error);
@@ -299,6 +326,12 @@ export class AudioRouter extends EventEmitter {
     try {
       this.transcriptionWs.send(frame.data);
       this.stats.totalFramesToTranscription++;
+      
+      // Log first successful send to Transcription
+      if (!this.firstSendToTranscription) {
+        this.firstSendToTranscription = true;
+        console.log(`[AudioRouter] ✅ FIRST FRAME sent to Deepgram Transcription (${frame.data.length} bytes from ${frame.participantId})`);
+      }
     } catch (error) {
       console.error('[AudioRouter] ❌ Failed to send to Transcription:', error);
     }

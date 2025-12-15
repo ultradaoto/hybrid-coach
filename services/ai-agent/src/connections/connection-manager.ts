@@ -276,8 +276,10 @@ export class DualConnectionManager extends EventEmitter {
    * Route audio through the system
    * This is the main entry point for all audio from LiveKit
    */
-  // Track if we've warned about uninitialized state
+  // Track if we've warned about uninitialized state and first frames
   private hasWarnedNotInitialized = false;
+  private firstFrameLogged = new Set<string>();
+  private frameCountByParticipant = new Map<string, number>();
 
   routeAudio(data: Buffer | Uint8Array, participantId: string, participantName?: string): void {
     if (!this.isInitialized) {
@@ -287,6 +289,21 @@ export class DualConnectionManager extends EventEmitter {
         this.hasWarnedNotInitialized = true;
       }
       return;
+    }
+
+    // Log first frame from each participant to confirm audio is reaching connection manager
+    if (!this.firstFrameLogged.has(participantId)) {
+      this.firstFrameLogged.add(participantId);
+      console.log(`[DualConnection] ✅ FIRST AUDIO FRAME from ${participantId} reached connection manager (${data.length} bytes)`);
+    }
+
+    // Track frame counts for periodic logging
+    const currentCount = this.frameCountByParticipant.get(participantId) || 0;
+    this.frameCountByParticipant.set(participantId, currentCount + 1);
+    
+    // Log every 100th frame to confirm continuous flow
+    if (currentCount > 0 && currentCount % 100 === 0) {
+      console.log(`[DualConnection] 📊 ${participantId} has sent ${currentCount} audio frames to connection manager`);
     }
 
     this.router.routeAudio(data, participantId, participantName);

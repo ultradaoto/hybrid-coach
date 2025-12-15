@@ -74,19 +74,21 @@ export const DEEPGRAM_VOICE_AGENT_URL = 'wss://agent.deepgram.com/v1/agent/conve
 /**
  * Deepgram Listen API (speech-to-text only)
  * For always-on transcription logging
- * Phase 2: Optimized for lower latency
+ * 
+ * IMPORTANT: Keep parameters minimal and well-tested to avoid 400 Bad Request errors
+ * Advanced parameters like utterance_end_ms and endpointing can cause API rejections
  */
 export function getDeepgramSttUrl(config: AudioConfig = OPUS_CONFIG): string {
   const params = new URLSearchParams({
     encoding: config.encoding,
     sample_rate: config.sampleRate.toString(),
     channels: config.channels.toString(),
-    model: 'nova-2',  // Use nova-2 (stable) - nova-3 not yet available for Listen API
+    model: 'nova-2',  // Use nova-2 (stable, well-tested)
     punctuate: 'true',
     interim_results: 'true',
-    utterance_end_ms: '500', // Phase 2: Reduced from 1000ms to 500ms for faster transcripts
     vad_events: 'true',
-    endpointing: '300', // Phase 2: Add faster endpointing (300ms instead of default)
+    // NOTE: Removed utterance_end_ms and endpointing - they can cause 400 errors
+    // These parameters work better in Voice Agent which handles them internally
   });
   
   return `wss://api.deepgram.com/v1/listen?${params.toString()}`;

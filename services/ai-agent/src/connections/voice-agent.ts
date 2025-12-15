@@ -180,7 +180,7 @@ export class VoiceAgentConnection extends EventEmitter {
   }
 
   /**
-   * Send Voice Agent settings with function definitions (Phase 2: Optimized)
+   * Send Voice Agent settings with function definitions
    * 
    * Deepgram Voice Agent API v1 Settings format
    * Reference: https://developers.deepgram.com/docs/configure-voice-agent
@@ -189,8 +189,7 @@ export class VoiceAgentConnection extends EventEmitter {
    * - model goes INSIDE provider object
    * - use "prompt" not "instructions" 
    * - temperature goes inside provider for think
-   * 
-   * Phase 2: Added endpointing and VAD settings for faster responses
+   * - endpointing/utterance_end_ms are NOT valid Voice Agent fields (they're for Listen API only)
    */
   private sendSettings(): void {
     // Build settings object matching Deepgram Voice Agent API v1 format
@@ -213,9 +212,8 @@ export class VoiceAgentConnection extends EventEmitter {
             type: 'deepgram',
             model: 'nova-2',
           },
-          // Phase 2: Faster endpointing for quicker turn detection
-          endpointing: 300, // 300ms instead of default 500ms
-          utterance_end_ms: 500, // 500ms instead of default 1000ms
+          // NOTE: endpointing and utterance_end_ms are NOT supported in Voice Agent API
+          // Voice Agent handles turn detection internally
         },
         think: {
           provider: {
@@ -235,9 +233,9 @@ export class VoiceAgentConnection extends EventEmitter {
     };
 
     const settingsJson = JSON.stringify(settings, null, 2);
-    console.log('[VoiceAgent] 📤 Sending settings (Phase 2: optimized):', settingsJson);
+    console.log('[VoiceAgent] 📤 Sending settings:', settingsJson);
     this.ws?.send(JSON.stringify(settings));
-    console.log('[VoiceAgent] ⚙️ Settings sent with faster endpointing');
+    console.log('[VoiceAgent] ⚙️ Settings sent successfully');
   }
 
   /**
@@ -459,8 +457,13 @@ export class VoiceAgentConnection extends EventEmitter {
     console.log(`[VoiceAgent] 🔊 Injected agent message: "${content}"`);
   }
 
+  // Backpressure tracking
+  private readonly MAX_BUFFER_SIZE = 64 * 1024;  // 64KB buffer limit
+  private droppedFrameCount = 0;
+  private lastDropWarning = 0;
+
   /**
-   * Send audio data to Voice Agent
+   * Send audio data to Voice Agent with backpressure handling
    */
   sendAudio(data: Buffer | Uint8Array): boolean {
     if (!this.isConnected || !this.ws) {
@@ -471,6 +474,21 @@ export class VoiceAgentConnection extends EventEmitter {
     if (this.ws.readyState !== WebSocket.OPEN) {
       this.log('⚠️ WebSocket not open');
       return false;
+    }
+
+    // Check backpressure - drop frames instead of queuing infinitely
+    if (this.ws.bufferedAmount > this.MAX_BUFFER_SIZE) {
+      this.droppedFrameCount++;
+      
+      // Log warning every 5 seconds
+      const now = Date.now();
+      if (now - this.lastDropWarning > 5000) {
+        console.warn(`[VoiceAgent] ⚠️ Dropping frames due to backpressure. Dropped ${this.droppedFrameCount} frames. BufferedAmount: ${this.ws.bufferedAmount} bytes`);
+        this.lastDropWarning = now;
+        this.droppedFrameCount = 0;
+      }
+      
+      return false;  // Drop frame instead of queuing
     }
 
     try {
