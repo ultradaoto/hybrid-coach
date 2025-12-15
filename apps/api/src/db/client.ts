@@ -61,6 +61,12 @@ const SEED_USERS: SeedUser[] = [
     role: 'admin',
     displayName: 'Admin User',
   },
+  {
+    email: 'evvargreen@hotmail.com',
+    password: '1Sunny1',
+    role: 'client',
+    displayName: 'Mom',
+  },
 ];
 
 let seedInitialized = false;
