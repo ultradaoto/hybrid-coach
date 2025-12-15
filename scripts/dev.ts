@@ -106,6 +106,7 @@ async function dev() {
   const publicPort = numEnv('PUBLIC_PORT', 3700);
   const coachPort = numEnv('COACH_PORT', 3701);
   const clientPort = numEnv('CLIENT_PORT', 3702);
+  const adminPort = numEnv('ADMIN_PORT', 3703);
 
   // Check if LiveKit is configured
   const hasLiveKit = Boolean(
@@ -167,6 +168,18 @@ async function dev() {
     });
   }
 
+  // Web Admin
+  if (!forceSpawn && (await isPortListening(host, adminPort))) {
+    console.log(`[dev] web-admin already listening on ${host}:${adminPort}, skipping spawn (set DEV_FORCE_SPAWN=1 to override)`);
+  } else {
+    children.push({
+      proc: spawnLogged('web-admin', ['bun', 'run', 'dev', '--', '--port', String(adminPort)], {
+        cwd: join(root, 'apps', 'web-admin'),
+        env: { API_PORT: String(apiPort), ADMIN_PORT: String(adminPort) },
+      }),
+    });
+  }
+
   // AI Agent status message
   if (hasLiveKit) {
     console.log('[dev] ✅ LiveKit + Deepgram configured');
@@ -190,6 +203,7 @@ async function dev() {
   console.log('[dev]    Public:      http://localhost:' + publicPort);
   console.log('[dev]    Coach:       http://localhost:' + coachPort);
   console.log('[dev]    Client:      http://localhost:' + clientPort);
+  console.log('[dev]    Admin:       http://localhost:' + adminPort);
   console.log('[dev] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   registerShutdown(children);

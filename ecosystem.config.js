@@ -87,6 +87,15 @@ module.exports = {
         PORT: 5172,
       },
     },
+    {
+      name: 'web-admin',
+      script: 'apps/web-admin/dist/index.js',
+      interpreter: 'bun',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3703,
+      },
+    },
 
     // ═══════════════════════════════════════════════════════════════════════
     // NODE.JS SERVICE 🟢 (LiveKit Agents require Node.js)
