@@ -1,4 +1,4 @@
-# Prisma Database Status Report - December 2025
+# Prisma Database Status Report - December 2025 (UPDATED AUDIT)
 
 ## Executive Summary
 
@@ -8,6 +8,35 @@ This project uses **Prisma 5.14.0** with **PostgreSQL** as the database provider
 **Current Schema Version:** Latest migration `20251214082136_add_onboarding_fields`  
 **Total Tables:** 11 models  
 **Key Features:** Authentication, Session Management, Appointments, Ratings, Skool Integration, Onboarding
+
+### ⚠️ CRITICAL AUDIT FINDINGS (December 2025)
+
+**CURRENT STATE: DUAL SYSTEM ARCHITECTURE**
+
+The project is running **TWO parallel API systems** with different database approaches:
+
+1. **Legacy Node.js API** (`src/`) - **ACTIVE DATABASE USAGE**
+   - ✅ Full Prisma integration
+   - ✅ Stores sessions, appointments, messages, transcripts
+   - ✅ Running in production (PM2: `hybridcoach-legacy`)
+   - ⚠️ Being phased out
+
+2. **New Bun API** (`apps/api/`) - **MINIMAL DATABASE USAGE**
+   - ⚠️ Uses in-memory Map-based "database" for authentication
+   - ⚠️ **ONLY** onboarding route uses Prisma
+   - ⚠️ Sessions route: Not implemented (returns 501)
+   - ⚠️ Rooms route: In-memory only, no persistence
+   - ⚠️ Admin transcripts: Mock data only
+   - ⚠️ Running in production (PM2: `api`)
+
+3. **AI Agent** (`services/ai-agent/`) - **NO DATABASE INTEGRATION**
+   - ✅ Receives transcripts via Deepgram `ConversationText` events
+   - ✅ Broadcasts transcripts to room via LiveKit DataChannel
+   - ❌ **DOES NOT STORE** transcripts in database
+   - ❌ **DOES NOT STORE** session metadata
+   - ❌ **DOES NOT STORE** call duration/recordings
+
+**IMPACT: Session data and transcripts are TRANSIENT and not persisted!**
 
 ---
 
@@ -785,42 +814,496 @@ Opens web UI at `http://localhost:5555` to browse data.
 
 ---
 
-## Current Data Utilization
+## Current Data Utilization - AUDIT REPORT
 
-### Where Prisma is Used
+### ✅ ACTIVE DATABASE WRITES (What's Actually Being Stored)
 
-**API Routes (Bun/TypeScript):**
-- `apps/api/src/routes/onboarding.ts` - Onboarding system
+#### **New Bun API (`apps/api/`)** - PORT 3699
 
-**Legacy Routes (Node.js):**
-- `src/routes/api.js` - Main API router
-- `src/routes/coach.js` - Coach-specific routes
-- `src/routes/client.js` - Client-specific routes
-- `src/routes/schedule.js` - Appointment scheduling
-- `src/routes/room.js` - Session room management
-- `src/routes/ai.js` - AI service integration
-- `src/routes/api/profile.js` - Profile management
-- `src/routes/api/message.js` - Message handling
-- `src/routes/api/coach.js` - Coach operations
+**Routes with Prisma:**
+1. `apps/api/src/routes/onboarding.ts` ✅
+   - **WRITES:** `Profile` (upsert)
+     - `onboardingCompleted`, `onboardingCompletedAt`
+     - `intakeCoachingGoals`, `intakeSymptoms`, `intakeInitialMood`
+   - **READS:** `Profile` (findUnique)
+     - Status checks and data retrieval
 
-**Services:**
-- `src/services/userService.js` - User CRUD operations
-- `src/services/authService.js` - Authentication logic
-- `src/services/sessionTimer.js` - Session time tracking
-- `src/services/SessionSummaryHandler.js` - AI summaries
-- `src/services/aiService.js` - AI context building
-- `src/services/skoolMonitoringService.js` - Skool sync
+**Routes WITHOUT Prisma (Using In-Memory Maps):**
+- `apps/api/src/routes/auth.ts` ❌ - Uses `db/client.ts` (Map-based)
+- `apps/api/src/routes/rooms.ts` ❌ - In-memory rooms via `ws/rooms.ts`
+- `apps/api/src/routes/sessions.ts` ❌ - Returns 501 Not Implemented
+- `apps/api/src/routes/users.ts` ❌ - Uses Map-based user store
+- `apps/api/src/routes/admin.ts` ❌ - Uses mock transcript data
 
-**Controllers:**
-- `src/controllers/dashboardController.js` - Dashboard data
-- `src/controllers/sessionRatingController.js` - Ratings
+#### **Legacy Node.js API (`src/`)** - PM2: `hybridcoach-legacy`
 
-**Middleware:**
-- `src/middlewares/jwtAuth.js` - JWT validation
+**Routes with Prisma:**
+1. `src/routes/schedule.js` ✅
+   - **WRITES:** `Appointment.create()`
+   - Creates scheduled appointments
 
-**Utilities:**
-- `src/utils/sessionUtils.js` - Session helpers
-- `scripts/check-database.js` - DB health check
+2. `src/routes/coach.js` ✅
+   - **WRITES:** `Appointment.update()` (reassignment, cancellation)
+   - Updates appointment status
+
+3. `src/routes/client.js` ✅
+   - **WRITES:** `Appointment.update()` (cancellation)
+   - Cancels appointments
+
+4. `src/routes/api.js` ✅
+   - **WRITES:** `Session.update()` (transcript, aiSummary, endedAt)
+   - Stores session summaries and transcripts
+
+5. `src/routes/api/message.js` ✅
+   - **WRITES:** `Message.create()`
+   - Stores chat messages
+
+6. `src/controllers/sessionRatingController.js` ✅
+   - **WRITES:** `SessionRating.create()`
+   - Stores post-session ratings
+
+**Services with Prisma:**
+1. `src/services/sessionTimer.js` ✅
+   - **WRITES:** `Session.update()` (warningsSent, status, endedAt)
+   - Updates session state during call
+
+2. `src/services/skoolMonitoringService.js` ✅
+   - **WRITES:** `User.update()`, `SkoolMonitoringLog.create()`, `MembershipStatusHistory.create()`
+   - Syncs Skool membership data
+
+3. `src/services/userService.js` ✅
+   - **READS/WRITES:** Full user CRUD operations
+
+### ❌ MISSING DATABASE INTEGRATION (Critical Gaps)
+
+#### **AI Agent (`services/ai-agent/`)** - NO PRISMA CLIENT
+
+**Current State:**
+- ✅ Receives transcripts from Deepgram (ConversationText events)
+- ✅ Broadcasts transcripts via LiveKit DataChannel
+- ❌ **DOES NOT STORE** transcripts in `Message` or `Session` tables
+- ❌ **DOES NOT STORE** session metadata (duration, participants)
+- ❌ **DOES NOT CREATE** Session records in database
+- ❌ **DOES NOT UPDATE** Session.transcript field
+
+**Data Flow:**
+```
+LiveKit Room Audio
+    ↓
+AI Agent (Deepgram)
+    ↓
+ConversationText Event (transcript)
+    ↓
+LiveKit DataChannel (broadcast to room)
+    ↓
+[DEAD END - NOT PERSISTED TO DATABASE]
+```
+
+#### **New Bun API Rooms** - NO PERSISTENCE
+
+**Current State:**
+- ✅ Creates WebSocket rooms in memory (`ws/rooms.ts`)
+- ✅ Manages peer connections
+- ❌ **DOES NOT STORE** room creation in database
+- ❌ **DOES NOT LINK** rooms to Appointment records
+- ❌ **DOES NOT CREATE** Session records
+
+**Data Flow:**
+```
+POST /api/rooms/create
+    ↓
+createRoomId() (in-memory Map)
+    ↓
+[DEAD END - NOT PERSISTED TO DATABASE]
+```
+
+### 🔍 DATA ARCHITECTURE COMPARISON
+
+| **Feature** | **Legacy Node.js** | **New Bun API** | **AI Agent** |
+|-------------|-------------------|-----------------|--------------|
+| User Auth | Prisma (User table) | In-Memory Maps | N/A |
+| Sessions | Prisma (Session table) | Not Implemented | No DB Access |
+| Appointments | Prisma (Appointment table) | Not Implemented | No DB Access |
+| Messages | Prisma (Message table) | Not Implemented | No DB Access |
+| Transcripts | Prisma (Session.transcript) | Mock Data Only | Emits Events (Not Stored) |
+| Onboarding | Prisma (Profile table) | ✅ Prisma | N/A |
+| Room State | In-Memory | In-Memory | N/A |
+
+### 📊 ACTIVE vs INACTIVE TABLES
+
+**ACTIVELY USED (Getting Data):**
+- ✅ `User` - Legacy API only (auth, Skool sync)
+- ✅ `Profile` - Bun API (onboarding) + Legacy API
+- ✅ `Appointment` - Legacy API only (scheduling, cancellation)
+- ✅ `Session` - Legacy API only (session tracking, summaries)
+- ✅ `Message` - Legacy API only (chat storage)
+- ✅ `SessionRating` - Legacy API only (post-session feedback)
+- ✅ `SkoolMonitoringLog` - Legacy API only (Skool sync)
+- ✅ `MembershipStatusHistory` - Legacy API only (Skool sync)
+- ⚠️ `AuthCode` - Defined in schema, **NOT USED** anywhere in code
+- ⚠️ `UserSession` - Defined in schema, **NOT USED** anywhere in code  
+- ⚠️ `RateLimit` - Defined in schema, **NOT USED** anywhere in code
+
+**DEAD/UNUSED TABLES:**
+- ❌ `AuthCode` - Created in migration but no routes use it
+- ❌ `UserSession` - Created in migration but no routes use it
+- ❌ `RateLimit` - Created in migration but no routes use it
+
+---
+
+## 🚨 PRIORITY RECOMMENDATIONS FOR TRANSCRIPT & CALL LOGGING
+
+### Critical Implementation Needed
+
+Based on the audit, here are the **IMMEDIATE** actions needed to enable proper call logging and transcript storage:
+
+---
+
+### 1. **Add Prisma Client to AI Agent** (HIGH PRIORITY)
+
+**Current Problem:**
+- AI Agent receives all transcripts but has NO database access
+- Transcripts are broadcast via LiveKit but never persisted
+- Session metadata (duration, participants) is lost after session ends
+
+**Required Changes:**
+
+**A. Install Prisma in AI Agent:**
+```bash
+cd services/ai-agent
+npm install @prisma/client
+```
+
+**B. Create Database Service** (`services/ai-agent/src/db/prisma.ts`):
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+export const prisma = globalForPrisma.prisma || new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+**C. Integrate in LiveKit Agent** (`services/ai-agent/src/livekit-agent.ts`):
+
+Add session creation when room connects:
+```typescript
+import { prisma } from './db/prisma.js';
+
+class LiveKitAgent {
+  private sessionId: string | null = null;
+  
+  async connect() {
+    // Existing connection code...
+    
+    // CREATE session record
+    const session = await prisma.session.create({
+      data: {
+        roomId: this.config.roomName,
+        userId: 'system', // Or participant ID
+        status: 'active',
+        startedAt: new Date(),
+        durationMinutes: 30, // Expected duration
+      }
+    });
+    this.sessionId = session.id;
+  }
+}
+```
+
+Add transcript storage when received:
+```typescript
+private handleDataReceived(payload: Uint8Array, participant?: RemoteParticipant) {
+  const message = JSON.parse(new TextDecoder().decode(payload));
+  
+  if (message.type === 'transcript') {
+    // STORE transcript in database
+    await prisma.message.create({
+      data: {
+        sessionId: this.sessionId!,
+        userId: participant?.identity ?? 'unknown',
+        sender: message.role === 'assistant' ? 'ai' : 'client',
+        content: message.content,
+      }
+    });
+  }
+}
+```
+
+Add session completion:
+```typescript
+async disconnect() {
+  // FINALIZE session record
+  if (this.sessionId) {
+    const messages = await prisma.message.findMany({
+      where: { sessionId: this.sessionId },
+      orderBy: { createdAt: 'asc' }
+    });
+    
+    const transcript = messages
+      .map(m => `${m.sender}: ${m.content}`)
+      .join('\n');
+    
+    await prisma.session.update({
+      where: { id: this.sessionId },
+      data: {
+        status: 'completed',
+        endedAt: new Date(),
+        transcript: transcript,
+      }
+    });
+  }
+  
+  // Existing disconnect code...
+}
+```
+
+---
+
+### 2. **Implement Sessions API in Bun** (HIGH PRIORITY)
+
+**Current Problem:**
+- `apps/api/src/routes/sessions.ts` returns 501 Not Implemented
+- No way to query session history via API
+- Admin dashboard shows mock transcript data
+
+**Required Implementation:**
+
+**File:** `apps/api/src/routes/sessions.ts`
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+import { jsonResponse } from '../middleware/cors';
+import type { AuthUser } from '../middleware/auth';
+
+const prisma = new PrismaClient();
+
+export async function sessionsRoutes(req: Request, user: AuthUser): Promise<Response> {
+  const url = new URL(req.url);
+  const path = url.pathname;
+  const method = req.method;
+
+  // GET /api/sessions - List user's sessions
+  if (path === '/api/sessions' && method === 'GET') {
+    try {
+      const sessions = await prisma.session.findMany({
+        where: { userId: user.id },
+        orderBy: { startedAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          roomId: true,
+          startedAt: true,
+          endedAt: true,
+          status: true,
+          durationMinutes: true,
+        }
+      });
+      
+      return jsonResponse({ success: true, data: sessions });
+    } catch (err) {
+      return jsonResponse({ success: false, error: 'Failed to fetch sessions' }, { status: 500 });
+    }
+  }
+
+  // GET /api/sessions/:id - Get session details with transcript
+  const match = path.match(/^\/api\/sessions\/([^/]+)$/);
+  if (match && method === 'GET') {
+    const sessionId = match[1];
+    
+    try {
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          messages: {
+            orderBy: { createdAt: 'asc' }
+          },
+          rating: true,
+        }
+      });
+      
+      if (!session) {
+        return jsonResponse({ success: false, error: 'Session not found' }, { status: 404 });
+      }
+      
+      // Check authorization
+      if (session.userId !== user.id && user.role !== 'admin' && user.role !== 'coach') {
+        return jsonResponse({ success: false, error: 'Unauthorized' }, { status: 403 });
+      }
+      
+      return jsonResponse({ success: true, data: session });
+    } catch (err) {
+      return jsonResponse({ success: false, error: 'Failed to fetch session' }, { status: 500 });
+    }
+  }
+
+  return jsonResponse({ success: false, error: 'Not Found' }, { status: 404 });
+}
+```
+
+---
+
+### 3. **Link Rooms to Database** (MEDIUM PRIORITY)
+
+**Current Problem:**
+- Rooms are created in-memory only
+- No relationship between WebSocket rooms and database records
+- Can't track which coach/client was in which room
+
+**Required Changes:**
+
+**Option A: Store Room Metadata in Database**
+
+Add to `apps/api/src/routes/rooms.ts`:
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+// POST /api/rooms/create
+if (path === '/api/rooms/create' && method === 'POST') {
+  const roomId = createRoomId();
+  
+  // STORE room creation in database
+  await prisma.session.create({
+    data: {
+      roomId,
+      userId: user.id,
+      status: 'active',
+      startedAt: new Date(),
+      durationMinutes: 30,
+    }
+  });
+  
+  const joinUrls = getJoinUrls(roomId);
+  return jsonResponse({
+    success: true,
+    data: { roomId, joinUrls, createdBy: { id: user.id, role: user.role } },
+  });
+}
+```
+
+**Option B: Create Dedicated Room Table**
+
+Add new model to `prisma/schema.prisma`:
+```prisma
+model Room {
+  id            String   @id @default(cuid())
+  roomId        String   @unique
+  createdBy     String   // User ID who created room
+  createdAt     DateTime @default(now())
+  closedAt      DateTime?
+  status        String   @default("active") // active, closed
+  participants  Json     // Array of participant IDs
+  
+  creator       User     @relation(fields: [createdBy], references: [id])
+  sessions      Session[]
+  
+  @@index([roomId, status])
+}
+```
+
+---
+
+### 4. **Unified User Authentication** (MEDIUM PRIORITY)
+
+**Current Problem:**
+- New Bun API uses in-memory Maps for auth
+- Legacy API uses Prisma User table
+- Two separate authentication systems
+
+**Recommended Solution:**
+
+Migrate Bun API to use Prisma for user auth:
+
+**File:** `apps/api/src/db/client.ts` (REPLACE)
+
+```typescript
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+export async function getUserByEmail(email: string) {
+  return await prisma.user.findUnique({
+    where: { email: email.toLowerCase() }
+  });
+}
+
+export async function getUserById(id: string) {
+  return await prisma.user.findUnique({
+    where: { id }
+  });
+}
+
+export async function upsertUser(userData: any) {
+  return await prisma.user.upsert({
+    where: { email: userData.email.toLowerCase() },
+    update: userData,
+    create: userData,
+  });
+}
+```
+
+---
+
+### 5. **Real-Time Transcript Streaming** (LOW PRIORITY - Nice to Have)
+
+**Enhancement:** Stream transcripts to database in real-time as they arrive
+
+**File:** `services/ai-agent/src/connections/connection-manager.ts`
+
+```typescript
+// Listen for conversation-text events
+this.voiceAgent.on('conversation-text', async (entry: TranscriptEntry) => {
+  // STORE transcript immediately
+  await prisma.message.create({
+    data: {
+      sessionId: this.sessionId,
+      userId: entry.participantId,
+      sender: entry.role === 'assistant' ? 'ai' : 'client',
+      content: entry.content,
+    }
+  });
+  
+  // Emit for real-time display
+  this.emit('conversation-text', entry);
+});
+```
+
+---
+
+### Implementation Checklist
+
+**Phase 1: Core Logging** (Do FIRST)
+- [ ] Add Prisma to AI Agent (`services/ai-agent/`)
+- [ ] Create session records when room connects
+- [ ] Store messages/transcripts as they arrive
+- [ ] Finalize session on disconnect
+
+**Phase 2: API Integration** (Do SECOND)
+- [ ] Implement Sessions API (`apps/api/src/routes/sessions.ts`)
+- [ ] Add session history endpoint
+- [ ] Add transcript retrieval endpoint
+- [ ] Update Admin dashboard to use real data
+
+**Phase 3: Room Persistence** (Do THIRD)
+- [ ] Link rooms to database sessions
+- [ ] Track room participants
+- [ ] Store room metadata
+
+**Phase 4: Auth Migration** (Do LAST)
+- [ ] Migrate Bun API auth to Prisma
+- [ ] Remove in-memory Maps
+- [ ] Consolidate user management
 
 ---
 
@@ -1335,7 +1818,56 @@ await prisma.$transaction([
 
 ---
 
-**Report Generated:** December 2025  
+## 📋 AUDIT SUMMARY
+
+### Current Database Usage Status
+
+| **Component** | **Prisma Status** | **Data Persistence** | **Priority Fix** |
+|--------------|------------------|---------------------|------------------|
+| **AI Agent** | ❌ Not Connected | ❌ Transcripts NOT stored | 🔴 CRITICAL |
+| **Bun API (New)** | ⚠️ Partial (Onboarding only) | ⚠️ Minimal persistence | 🟠 HIGH |
+| **Legacy API** | ✅ Full Integration | ✅ All data persisted | 🟢 Working |
+| **LiveKit Rooms** | ❌ In-Memory Only | ❌ No persistence | 🟠 HIGH |
+
+### Key Findings
+
+**✅ What's Working:**
+- Legacy Node.js API has full Prisma integration
+- Onboarding flow stores data correctly
+- Skool synchronization working
+- User/Profile management working (Legacy API only)
+
+**❌ Critical Gaps:**
+- **NO transcript storage** - AI Agent receives transcripts but doesn't save them
+- **NO session logging** - LiveKit sessions are not recorded in database
+- **NO call duration tracking** - Session metadata is lost after disconnect
+- **Dual authentication systems** - In-memory auth in new API, Prisma in legacy
+
+### Next Steps for Implementation
+
+1. **Install Prisma in AI Agent** - Enable database writes from the service that has the transcripts
+2. **Implement Sessions API** - Create endpoints to query session history and transcripts
+3. **Link Rooms to Database** - Persist room creation and participant tracking
+4. **Consolidate Auth** - Migrate new Bun API to use Prisma instead of in-memory Maps
+
+### Data Architecture Recommendation
+
+**Current:** Dual system (Legacy + New Bun API) running in parallel  
+**Target:** Unified Bun API with full Prisma integration, deprecate legacy system
+
+**Migration Path:**
+1. Add missing Prisma integrations to new Bun API
+2. Port remaining legacy routes to Bun API
+3. Test thoroughly
+4. Deprecate legacy Node.js API
+5. Remove in-memory database workarounds
+
+---
+
+**Report Generated:** December 15, 2025 (UPDATED AUDIT)  
 **Schema Version:** v1.0 (Migration: 20251214082136_add_onboarding_fields)  
 **Database:** PostgreSQL (localhost:5432/hybridcoach_dev)  
-**Prisma Version:** 5.14.0
+**Prisma Version:** 5.14.0  
+**Audit Performed By:** Database Architecture Review
+
+**Status:** 🟡 Database schema is solid, but actual usage is minimal. Priority implementation needed for transcript storage and session logging.
