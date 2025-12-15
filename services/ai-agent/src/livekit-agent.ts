@@ -110,10 +110,10 @@ export class LiveKitAgent extends EventEmitter {
   private playbackInterval: ReturnType<typeof setInterval> | null = null;
   private isPlaybackActive = false;
   
-  // Buffer configuration (based on Deepgram recommendation: 100-200ms)
+  // Buffer configuration - increased to 250ms for smoother playback
   private readonly FRAME_DURATION_MS = 20;          // Each frame is 20ms
-  private readonly BUFFER_TARGET_MS = 150;          // Buffer 150ms before starting
-  private readonly FRAMES_TO_BUFFER = Math.ceil(150 / 20); // ~8 frames (can't use this. in field initializers)
+  private readonly BUFFER_TARGET_MS = 250;          // Buffer 250ms before starting (was 150ms)
+  private readonly FRAMES_TO_BUFFER = Math.ceil(250 / 20); // ~13 frames for extra smoothness
   private readonly OUTPUT_SAMPLE_RATE = 24000;
   private readonly SAMPLES_PER_FRAME = (24000 * 20) / 1000; // 480 samples per 20ms frame
   
