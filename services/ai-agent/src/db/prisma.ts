@@ -80,17 +80,31 @@ export async function createAgentSession(params: CreateSessionParams): Promise<s
       }
     }
 
-    // Create session
+    // Create session - build data object explicitly to satisfy TypeScript
+    const sessionData: {
+      roomId: string;
+      userId: string;
+      appointmentId?: string;
+      status: string;
+      startedAt: Date;
+      durationMinutes: number;
+      warningsSent: number;
+    } = {
+      roomId: params.roomId,
+      userId: clientUserId || 'ai-session', // Fallback for ad-hoc sessions
+      status: 'active',
+      startedAt: new Date(),
+      durationMinutes: 30, // Expected duration, will be updated on completion
+      warningsSent: 0,
+    };
+    
+    // Only add appointmentId if it exists
+    if (appointmentId) {
+      sessionData.appointmentId = appointmentId;
+    }
+    
     const session = await prisma.session.create({
-      data: {
-        roomId: params.roomId,
-        userId: clientUserId || 'ai-session', // Fallback for ad-hoc sessions
-        appointmentId: appointmentId || undefined,
-        status: 'active',
-        startedAt: new Date(),
-        durationMinutes: 30, // Expected duration, will be updated on completion
-        warningsSent: 0,
-      },
+      data: sessionData as any, // Type assertion needed due to Prisma's strict typing
     });
 
     console.log(`[DB] ✅ Session created: ${session.id} for room: ${params.roomId}`);
@@ -108,13 +122,24 @@ export async function createAgentSession(params: CreateSessionParams): Promise<s
  */
 export async function storeMessage(params: MessageParams): Promise<boolean> {
   try {
+    // Build message data explicitly to satisfy TypeScript
+    const messageData: {
+      sessionId: string;
+      userId?: string;
+      sender: 'client' | 'coach' | 'ai';
+      content: string;
+    } = {
+      sessionId: params.sessionId,
+      sender: params.sender,
+      content: params.content,
+    };
+    
+    if (params.userId) {
+      messageData.userId = params.userId;
+    }
+    
     await prisma.message.create({
-      data: {
-        sessionId: params.sessionId,
-        userId: params.userId || undefined,
-        sender: params.sender,
-        content: params.content,
-      },
+      data: messageData as any, // Type assertion needed due to Prisma's strict typing
     });
 
     // Log sparingly to avoid spam
