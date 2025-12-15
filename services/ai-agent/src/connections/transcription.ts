@@ -82,7 +82,7 @@ export class TranscriptionConnection extends EventEmitter {
   constructor(config: TranscriptionConfig) {
     super();
     this.config = {
-      model: 'nova-3',
+      model: 'nova-2',  // Use nova-2 (stable) - nova-3 not available for Listen API
       language: 'en-US',
       punctuate: true,
       interimResults: true,

@@ -81,7 +81,7 @@ export function getDeepgramSttUrl(config: AudioConfig = OPUS_CONFIG): string {
     encoding: config.encoding,
     sample_rate: config.sampleRate.toString(),
     channels: config.channels.toString(),
-    model: 'nova-3',
+    model: 'nova-2',  // Use nova-2 (stable) - nova-3 not yet available for Listen API
     punctuate: 'true',
     interim_results: 'true',
     utterance_end_ms: '500', // Phase 2: Reduced from 1000ms to 500ms for faster transcripts
