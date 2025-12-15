@@ -34,6 +34,7 @@ const envPath = path.resolve(__dirname, '../../../.env');
 dotenv.config({ path: envPath });
 
 import { createLiveKitAgent, type LiveKitAgent } from './livekit-agent.js';
+import { cleanupAbandonedSessions } from './db/index.js';
 
 // =============================================================================
 // Banner
@@ -275,6 +276,13 @@ async function main(): Promise<void> {
   try {
     // Validate environment
     validateEnvironment();
+
+    // Clean up any abandoned sessions from previous crashes
+    console.log('[Startup] Checking for abandoned sessions...');
+    const cleaned = await cleanupAbandonedSessions();
+    if (cleaned > 0) {
+      console.log(`[Startup] Cleaned up ${cleaned} abandoned sessions`);
+    }
 
     // Parse CLI arguments
     const config = parseArgs();

@@ -186,15 +186,20 @@ export class VoiceAgentConnection extends EventEmitter {
    * Reference: https://developers.deepgram.com/docs/configure-voice-agent
    * 
    * CONFIRMED SETTINGS FROM DEEPGRAM SUPPORT:
-   * - STT Model: nova-3 (NOT nova-2)
+   * - STT Model: nova-3-medical (optimized for health/wellness conversations)
    * - TTS Model: aura-2-thalia-en (NOT aura-asteria-en)
    * - Sample Rate: 24000 (recommended, NOT 16000)
+   * - Keyterms: Boosts recognition of wellness-specific vocabulary
+   * - Language: 'en' required (nova-3-medical only supports English locales)
    * - endpointing/utterance_end_ms: NOT valid in Voice Agent (only for Listen API)
    * - Voice Agent handles turn detection internally
    */
   private sendSettings(): void {
+    // Get STT model from environment (default to nova-3-medical)
+    const sttModel = process.env.DEEPGRAM_STT_MODEL || 'nova-3-medical';
+    
     // Build settings object matching Deepgram Voice Agent API v1 format
-    // Using CONFIRMED values from Deepgram support
+    // Using CONFIRMED values from Deepgram support + nova-3-medical for health vocabulary
     const settings: Record<string, unknown> = {
       type: 'Settings',
       audio: {
@@ -209,11 +214,135 @@ export class VoiceAgentConnection extends EventEmitter {
         },
       },
       agent: {
-        language: 'en',  // ✅ Added per Deepgram guidance
+        language: 'en',  // ✅ REQUIRED - nova-3-medical only supports English locales
         listen: {
           provider: {
             type: 'deepgram',
-            model: 'nova-3',  // ✅ Confirmed by Deepgram (was nova-2)
+            model: sttModel,  // ✅ nova-3-medical for health/wellness conversations
+            // Keyterms boost recognition of specific wellness/medical vocabulary
+            // CRITICAL: "vagus" and "vagus nerve" are emphasized to prevent "Vegas" misrecognition
+            keyterms: [
+              // === CRITICAL: Vagus Nerve (NOT Vegas!) ===
+              'vagus',
+              'vagus nerve',
+              'vagal',
+              'vagal tone',
+              'vagus nerve stimulation',
+              'polyvagal',
+              'polyvagal theory',
+              
+              // === Wellness & Stress Management ===
+              'cortisol',
+              'mindfulness',
+              'meditation',
+              'breathwork',
+              'breath work',
+              'breathing exercises',
+              'parasympathetic',
+              'sympathetic',
+              'nervous system',
+              'autonomic nervous system',
+              'HRV',
+              'heart rate variability',
+              'biofeedback',
+              'neurofeedback',
+              
+              // === Mental Health & Trauma ===
+              'anxiety',
+              'depression',
+              'PTSD',
+              'trauma',
+              'traumatic',
+              'dysregulation',
+              'regulation',
+              'emotional regulation',
+              'somatic',
+              'somatic experiencing',
+              'body scan',
+              'grounding',
+              'grounding techniques',
+              
+              // === Sleep & Circadian Rhythm ===
+              'circadian',
+              'circadian rhythm',
+              'melatonin',
+              'insomnia',
+              'sleep hygiene',
+              'sleep quality',
+              'REM sleep',
+              'deep sleep',
+              
+              // === Nutrition & Gut Health ===
+              'inflammation',
+              'anti-inflammatory',
+              'gut health',
+              'microbiome',
+              'gut-brain axis',
+              'adaptogens',
+              'supplements',
+              'probiotics',
+              'prebiotics',
+              
+              // === Physical Health & Pain ===
+              'chronic pain',
+              'chronic fatigue',
+              'autoimmune',
+              'thyroid',
+              'adrenal',
+              'adrenal fatigue',
+              'burnout',
+              'fibromyalgia',
+              'neuropathy',
+              
+              // === Holistic Wellness ===
+              'holistic',
+              'integrative',
+              'functional medicine',
+              'naturopathic',
+              'acupuncture',
+              'chiropractic',
+              'osteopathy',
+              
+              // === Exercise & Movement ===
+              'yoga',
+              'tai chi',
+              'qigong',
+              'pilates',
+              'fascia',
+              'myofascial',
+              'stretching',
+              'mobility',
+              
+              // === Cognitive & Brain Health ===
+              'neuroplasticity',
+              'cognitive',
+              'executive function',
+              'brain fog',
+              'ADHD',
+              'attention deficit',
+              'dopamine',
+              'serotonin',
+              'norepinephrine',
+              
+              // === Specific Wellness Practices ===
+              'cold exposure',
+              'ice bath',
+              'Wim Hof',
+              'cold plunge',
+              'sauna',
+              'infrared sauna',
+              'heat therapy',
+              'forest bathing',
+              'earthing',
+              'grounding',
+              
+              // === Ultra Coach Specific ===
+              'Ultra Coach',
+              'MyUltra',
+              'wellness coaching',
+              'life coaching',
+              'health coaching',
+            ],
           },
           // NOTE: endpointing and utterance_end_ms are NOT supported in Voice Agent API
           // Voice Agent handles turn detection internally
@@ -237,9 +366,9 @@ export class VoiceAgentConnection extends EventEmitter {
     };
 
     const settingsJson = JSON.stringify(settings, null, 2);
-    console.log('[VoiceAgent] 📤 Sending DEEPGRAM-CONFIRMED settings:', settingsJson);
+    console.log(`[VoiceAgent] 📤 Sending settings with ${sttModel}:`, settingsJson);
     this.ws?.send(JSON.stringify(settings));
-    console.log('[VoiceAgent] ⚙️ Settings sent with nova-3 + aura-2-thalia-en + 24kHz');
+    console.log(`[VoiceAgent] ⚙️ Settings sent: ${sttModel} + aura-2-thalia-en + 24kHz + ${(settings.agent as any).listen.provider.keyterms.length} keyterms`);
   }
 
   /**

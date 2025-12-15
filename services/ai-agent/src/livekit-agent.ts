@@ -47,6 +47,13 @@ import {
 import { AccessToken, VideoGrant } from 'livekit-server-sdk';
 import { DualConnectionManager, createDualConnectionManager } from './connections/connection-manager.js';
 import type { TranscriptEntry } from './types/deepgram-events.js';
+import {
+  createAgentSession,
+  storeMessage,
+  completeSession,
+  parseParticipantIdentity,
+  cleanupAbandonedSessions,
+} from './db/index.js';
 
 // =============================================================================
 // Types
@@ -156,6 +163,16 @@ export class LiveKitAgent extends EventEmitter {
   private isProcessingAudio = false;
   private readonly MAX_QUEUE_SIZE = 500; // Phase 2: Increased from 100 to 500
 
+  // Phase 3: Database session tracking
+  private dbSessionId: string | null = null;
+  private messageBuffer: Array<{
+    content: string;
+    sender: 'client' | 'coach' | 'ai';
+    userId?: string;
+    timestamp: Date;
+  }> = [];
+  private isStoringMessages: boolean = true;
+
   constructor(config: LiveKitAgentConfig) {
     super();
     this.config = config;
@@ -212,6 +229,41 @@ export class LiveKitAgent extends EventEmitter {
 
       // Set up audio publication
       await this.setupAudioPublication();
+
+      // ================================================
+      // DATABASE: Create session for this room
+      // ================================================
+      try {
+        // Clean up any abandoned sessions for this room first
+        await cleanupAbandonedSessions(this.config.roomName);
+        
+        // Find the first non-AI participant to use as session owner
+        let primaryUserId: string | undefined;
+        for (const [identity, participant] of this.room.remoteParticipants) {
+          const parsed = parseParticipantIdentity(identity);
+          if (parsed.role !== 'ai' && parsed.userId) {
+            primaryUserId = parsed.userId;
+            break;
+          }
+        }
+        
+        // Create database session
+        this.dbSessionId = await createAgentSession({
+          roomId: this.config.roomName,
+          userId: primaryUserId,
+          // appointmentId will be auto-detected from room linkage
+        });
+        
+        if (this.dbSessionId) {
+          console.log(`[Agent] Database session initialized: ${this.dbSessionId}`);
+        } else {
+          console.warn('[Agent] Running without database session (messages will not be stored)');
+        }
+      } catch (error) {
+        console.error('[Agent] Database session creation failed:', error);
+        // Continue anyway - agent should work even if DB fails
+      }
+      // ================================================
 
       this.emit('connected');
 
@@ -371,8 +423,8 @@ export class LiveKitAgent extends EventEmitter {
     });
 
     // Handle conversation transcripts
-    this.connectionManager.on('conversation-text', (entry: TranscriptEntry) => {
-      this.broadcastTranscript(entry);
+    this.connectionManager.on('conversation-text', async (entry: TranscriptEntry) => {
+      await this.broadcastTranscript(entry);
     });
 
     // Handle agent speaking state
@@ -1028,7 +1080,7 @@ export class LiveKitAgent extends EventEmitter {
   /**
    * Broadcast transcript to all participants
    */
-  private broadcastTranscript(entry: TranscriptEntry): void {
+  private async broadcastTranscript(entry: TranscriptEntry): Promise<void> {
     if (!this.room?.localParticipant) return;
 
     const message = {
@@ -1040,6 +1092,36 @@ export class LiveKitAgent extends EventEmitter {
 
     const data = new TextEncoder().encode(JSON.stringify(message));
     this.room.localParticipant.publishData(data, { reliable: true });
+
+    // ================================================
+    // DATABASE: Store transcript message
+    // ================================================
+    if (this.dbSessionId && this.isStoringMessages && entry.content?.trim() && entry.isFinal) {
+      try {
+        // Map role to our database schema
+        const sender: 'client' | 'coach' | 'ai' = 
+          entry.role === 'assistant' ? 'ai' :
+          entry.role === 'coach' ? 'coach' : 'client';
+        
+        await storeMessage({
+          sessionId: this.dbSessionId,
+          content: entry.content.trim(),
+          sender,
+          userId: undefined, // Could extract from entry.sessionId if needed
+        });
+      } catch (error) {
+        console.error('[Agent] Failed to store message:', error);
+        // Buffer for potential retry
+        this.messageBuffer.push({
+          content: entry.content,
+          sender: entry.role === 'assistant' ? 'ai' : 
+                  entry.role === 'coach' ? 'coach' : 'client',
+          userId: undefined,
+          timestamp: new Date(),
+        });
+      }
+    }
+    // ================================================
   }
 
   /**
@@ -1134,6 +1216,37 @@ export class LiveKitAgent extends EventEmitter {
    */
   async disconnect(): Promise<void> {
     console.log('[LiveKitAgent] 🔌 Disconnecting...');
+
+    // ================================================
+    // DATABASE: Complete session
+    // ================================================
+    if (this.dbSessionId) {
+      try {
+        // Flush any buffered messages first
+        for (const msg of this.messageBuffer) {
+          await storeMessage({
+            sessionId: this.dbSessionId,
+            content: msg.content,
+            sender: msg.sender,
+            userId: msg.userId,
+          });
+        }
+        this.messageBuffer = [];
+        
+        // Complete the session with transcript
+        await completeSession(this.dbSessionId, {
+          generateTranscript: true,
+          // aiSummary: await this.generateSessionSummary(), // Optional: add summary generation
+        });
+        
+        console.log(`[Agent] Database session completed: ${this.dbSessionId}`);
+      } catch (error) {
+        console.error('[Agent] Failed to complete database session:', error);
+      } finally {
+        this.dbSessionId = null;
+      }
+    }
+    // ================================================
 
     // Clear any pending shutdown timer
     if (this.shutdownTimer) {
