@@ -95,6 +95,7 @@ export class LiveKitAgent extends EventEmitter {
   private audioSource: AudioSource | null = null;
   private audioTrack: LocalAudioTrack | null = null;
   private isPublishing: boolean = false;
+  private audioFramesSent: number = 0;
   private mutedParticipants: Set<string> = new Set();
   private participantRoles: Map<string, 'client' | 'coach'> = new Map();
   private identity: string;
@@ -606,6 +607,7 @@ export class LiveKitAgent extends EventEmitter {
     
     // Block AI audio output when paused
     if (this.isAIPaused) {
+      console.log('[LiveKitAgent] ⚠️ Cannot publish audio: AI is paused');
       return;
     }
 
@@ -628,6 +630,13 @@ export class LiveKitAgent extends EventEmitter {
     // Create audio frame and capture it (async with error handling)
     // Sample rate must match AudioSource (24000 Hz)
     const frame = new AudioFrame(samples, 24000, 1, samples.length);  // ✅ Changed from 16000 to 24000
+    
+    // Track successful captures for debugging
+    this.audioFramesSent = (this.audioFramesSent || 0) + 1;
+    if (this.audioFramesSent % 100 === 1) {
+      console.log(`[LiveKitAgent] 🔊 Publishing AI audio: frame ${this.audioFramesSent} (${samples.length} samples)`);
+    }
+    
     audioSource.captureFrame(frame).catch((error: Error) => {
       // Only log if we're still supposed to be publishing
       if (this.isPublishing) {
