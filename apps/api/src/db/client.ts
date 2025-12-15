@@ -54,6 +54,13 @@ const SEED_USERS: SeedUser[] = [
     role: 'coach',
     displayName: 'Ultra Coach',
   },
+  // Admin user - add your email to ADMIN_EMAILS env var to enable admin login
+  {
+    email: 'admin@myultra.coach',
+    password: 'MOONshot1!',
+    role: 'admin',
+    displayName: 'Admin User',
+  },
 ];
 
 let seedInitialized = false;
@@ -79,7 +86,7 @@ export async function initSeedUsers(hashFn: (password: string, salt: string) => 
       email,
       displayName: seed.displayName,
       role: seed.role,
-      membershipTier: seed.role === 'coach' ? 'PREMIUM' : 'VAGUS_MEMBER',
+      membershipTier: seed.role === 'coach' || seed.role === 'admin' ? 'PREMIUM' : 'VAGUS_MEMBER',
       passwordHash,
       passwordSalt: salt,
       createdAt: nowIso(),

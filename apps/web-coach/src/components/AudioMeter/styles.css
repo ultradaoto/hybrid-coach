@@ -1,0 +1,139 @@
+/**
+ * AudioMeter Styles
+ */
+
+.audio-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Size variants */
+.audio-meter-small {
+  font-size: 0.75rem;
+}
+
+.audio-meter-medium {
+  font-size: 0.85rem;
+}
+
+.audio-meter-large {
+  font-size: 1rem;
+}
+
+/* Label */
+.audio-meter-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.audio-meter-value {
+  font-size: 0.8em;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bar container */
+.audio-meter-bar-container {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.audio-meter-small .audio-meter-bar-container {
+  height: 6px;
+}
+
+.audio-meter-large .audio-meter-bar-container {
+  height: 10px;
+}
+
+/* Background track */
+.audio-meter-track {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+/* Current level fill */
+.audio-meter-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 4px;
+  transition: 
+    width 50ms ease-out,
+    background-color 200ms ease,
+    box-shadow 200ms ease;
+  will-change: width;
+}
+
+/* Peak indicator */
+.audio-meter-peak {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  border-left: 2px solid #fff;
+  opacity: 0.7;
+  pointer-events: none;
+  transition: left 100ms ease-out, border-color 200ms ease;
+  z-index: 2;
+}
+
+/* Threshold markers */
+.audio-meter-threshold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Status text */
+.audio-meter-status {
+  font-size: 0.75em;
+  font-weight: 600;
+  text-align: center;
+  animation: pulse-warning 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Compact mode for inline display */
+.audio-meter-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.audio-meter-inline .audio-meter-bar-container {
+  flex: 1;
+  min-width: 80px;
+}
+
+.audio-meter-inline .audio-meter-label {
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.audio-meter-inline .audio-meter-status {
+  white-space: nowrap;
+  min-width: fit-content;
+}

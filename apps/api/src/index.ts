@@ -110,6 +110,11 @@ Bun.serve<WsData>({
     }
 
     if (path.startsWith('/api/admin')) {
+      // Admin login doesn't require auth
+      if (path === '/api/admin/login') {
+        return adminRoutes(req);
+      }
+      // All other admin routes require admin auth
       const authResult = await authMiddleware(req, 'admin');
       if (!authResult.success) return authResult.response;
       return adminRoutes(req, authResult.user);

@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String                    @id @default(cuid())
+  googleId                String                    @unique
+  email                   String                    @unique
+  displayName             String
+  role                    String
+  googleTokens            Json?
+  isAvailable             Boolean                   @default(true)
+  coachLevel              Int?
+  coachName               String?
+  lastSkoolSync           DateTime?
+  membershipEndDate       DateTime?
+  membershipWarningShown  Boolean                   @default(false)
+  skoolUltraEmail         String?
+  skoolVagusEmail         String?
+  ultraSubscriptionStatus String?
+  vagusSubscriptionStatus String?
+  // 🖼️ SKOOL PROFILE PHOTO FIELDS
+  skoolProfileUrl         String?
+  skoolProfilePhotoUrl    String?  // Original Skool photo URL
+  profilePhotoPath        String?  // Local storage path
+  skoolBio               String?   // Member's bio/description
+  skoolJoinedDate        DateTime? // When they joined Skool
+  lastPhotoSync          DateTime? // Last photo download
+  clientAppointments      Appointment[]             @relation("Client")
+  coachAppointments       Appointment[]             @relation("Coach")
+  membershipHistory       MembershipStatusHistory[]
+  messages                Message[]
+  profile                 Profile?
+  sessions                Session[]
+}
+
+model Profile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  bioJson      Json?
+  // 🎯 CLIENT CONTEXT FIELDS
+  clientFacts  String[] @default([])
+  challenges   String[] @default([])
+  preferences  Json?
+  lastSummary  String?
+  contextNotes String?
+  // 🚀 ONBOARDING FIELDS
+  onboardingCompleted  Boolean   @default(false)
+  onboardingCompletedAt DateTime?
+  intakeCoachingGoals  String?   // What they hope to get from coaching
+  intakeSymptoms       String?   // Health symptoms they experience
+  intakeInitialMood    Int?      // 1-5 star mood rating at onboarding
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model Session {
+  id              String         @id @default(cuid())
+  roomId          String
+  startedAt       DateTime       @default(now())
+  endedAt         DateTime?
+  userId          String
+  summary         String?
+  appointmentId   String
+  // 🎯 SESSION MANAGEMENT FIELDS
+  durationMinutes Int            @default(20)
+  transcript      String?
+  aiSummary       String?
+  status          String         @default("active")
+  warningsSent    Int            @default(0)
+  rating          SessionRating?
+  messages        Message[]
+  appointment     Appointment    @relation(fields: [appointmentId], references: [id])
+  user            User           @relation(fields: [userId], references: [id])
+
+  @@unique([appointmentId, userId], name: "appointment_user")
+}
+
+model SessionRating {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  rating    Int      // 1-5 stars
+  comment   String?  // Optional feedback
+  tipAmount Float?   // $1, $3, or $5
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  sender    String
+  content   String
+  createdAt DateTime @default(now())
+  userId    String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Appointment {
+  id           String    @id @default(cuid())
+  scheduledFor DateTime
+  durationMin  Int       @default(30)
+  clientId     String
+  coachId      String
+  roomId       String    @unique
+  status       String    @default("scheduled")
+  cancelledAt  DateTime?
+  cancelledBy  String?
+  createdAt    DateTime  @default(now())
+  client       User      @relation("Client", fields: [clientId], references: [id])
+  coach        User      @relation("Coach", fields: [coachId], references: [id])
+  sessions     Session[]
+}
+
+model SkoolMonitoringLog {
+  id               Int      @id @default(autoincrement())
+  community        String
+  membersFound     Int
+  newMembers       Int
+  cancelledMembers Int
+  syncDurationMs   Int
+  success          Boolean
+  errorMessage     String?
+  executedAt       DateTime @default(now())
+}
+
+model MembershipStatusHistory {
+  id               String   @id @default(cuid())
+  userId           String
+  community        String
+  previousStatus   String?
+  newStatus        String
+  changeDetectedAt DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id])
+}
+
+// 🔐 SKOOL AUTHENTICATION SYSTEM
+model AuthCode {
+  id                 String         @id @default(cuid())
+  code               String         @unique // vgs-1703123456789-abc123
+  skoolUserId        String         // From Skool profile
+  skoolUsername      String         // Display name from Skool
+  generatedAt        DateTime       @default(now())
+  expiresAt          DateTime       // 30 minutes from generation
+  usedAt             DateTime?      // When code was consumed (NULL = unused)
+  usedIpAddress      String?        // IP that used the code
+  userAgent          String?        // Browser info
+  deviceFingerprint  String?        // Device identification
+  isActive           Boolean        @default(true)
+  userSessions       UserSession[]  // Sessions created from this code
+
+  @@index([code])
+  @@index([skoolUserId, generatedAt])
+}
+
+model UserSession {
+  id                String    @id @default(cuid())
+  sessionId         String    @unique // Secure random session ID
+  skoolUserId       String    // Links to auth_codes
+  skoolUsername     String    // For display purposes
+  authCodeUsed      String    // Which code created this session
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime  // 30 days from creation
+  lastActive        DateTime  @default(now())
+  ipAddress         String    // Login IP
+  userAgent         String    // Browser info
+  deviceFingerprint String    // Device identification
+  isActive          Boolean   @default(true)
+  authCode          AuthCode  @relation(fields: [authCodeUsed], references: [code])
+
+  @@index([sessionId])
+  @@index([skoolUserId])
+  @@index([expiresAt])
+}
+
+model RateLimit {
+  id              String   @id @default(cuid())
+  skoolUserId     String   // User identifier from Skool
+  requestDate     DateTime // Which day (date only)
+  requestCount    Int      @default(1) // How many codes requested today
+  lastRequestAt   DateTime @default(now()) // Most recent request time
+
+  @@unique([skoolUserId, requestDate])
+  @@index([skoolUserId, requestDate])
+}

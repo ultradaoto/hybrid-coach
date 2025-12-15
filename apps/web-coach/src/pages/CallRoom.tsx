@@ -14,6 +14,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ConnectionState } from 'livekit-client';
 import { useLiveKitRoom, type ParticipantInfo } from '@myultra/ui';
 import { Orb3D } from '../components/Orb3D';
+import { AudioMeter } from '../components/AudioMeter';
 import '../dashboard.css';
 import '../room.css';
 
@@ -458,6 +459,39 @@ export function CallRoomPage() {
     return null;
   }, [remoteParticipants, getParticipantAudioStream]);
 
+  // Get client audio stream for meter
+  const clientAudioStream = useMemo(() => {
+    let clientIdentity: string | null = null;
+    remoteParticipants.forEach((p) => {
+      if (p.identity.startsWith('client-')) {
+        clientIdentity = p.identity;
+      }
+    });
+    
+    if (clientIdentity) {
+      const stream = getParticipantAudioStream(clientIdentity);
+      return stream;
+    }
+    return null;
+  }, [remoteParticipants, getParticipantAudioStream]);
+
+  // Get local (coach) audio stream for meter
+  const coachAudioStream = useMemo(() => {
+    if (!localParticipant?.audioTrack) return null;
+    
+    // Create MediaStream from LocalAudioTrack
+    try {
+      const mediaStreamTrack = localParticipant.audioTrack.mediaStreamTrack;
+      if (mediaStreamTrack) {
+        const stream = new MediaStream([mediaStreamTrack]);
+        return stream;
+      }
+    } catch (e) {
+      console.warn('[CallRoom] Failed to create coach audio stream:', e);
+    }
+    return null;
+  }, [localParticipant?.audioTrack]);
+
   // Coach controls
   const handleWhisper = useCallback(() => {
     if (!whisperText.trim()) return;
@@ -576,6 +610,16 @@ export function CallRoomPage() {
               <div className="coach-room-tile-label">
                 You (Coach) {isAudioEnabled ? '🎤' : '🔇'}
               </div>
+              {/* Coach audio meter */}
+              {isAudioEnabled && (
+                <div style={{ position: 'absolute', bottom: 36, left: 8, right: 8 }}>
+                  <AudioMeter 
+                    stream={coachAudioStream} 
+                    size="small"
+                    sensitivity={1.2}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Client Video */}
@@ -590,6 +634,16 @@ export function CallRoomPage() {
               <div className="coach-room-tile-label">
                 Client {clientParticipant ? '🟢' : '⚪'}
               </div>
+              {/* Client audio meter */}
+              {clientParticipant && (
+                <div style={{ position: 'absolute', bottom: 36, left: 8, right: 8 }}>
+                  <AudioMeter 
+                    stream={clientAudioStream} 
+                    size="small"
+                    sensitivity={1.2}
+                  />
+                </div>
+              )}
             </div>
 
             {/* AI Orb */}

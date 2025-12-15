@@ -1,3 +1,8 @@
+// ============================================
+// MyUltra.Coach Database Schema v2.0
+// Long-term Client Data Management
+// ============================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,184 +12,469 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// CORE IDENTITY
+// ============================================
+
 model User {
-  id                      String                    @id @default(cuid())
-  googleId                String                    @unique
-  email                   String                    @unique
-  displayName             String
-  role                    String
+  id                      String    @id @default(cuid())
+  googleId                String?   @unique
+  email                   String    @unique
+  displayName             String?
+  role                    String    @default("client") // coach, client, admin
   googleTokens            Json?
-  isAvailable             Boolean                   @default(true)
+  
+  // Coach-specific
+  isAvailable             Boolean   @default(false)
   coachLevel              Int?
   coachName               String?
-  lastSkoolSync           DateTime?
-  membershipEndDate       DateTime?
-  membershipWarningShown  Boolean                   @default(false)
+  
+  // Skool Integration
   skoolUltraEmail         String?
   skoolVagusEmail         String?
   ultraSubscriptionStatus String?
   vagusSubscriptionStatus String?
-  // 🖼️ SKOOL PROFILE PHOTO FIELDS
+  lastSkoolSync           DateTime?
+  membershipEndDate       DateTime?
+  membershipWarningShown  Boolean   @default(false)
+  
+  // Profile Photos
   skoolProfileUrl         String?
-  skoolProfilePhotoUrl    String?  // Original Skool photo URL
-  profilePhotoPath        String?  // Local storage path
-  skoolBio               String?   // Member's bio/description
-  skoolJoinedDate        DateTime? // When they joined Skool
-  lastPhotoSync          DateTime? // Last photo download
-  clientAppointments      Appointment[]             @relation("Client")
-  coachAppointments       Appointment[]             @relation("Coach")
-  membershipHistory       MembershipStatusHistory[]
-  messages                Message[]
+  skoolProfilePhotoUrl    String?
+  profilePhotoPath        String?
+  skoolBio                String?   @db.Text
+  skoolJoinedDate         DateTime?
+  lastPhotoSync           DateTime?
+  
+  // Data lifecycle
+  dataRetentionConsent    Boolean   @default(true)
+  lastDataExportAt        DateTime?
+  accountDeletionRequestedAt DateTime?
+  
+  // Timestamps
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  // Relations
   profile                 Profile?
+  appointmentsAsClient    Appointment[] @relation("ClientAppointments")
+  appointmentsAsCoach     Appointment[] @relation("CoachAppointments")
   sessions                Session[]
+  messages                Message[]
+  membershipHistory       MembershipStatusHistory[]
+  sessionInsights         SessionInsight[]
+  clientObservations      ClientObservation[]
+  clientGoals             ClientGoal[]
+  clientSummaries         ClientSummary[]
+  archivedTranscripts     ArchivedTranscript[]
+  dataDeletionRequests    DataDeletionRequest[]
+  
+  @@index([role])
+  @@index([vagusSubscriptionStatus])
+  @@index([isAvailable])
+  @@index([createdAt])
 }
 
 model Profile {
-  id           String   @id @default(cuid())
-  userId       String   @unique
-  bioJson      Json?
-  // 🎯 CLIENT CONTEXT FIELDS
-  clientFacts  String[] @default([])
-  challenges   String[] @default([])
-  preferences  Json?
-  lastSummary  String?
-  contextNotes String?
-  // 🚀 ONBOARDING FIELDS
-  onboardingCompleted  Boolean   @default(false)
-  onboardingCompletedAt DateTime?
-  intakeCoachingGoals  String?   // What they hope to get from coaching
-  intakeSymptoms       String?   // Health symptoms they experience
-  intakeInitialMood    Int?      // 1-5 star mood rating at onboarding
-  user         User     @relation(fields: [userId], references: [id])
+  id                      String    @id @default(cuid())
+  userId                  String    @unique
+  bioJson                 Json?
+  
+  // Client context (AI enhancement)
+  clientFacts             String[]  @default([])
+  challenges              String[]  @default([])
+  preferences             Json?
+  lastSummary             String?   @db.Text
+  contextNotes            String?   @db.Text
+  
+  // Accumulated context for smart windows
+  accumulatedInsights     String?   @db.Text
+  lastContextUpdateAt     DateTime?
+  contextVersion          Int       @default(0)
+  
+  // Onboarding
+  onboardingCompleted     Boolean   @default(false)
+  onboardingCompletedAt   DateTime?
+  intakeCoachingGoals     String?   @db.Text
+  intakeSymptoms          String?   @db.Text
+  intakeInitialMood       Int?
+  
+  // Privacy settings
+  allowDataAggregation    Boolean   @default(true)
+  allowAnonymizedResearch Boolean   @default(false)
+  
+  // Timestamps
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  
+  // Relations
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([onboardingCompleted])
 }
 
-model Session {
-  id              String         @id @default(cuid())
-  roomId          String
-  startedAt       DateTime       @default(now())
-  endedAt         DateTime?
-  userId          String
-  summary         String?
-  appointmentId   String
-  // 🎯 SESSION MANAGEMENT FIELDS
-  durationMinutes Int            @default(20)
-  transcript      String?
-  aiSummary       String?
-  status          String         @default("active")
-  warningsSent    Int            @default(0)
-  rating          SessionRating?
-  messages        Message[]
-  appointment     Appointment    @relation(fields: [appointmentId], references: [id])
-  user            User           @relation(fields: [userId], references: [id])
+// ============================================
+// SESSIONS & COMMUNICATION
+// ============================================
 
-  @@unique([appointmentId, userId], name: "appointment_user")
+model Session {
+  id                String    @id @default(cuid())
+  roomId            String
+  appointmentId     String
+  userId            String
+  
+  // Session timing
+  startedAt         DateTime  @default(now())
+  endedAt           DateTime?
+  durationMinutes   Int       @default(20)
+  
+  // Session state
+  status            String    @default("active") // active, completed, cancelled
+  warningsSent      Int       @default(0)
+  
+  // Content
+  transcript        String?   @db.Text
+  aiSummary         String?   @db.Text
+  summary           String?   @db.Text
+  
+  // Archival
+  isArchived        Boolean   @default(false)
+  archivedAt        DateTime?
+  
+  // Relations
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointment       Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  messages          Message[]
+  rating            SessionRating?
+  insight           SessionInsight?
+  
+  @@unique([appointmentId, userId])
+  @@index([userId, status])
+  @@index([status, endedAt])
+  @@index([isArchived])
 }
 
 model SessionRating {
-  id        String   @id @default(cuid())
-  sessionId String   @unique
-  rating    Int      // 1-5 stars
-  comment   String?  // Optional feedback
-  tipAmount Float?   // $1, $3, or $5
-  createdAt DateTime @default(now())
-  session   Session  @relation(fields: [sessionId], references: [id])
+  id          String    @id @default(cuid())
+  sessionId   String    @unique
+  rating      Int       // 1-5
+  comment     String?   @db.Text
+  tipAmount   Float?
+  createdAt   DateTime  @default(now())
+  
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  sessionId String
-  sender    String
-  content   String
-  createdAt DateTime @default(now())
-  userId    String
-  session   Session  @relation(fields: [sessionId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  id          String    @id @default(cuid())
+  sessionId   String
+  userId      String
+  sender      String    // client, coach, ai
+  content     String    @db.Text
+  createdAt   DateTime  @default(now())
+  
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId, createdAt])
 }
+
+// ============================================
+// LONG-TERM CLIENT DATA
+// ============================================
+
+model SessionInsight {
+  id                  String    @id @default(cuid())
+  sessionId           String    @unique
+  userId              String
+  
+  // Structured insights
+  summary             String?   @db.Text
+  keyTopics           Json?     // String[]
+  clientMoodStart     Int?      // 1-5
+  clientMoodEnd       Int?      // 1-5
+  breakthroughMoments String[]  @default([])
+  concernsFlagged     String[]  @default([])
+  
+  // Action items
+  clientCommitments   String[]  @default([])
+  suggestedFocusAreas String[]  @default([])
+  
+  // Raw AI output
+  rawAnalysis         Json?
+  modelVersion        String?
+  
+  generatedAt         DateTime  @default(now())
+  
+  session             Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([generatedAt])
+}
+
+model ClientObservation {
+  id                String    @id @default(cuid())
+  userId            String
+  
+  // Observation details
+  observationType   String    // pattern, progress, concern, milestone, breakthrough
+  title             String?
+  description       String    @db.Text
+  
+  // Evidence
+  relatedSessionIds String[]  @default([])
+  confidenceScore   Float?    @db.DoublePrecision
+  
+  // Human verification
+  humanVerified     Boolean   @default(false)
+  humanVerifiedBy   String?
+  humanVerifiedAt   DateTime?
+  humanNotes        String?   @db.Text
+  
+  // Lifecycle
+  isActive          Boolean   @default(true)
+  supersededBy      String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, observationType])
+  @@index([userId, isActive])
+  @@index([createdAt])
+}
+
+model ClientGoal {
+  id              String    @id @default(cuid())
+  userId          String
+  
+  // Goal definition
+  goalText        String    @db.Text
+  category        String?   // health, wellness, energy, sleep, stress, breathing
+  status          String    @default("active") // active, achieved, paused, abandoned
+  
+  // Progress
+  progressNotes   Json?     // [{date, note, progressPct}]
+  currentProgress Int?      @default(0)
+  targetDate      DateTime?
+  achievedAt      DateTime?
+  
+  // Source
+  source          String?   // onboarding, session, client_input, coach_suggested
+  sourceSessionId String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, status])
+  @@index([userId, category])
+}
+
+model ClientSummary {
+  id                  String    @id @default(cuid())
+  userId              String
+  
+  // Period
+  periodType          String    // weekly, monthly, quarterly
+  periodStart         DateTime
+  periodEnd           DateTime
+  
+  // Metrics
+  sessionCount        Int       @default(0)
+  totalDurationMins   Int       @default(0)
+  averageMoodStart    Float?    @db.DoublePrecision
+  averageMoodEnd      Float?    @db.DoublePrecision
+  moodTrend           String?   // improving, stable, declining
+  
+  // AI themes
+  topTopics           String[]  @default([])
+  progressHighlights  String[]  @default([])
+  concernsToMonitor   String[]  @default([])
+  
+  // Goals snapshot
+  goalsProgress       Json?
+  includedSessionIds  String[]  @default([])
+  
+  generatedAt         DateTime  @default(now())
+  modelVersion        String?
+  
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, periodType, periodStart])
+  @@index([userId, periodType])
+  @@index([periodEnd])
+}
+
+// ============================================
+// ARCHIVAL & DATA LIFECYCLE
+// ============================================
+
+model ArchivedTranscript {
+  id                String    @id @default(cuid())
+  originalId        String
+  sessionId         String
+  userId            String
+  
+  // Archived content
+  archiveSummary    String?   @db.Text
+  keyQuotes         Json?     // [{text, context, timestamp}]
+  speakerBreakdown  Json?     // {client: n, ai: n, coach: n}
+  
+  // Original metadata
+  originalCreatedAt DateTime
+  messageCount      Int       @default(0)
+  
+  // Archive metadata
+  archivedAt        DateTime  @default(now())
+  archiveReason     String?   // age, storage_optimization, user_request
+  
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([sessionId])
+  @@index([archivedAt])
+}
+
+model DataDeletionRequest {
+  id                String    @id @default(cuid())
+  userId            String
+  
+  // Request details
+  requestType       String    // full_deletion, partial_deletion, data_export
+  requestedScope    Json?
+  requestReason     String?   @db.Text
+  
+  // Status
+  status            String    @default("pending") // pending, processing, completed, failed
+  processedAt       DateTime?
+  processedBy       String?
+  
+  // Audit
+  deletionLog       Json?     // {table: rowsDeleted}
+  errorLog          String?   @db.Text
+  
+  // Verification
+  userConfirmed     Boolean   @default(false)
+  confirmationCode  String?   @unique
+  confirmedAt       DateTime?
+  
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+  
+  user              User      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================
+// SCHEDULING
+// ============================================
 
 model Appointment {
-  id           String    @id @default(cuid())
-  scheduledFor DateTime
-  durationMin  Int       @default(30)
-  clientId     String
-  coachId      String
-  roomId       String    @unique
-  status       String    @default("scheduled")
-  cancelledAt  DateTime?
-  cancelledBy  String?
-  createdAt    DateTime  @default(now())
-  client       User      @relation("Client", fields: [clientId], references: [id])
-  coach        User      @relation("Coach", fields: [coachId], references: [id])
-  sessions     Session[]
+  id            String    @id @default(cuid())
+  scheduledFor  DateTime
+  durationMin   Int       @default(30)
+  clientId      String
+  coachId       String
+  roomId        String    @unique
+  status        String    @default("scheduled") // scheduled, active, completed, cancelled
+  cancelledAt   DateTime?
+  cancelledBy   String?
+  createdAt     DateTime  @default(now())
+  
+  client        User      @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+  coach         User      @relation("CoachAppointments", fields: [coachId], references: [id], onDelete: Cascade)
+  sessions      Session[]
+  
+  @@index([status, scheduledFor])
+  @@index([clientId, scheduledFor])
+  @@index([coachId, status])
 }
 
+// ============================================
+// SKOOL INTEGRATION & AUTH
+// ============================================
+
 model SkoolMonitoringLog {
-  id               Int      @id @default(autoincrement())
-  community        String
-  membersFound     Int
-  newMembers       Int
+  id              Int       @id @default(autoincrement())
+  community       String    // ultra, vagus
+  membersFound    Int
+  newMembers      Int
   cancelledMembers Int
-  syncDurationMs   Int
-  success          Boolean
-  errorMessage     String?
-  executedAt       DateTime @default(now())
+  syncDurationMs  Int
+  success         Boolean
+  errorMessage    String?   @db.Text
+  executedAt      DateTime  @default(now())
+  
+  @@index([community, executedAt])
 }
 
 model MembershipStatusHistory {
-  id               String   @id @default(cuid())
-  userId           String
-  community        String
-  previousStatus   String?
-  newStatus        String
-  changeDetectedAt DateTime @default(now())
-  user             User     @relation(fields: [userId], references: [id])
+  id                String    @id @default(cuid())
+  userId            String
+  community         String    // ultra, vagus
+  previousStatus    String?
+  newStatus         String
+  changeDetectedAt  DateTime  @default(now())
+  
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, community])
 }
 
-// 🔐 SKOOL AUTHENTICATION SYSTEM
 model AuthCode {
-  id                 String         @id @default(cuid())
-  code               String         @unique // vgs-1703123456789-abc123
-  skoolUserId        String         // From Skool profile
-  skoolUsername      String         // Display name from Skool
-  generatedAt        DateTime       @default(now())
-  expiresAt          DateTime       // 30 minutes from generation
-  usedAt             DateTime?      // When code was consumed (NULL = unused)
-  usedIpAddress      String?        // IP that used the code
-  userAgent          String?        // Browser info
-  deviceFingerprint  String?        // Device identification
-  isActive           Boolean        @default(true)
-  userSessions       UserSession[]  // Sessions created from this code
-
+  id                String    @id @default(cuid())
+  code              String    @unique
+  skoolUserId       String
+  skoolUsername     String
+  generatedAt       DateTime  @default(now())
+  expiresAt         DateTime
+  usedAt            DateTime?
+  usedIpAddress     String?
+  userAgent         String?
+  deviceFingerprint String?
+  isActive          Boolean   @default(true)
+  
+  userSessions      UserSession[]
+  
   @@index([code])
   @@index([skoolUserId, generatedAt])
 }
 
 model UserSession {
   id                String    @id @default(cuid())
-  sessionId         String    @unique // Secure random session ID
-  skoolUserId       String    // Links to auth_codes
-  skoolUsername     String    // For display purposes
-  authCodeUsed      String    // Which code created this session
+  sessionId         String    @unique
+  skoolUserId       String
+  skoolUsername     String
+  authCodeUsed      String
   createdAt         DateTime  @default(now())
-  expiresAt         DateTime  // 30 days from creation
+  expiresAt         DateTime
   lastActive        DateTime  @default(now())
-  ipAddress         String    // Login IP
-  userAgent         String    // Browser info
-  deviceFingerprint String    // Device identification
+  ipAddress         String?
+  userAgent         String?
+  deviceFingerprint String?
   isActive          Boolean   @default(true)
+  
   authCode          AuthCode  @relation(fields: [authCodeUsed], references: [code])
-
+  
   @@index([sessionId])
   @@index([skoolUserId])
   @@index([expiresAt])
 }
 
 model RateLimit {
-  id              String   @id @default(cuid())
-  skoolUserId     String   // User identifier from Skool
-  requestDate     DateTime // Which day (date only)
-  requestCount    Int      @default(1) // How many codes requested today
-  lastRequestAt   DateTime @default(now()) // Most recent request time
-
+  id            String    @id @default(cuid())
+  skoolUserId   String
+  requestDate   DateTime  @db.Date
+  requestCount  Int       @default(1)
+  lastRequestAt DateTime  @default(now())
+  
   @@unique([skoolUserId, requestDate])
   @@index([skoolUserId, requestDate])
 }
