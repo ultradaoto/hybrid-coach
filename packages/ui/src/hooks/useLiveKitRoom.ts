@@ -204,6 +204,10 @@ export function useLiveKitRoom(options: UseLiveKitRoomOptions): UseLiveKitRoomRe
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
+        // Use 24kHz sample rate for optimal quality (matches Deepgram Voice Agent recommendation)
+        // This ensures high-quality audio capture for AI processing
+        sampleRate: 24000,
+        channelCount: 1,  // Mono for voice
       },
     });
 

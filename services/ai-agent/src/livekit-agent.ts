@@ -356,16 +356,16 @@ export class LiveKitAgent extends EventEmitter {
   }
 
   /**
-   * Set up audio publication to room (Phase 2: Increased buffer)
+   * Set up audio publication to room
    */
   private async setupAudioPublication(): Promise<void> {
     if (!this.room) return;
 
     console.log('[LiveKitAgent] 🎙️ Setting up audio publication...');
 
-    // Phase 2: Create audio source (16kHz, mono) with even larger queue to prevent overflow
-    // Third parameter is queueSizeMs - 10000ms = 10 seconds of buffer (increased from 5s)
-    this.audioSource = new AudioSource(16000, 1, 10000);
+    // Create audio source at 24kHz (mono) to match Deepgram Voice Agent output
+    // Third parameter is queueSizeMs - 10000ms = 10 seconds of buffer to prevent overflow
+    this.audioSource = new AudioSource(24000, 1, 10000);  // ✅ Changed from 16000 to 24000
 
     // Create local audio track
     this.audioTrack = LocalAudioTrack.createAudioTrack('ai-voice', this.audioSource);
@@ -375,7 +375,7 @@ export class LiveKitAgent extends EventEmitter {
     await this.room.localParticipant?.publishTrack(this.audioTrack, {});
     this.isPublishing = true;
 
-    console.log('[LiveKitAgent] ✅ Audio track published');
+    console.log('[LiveKitAgent] ✅ Audio track published at 24kHz');
   }
 
   /**
@@ -385,16 +385,17 @@ export class LiveKitAgent extends EventEmitter {
     const role = this.participantRoles.get(participant.identity) || 'unknown';
     console.log(`[LiveKitAgent] 🎧 Setting up audio stream for ${participant.identity} (${role})`);
 
-    // Request 16kHz mono PCM (linear16) so it matches Deepgram Voice Agent + Listen configs.
+    // Request 24kHz mono PCM (linear16) to match Deepgram Voice Agent configuration
+    // Deepgram recommends 24kHz sample rate for optimal Voice Agent performance
     if (this.audioStreamsByTrackSid.has(track.sid)) {
       console.log(`[LiveKitAgent] ⚠️ Audio stream already exists for track ${track.sid}, skipping`);
       return;
     }
 
-    const audioStream = new AudioStream(track, 16000, 1);
+    const audioStream = new AudioStream(track, 24000, 1);  // ✅ Changed from 16000 to 24000
     this.audioStreamsByTrackSid.set(track.sid, audioStream);
     
-    console.log(`[LiveKitAgent] ✅ Audio stream created for ${participant.identity} (track: ${track.sid})`);
+    console.log(`[LiveKitAgent] ✅ Audio stream created for ${participant.identity} at 24kHz (track: ${track.sid})`);
 
     // Use non-blocking audio handler instead of blocking for-await
     this.setupAudioStreamHandler(audioStream, participant);
@@ -617,7 +618,8 @@ export class LiveKitAgent extends EventEmitter {
     const samples = new Int16Array(alignedBuffer);
 
     // Create audio frame and capture it (async with error handling)
-    const frame = new AudioFrame(samples, 16000, 1, samples.length);
+    // Sample rate must match AudioSource (24000 Hz)
+    const frame = new AudioFrame(samples, 24000, 1, samples.length);  // ✅ Changed from 16000 to 24000
     audioSource.captureFrame(frame).catch((error: Error) => {
       // Only log if we're still supposed to be publishing
       if (this.isPublishing) {

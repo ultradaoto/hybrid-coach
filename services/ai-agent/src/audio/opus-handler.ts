@@ -35,11 +35,11 @@ export const OPUS_CONFIG: AudioConfig = {
 
 /**
  * Linear16 config for Deepgram Voice Agent API
- * Voice Agent REQUIRES linear16 at 16000Hz for input and output
+ * DEEPGRAM CONFIRMED: 24kHz is recommended for optimal Voice Agent performance
  */
 export const LINEAR16_CONFIG: AudioConfig = {
   encoding: 'linear16',
-  sampleRate: 16000,  // Voice Agent requires 16kHz
+  sampleRate: 24000,  // ✅ Deepgram recommended (was 16000)
   channels: 1,
 };
 
@@ -48,7 +48,7 @@ export const LINEAR16_CONFIG: AudioConfig = {
  */
 export const VOICE_AGENT_INPUT_CONFIG: AudioConfig = {
   encoding: 'linear16',
-  sampleRate: 16000,
+  sampleRate: 24000,  // ✅ Deepgram recommended (was 16000)
   channels: 1,
 };
 
@@ -57,7 +57,7 @@ export const VOICE_AGENT_INPUT_CONFIG: AudioConfig = {
  */
 export const VOICE_AGENT_OUTPUT_CONFIG: AudioConfig = {
   encoding: 'linear16',
-  sampleRate: 16000,  // Can also use 8000, 24000, or 48000
+  sampleRate: 24000,  // ✅ Deepgram recommended (was 16000)
   channels: 1,
 };
 

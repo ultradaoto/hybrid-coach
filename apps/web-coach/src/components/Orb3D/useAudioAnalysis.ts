@@ -93,7 +93,9 @@ export function useAudioAnalysis(stream: MediaStream | null): AudioData {
     dataArrayRef.current = dataArray;
     
     // Frequency bin calculation
-    // Sample rate is typically 48000Hz
+    // AudioContext sample rate (browser default, typically 48000Hz)
+    // Note: LiveKit audio tracks are captured at 24kHz for optimal Deepgram quality
+    // AudioContext automatically resamples for analysis
     // With fftSize 512, each bin = sampleRate / fftSize = ~94Hz
     const sampleRate = audioContext.sampleRate;
     const binSize = sampleRate / analyser.fftSize;

@@ -185,32 +185,35 @@ export class VoiceAgentConnection extends EventEmitter {
    * Deepgram Voice Agent API v1 Settings format
    * Reference: https://developers.deepgram.com/docs/configure-voice-agent
    * 
-   * Key format notes (from Deepgram support):
-   * - model goes INSIDE provider object
-   * - use "prompt" not "instructions" 
-   * - temperature goes inside provider for think
-   * - endpointing/utterance_end_ms are NOT valid Voice Agent fields (they're for Listen API only)
+   * CONFIRMED SETTINGS FROM DEEPGRAM SUPPORT:
+   * - STT Model: nova-3 (NOT nova-2)
+   * - TTS Model: aura-2-thalia-en (NOT aura-asteria-en)
+   * - Sample Rate: 24000 (recommended, NOT 16000)
+   * - endpointing/utterance_end_ms: NOT valid in Voice Agent (only for Listen API)
+   * - Voice Agent handles turn detection internally
    */
   private sendSettings(): void {
     // Build settings object matching Deepgram Voice Agent API v1 format
+    // Using CONFIRMED values from Deepgram support
     const settings: Record<string, unknown> = {
       type: 'Settings',
       audio: {
         input: {
-          encoding: VOICE_AGENT_INPUT_CONFIG.encoding,
-          sample_rate: VOICE_AGENT_INPUT_CONFIG.sampleRate,
+          encoding: 'linear16',
+          sample_rate: 24000,  // ✅ Recommended by Deepgram (was 16000)
         },
         output: {
-          encoding: VOICE_AGENT_OUTPUT_CONFIG.encoding,
-          sample_rate: VOICE_AGENT_OUTPUT_CONFIG.sampleRate,
+          encoding: 'linear16',
+          sample_rate: 24000,  // ✅ Recommended by Deepgram (was 16000)
           container: 'none',
         },
       },
       agent: {
+        language: 'en',  // ✅ Added per Deepgram guidance
         listen: {
           provider: {
             type: 'deepgram',
-            model: 'nova-2',
+            model: 'nova-3',  // ✅ Confirmed by Deepgram (was nova-2)
           },
           // NOTE: endpointing and utterance_end_ms are NOT supported in Voice Agent API
           // Voice Agent handles turn detection internally
@@ -226,16 +229,17 @@ export class VoiceAgentConnection extends EventEmitter {
         speak: {
           provider: {
             type: 'deepgram',
-            model: 'aura-asteria-en',
+            model: 'aura-2-thalia-en',  // ✅ Confirmed by Deepgram (was aura-asteria-en)
           },
         },
+        greeting: this.config.greeting,  // ✅ Optional spoken welcome message
       },
     };
 
     const settingsJson = JSON.stringify(settings, null, 2);
-    console.log('[VoiceAgent] 📤 Sending settings:', settingsJson);
+    console.log('[VoiceAgent] 📤 Sending DEEPGRAM-CONFIRMED settings:', settingsJson);
     this.ws?.send(JSON.stringify(settings));
-    console.log('[VoiceAgent] ⚙️ Settings sent successfully');
+    console.log('[VoiceAgent] ⚙️ Settings sent with nova-3 + aura-2-thalia-en + 24kHz');
   }
 
   /**
