@@ -110,12 +110,13 @@ export class LiveKitAgent extends EventEmitter {
   private playbackInterval: ReturnType<typeof setInterval> | null = null;
   private isPlaybackActive = false;
   
-  // Buffer configuration - increased to 250ms for smoother playback
+  // Buffer configuration - increased to 400ms for ultra-smooth playback
   private readonly FRAME_DURATION_MS = 20;          // Each frame is 20ms
-  private readonly BUFFER_TARGET_MS = 250;          // Buffer 250ms before starting (was 150ms)
-  private readonly FRAMES_TO_BUFFER = Math.ceil(250 / 20); // ~13 frames for extra smoothness
+  private readonly BUFFER_TARGET_MS = 400;          // Buffer 400ms before starting
+  private readonly FRAMES_TO_BUFFER = Math.ceil(400 / 20); // 20 frames for maximum smoothness
   private readonly OUTPUT_SAMPLE_RATE = 24000;
   private readonly SAMPLES_PER_FRAME = (24000 * 20) / 1000; // 480 samples per 20ms frame
+  private readonly MIN_BUFFER_FRAMES = 5;           // Keep at least 5 frames to prevent pops
   
   // Phase 2: Performance monitoring
   private audioProcessingStats = {
@@ -659,6 +660,10 @@ export class LiveKitAgent extends EventEmitter {
     }
   }
 
+  // Track consecutive empty frames for graceful end detection
+  private emptyFrameCount = 0;
+  private readonly MAX_EMPTY_FRAMES = 15; // 300ms of silence before stopping
+
   /**
    * Start draining the buffer at a constant 20ms interval.
    * This ensures smooth playback regardless of when frames arrive.
@@ -667,15 +672,24 @@ export class LiveKitAgent extends EventEmitter {
     if (this.playbackInterval) return;
     
     this.isPlaybackActive = true;
+    this.emptyFrameCount = 0;
     
     this.playbackInterval = setInterval(() => {
       if (this.audioOutputBuffer.length > 0) {
         const samples = this.audioOutputBuffer.shift()!;
         this.publishAudioFrame(samples);
+        this.emptyFrameCount = 0; // Reset empty counter
       } else {
-        // Buffer underrun - stop playback, will restart when buffer refills
-        console.log('[LiveKitAgent] ⚠️ Buffer underrun, pausing playback until buffer refills');
-        this.stopBufferedPlayback();
+        // Buffer is empty - output silence to maintain timing continuity
+        this.emptyFrameCount++;
+        
+        if (this.emptyFrameCount >= this.MAX_EMPTY_FRAMES) {
+          // Only stop after sustained silence (agent truly finished speaking)
+          console.log('[LiveKitAgent] 🔇 Sustained silence detected, stopping playback');
+          this.stopBufferedPlayback();
+        }
+        // Otherwise: don't output anything, just wait for more frames
+        // This prevents pops from silence frames
       }
     }, this.FRAME_DURATION_MS);
   }
