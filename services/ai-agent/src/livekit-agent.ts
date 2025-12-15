@@ -594,7 +594,15 @@ export class LiveKitAgent extends EventEmitter {
    * Note: captureFrame is async, but we fire-and-forget with error handling
    */
   private publishAudioData(data: Buffer): void {
-    if (!this.audioSource || !this.isPublishing) return;
+    if (!this.audioSource || !this.isPublishing) {
+      // Debug: Log why we're not publishing
+      if (!this.audioSource) {
+        console.log('[LiveKitAgent] ⚠️ Cannot publish audio: audioSource is null');
+      } else if (!this.isPublishing) {
+        console.log('[LiveKitAgent] ⚠️ Cannot publish audio: isPublishing is false');
+      }
+      return;
+    }
     
     // Block AI audio output when paused
     if (this.isAIPaused) {
