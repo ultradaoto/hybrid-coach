@@ -373,7 +373,7 @@ export class LiveKitAgent extends EventEmitter {
     console.log('[LiveKitAgent] 🎙️ Audio track created:', this.audioTrack.sid);
 
     // Publish track to room
-    const publication = await this.room.localParticipant?.publishTrack(this.audioTrack);
+    const publication = await this.room.localParticipant?.publishTrack(this.audioTrack, {});
     this.isPublishing = true;
 
     console.log('[LiveKitAgent] ✅ Audio track published at 24kHz');
