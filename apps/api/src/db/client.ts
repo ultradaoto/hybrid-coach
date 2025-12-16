@@ -78,6 +78,32 @@ const SEED_USERS: SeedUser[] = [
 
 let seedInitialized = false;
 
+/**
+ * Generate a deterministic UUID from a string (like email).
+ * This ensures the same email always gets the same user ID,
+ * even across server restarts.
+ */
+function deterministicId(input: string): string {
+  // Create a simple hash-based deterministic ID
+  // Use a namespace UUID (fixed) + hash of input to create consistent IDs
+  const normalized = input.toLowerCase().trim();
+  
+  // Simple hash function to create hex string
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const char = normalized.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  
+  // Create a UUID-like string from the hash + email chars
+  const hashHex = Math.abs(hash).toString(16).padStart(8, '0');
+  const emailPart = normalized.replace(/[^a-z0-9]/g, '').slice(0, 12);
+  
+  // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+  return `${hashHex.slice(0, 8)}-${emailPart.slice(0, 4)}-4${emailPart.slice(4, 7)}-a${emailPart.slice(7, 10)}-${emailPart}00000`.slice(0, 36);
+}
+
 export async function initSeedUsers(hashFn: (password: string, salt: string) => Promise<string>) {
   if (seedInitialized) return;
   seedInitialized = true;
@@ -91,11 +117,15 @@ export async function initSeedUsers(hashFn: (password: string, salt: string) => 
       continue;
     }
 
-    const salt = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    // Use deterministic salt for seed users so password hash is consistent
+    const salt = deterministicId(email + '-salt').slice(0, 12);
     const passwordHash = await hashFn(seed.password, salt);
 
+    // Use deterministic ID based on email so sessions persist across restarts!
+    const userId = deterministicId(email);
+
     const user: DbUser = {
-      id: crypto.randomUUID(),
+      id: userId,
       email,
       displayName: seed.displayName,
       role: seed.role,
@@ -108,7 +138,7 @@ export async function initSeedUsers(hashFn: (password: string, salt: string) => 
 
     usersByEmail.set(email, user);
     usersById.set(user.id, user);
-    console.log(`[Auth] Seeded user: ${email} (${seed.role})`);
+    console.log(`[Auth] Seeded user: ${email} (${seed.role}) → id: ${userId.slice(0,8)}...`);
   }
 
   console.log('[Auth] Seed users initialized');
