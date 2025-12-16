@@ -192,7 +192,12 @@ export function CallRoomPage() {
         try {
           const payload = JSON.parse(atob(authToken.split('.')[1]));
           userId = payload.sub || payload.userId || payload.id || 'unknown';
-          log('👤 User ID from token:', userId);
+          // Prominent logging for debugging
+          console.log('%c[CallRoom] 🎤 SESSION STARTING', 'background: #2196F3; color: white; padding: 4px 8px; border-radius: 4px;');
+          console.log('%c  User ID: ' + userId, 'color: #2196F3; font-weight: bold;');
+          console.log('%c  Email: ' + (payload.email || 'unknown'), 'color: #2196F3;');
+          console.log('%c  Room: ' + roomId, 'color: #2196F3;');
+          console.log('%c  Identity will be: client-' + userId, 'color: #2196F3; font-weight: bold;');
         } catch (e) {
           logError('Failed to decode auth token:', e);
         }

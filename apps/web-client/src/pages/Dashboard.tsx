@@ -102,17 +102,29 @@ export function ClientDashboardPage() {
 
   const [user, setUser] = useState<User | null>(null);
   
-  // Debug: Log current user ID on mount
+  // Debug: Log current user ID on mount AND after every render
+  // This persists in console even after refresh
   useEffect(() => {
     const token = getAuthToken();
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        console.log('[Dashboard] 🔑 Logged in as userId:', payload.userId || payload.id || payload.sub);
-        console.log('[Dashboard] 🔑 Full token payload:', payload);
+        const userId = payload.sub || payload.userId || payload.id;
+        // Log prominently so it's easy to find
+        console.log('%c[Dashboard] 🔑 CLIENT SESSION INFO', 'background: #4CAF50; color: white; padding: 4px 8px; border-radius: 4px;');
+        console.log('%c  User ID: ' + userId, 'color: #4CAF50; font-weight: bold;');
+        console.log('%c  Email: ' + (payload.email || 'unknown'), 'color: #4CAF50;');
+        console.log('%c  Role: ' + (payload.role || 'unknown'), 'color: #4CAF50;');
+        console.log('[Dashboard] Full JWT payload:', payload);
+        
+        // Also store in sessionStorage for easy access
+        sessionStorage.setItem('debug_userId', userId);
+        sessionStorage.setItem('debug_email', payload.email || 'unknown');
       } catch (e) {
         console.error('[Dashboard] ❌ Could not decode token');
       }
+    } else {
+      console.log('%c[Dashboard] ⚠️ No auth token found', 'background: #FF9800; color: white; padding: 4px 8px;');
     }
   }, []);
   const [assignedCoach, setAssignedCoach] = useState<AssignedCoach | null>(null);
@@ -340,7 +352,8 @@ export function ClientDashboardPage() {
 
   const logout = () => {
     localStorage.removeItem('auth_token');
-    window.location.href = publicLoginUrl();
+    // Redirect to login page (use relative path to avoid port issues)
+    window.location.href = '/login';
   };
 
   const nextAppointment = useMemo(() => {

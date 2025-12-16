@@ -320,7 +320,8 @@ export function CoachDashboardPage() {
 
   const logout = () => {
     localStorage.removeItem('auth_token');
-    window.location.href = publicLoginUrl();
+    // Redirect to login page (use relative path to avoid port issues)
+    window.location.href = '/login';
   };
 
   const toggleIcon = theme === 'dark' ? '☀️' : '🌙';
