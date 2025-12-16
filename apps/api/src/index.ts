@@ -40,6 +40,11 @@ Bun.serve<WsData>({
 
     const url = new URL(req.url);
     const path = url.pathname;
+    
+    // Debug: Log all incoming requests
+    if (path.includes('/api/client/sessions')) {
+      console.log(`[API] 📨 Incoming request: ${req.method} ${path}`);
+    }
 
     // Handle rooms WebSocket upgrade (legacy - may be removed)
     if (path === '/ws/rooms') {
