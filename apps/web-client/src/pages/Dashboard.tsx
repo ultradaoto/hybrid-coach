@@ -101,6 +101,20 @@ export function ClientDashboardPage() {
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
 
   const [user, setUser] = useState<User | null>(null);
+  
+  // Debug: Log current user ID on mount
+  useEffect(() => {
+    const token = getAuthToken();
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        console.log('[Dashboard] 🔑 Logged in as userId:', payload.userId || payload.id || payload.sub);
+        console.log('[Dashboard] 🔑 Full token payload:', payload);
+      } catch (e) {
+        console.error('[Dashboard] ❌ Could not decode token');
+      }
+    }
+  }, []);
   const [assignedCoach, setAssignedCoach] = useState<AssignedCoach | null>(null);
   const [currentWeekFocus, setCurrentWeekFocus] = useState<string>('');
   const [weeklyRecommendations, setWeeklyRecommendations] = useState<WeeklyRecommendation[]>([]);
@@ -184,6 +198,47 @@ export function ClientDashboardPage() {
     }
 
     return () => observer.disconnect();
+  }, []);
+
+  // Poll for latest session summary every 30 seconds
+  useEffect(() => {
+    const pollLatestSummary = async () => {
+      const token = getAuthToken();
+      if (!token) return;
+
+      try {
+        const res = await fetch('/api/client/sessions/latest', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const json = await res.json();
+        console.log('[Dashboard] Latest session API response:', json);
+        if (json.success && json.data) {
+          // Update lastSession state with new summary
+          const sessionData = {
+            startedAt: json.data.startedAt,
+            durationMinutes: json.data.durationMinutes,
+            summary: json.data.summary,
+            keyTakeaways: json.data.breakthroughMoments || [],
+            nextSteps: json.data.suggestedFocusAreas || []
+          };
+          console.log('[Dashboard] Setting lastSession:', sessionData);
+          setLastSession(sessionData);
+        } else {
+          console.log('[Dashboard] No session data returned');
+        }
+      } catch (e) {
+        // Silent fail - don't spam user with errors
+      }
+    };
+
+    // Poll immediately, then every 30 seconds
+    void pollLatestSummary();
+    const pollInterval = setInterval(() => {
+      void pollLatestSummary();
+    }, 30000);
+
+    return () => clearInterval(pollInterval);
   }, []);
 
   const createInstantRoom = async () => {

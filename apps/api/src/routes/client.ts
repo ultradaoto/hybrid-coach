@@ -7,6 +7,7 @@ import {
   getDefaultCoachId,
   type Appointment 
 } from '../db/appointments';
+import { prisma } from '../db/prisma';
 
 type Slot = { iso: string; label: string };
 
@@ -166,6 +167,125 @@ export async function clientRoutes(req: Request, user: AuthUser): Promise<Respon
     const appointmentId = cancelMatch[1];
     updateAppointment(appointmentId, { status: 'cancelled' });
     return jsonResponse({ success: true });
+  }
+
+  // GET /api/client/sessions/:sessionId/summary - Fetch AI-generated session summary
+  const summaryMatch = path.match(/^\/api\/client\/sessions\/([^/]+)\/summary$/);
+  if (summaryMatch && method === 'GET') {
+    const sessionId = summaryMatch[1];
+    
+    try {
+      // Fetch session insight
+      const insight = await prisma.sessionInsight.findUnique({
+        where: { sessionId },
+        include: {
+          session: {
+            select: {
+              startedAt: true,
+              endedAt: true,
+              durationMinutes: true,
+              sessionType: true,
+              userId: true
+            }
+          }
+        }
+      });
+
+      // Check if insight exists and belongs to requesting user
+      if (!insight || insight.session.userId !== user.id) {
+        return jsonResponse({ 
+          success: false, 
+          error: 'Session summary not found' 
+        }, { status: 404 });
+      }
+
+      return jsonResponse({
+        success: true,
+        data: {
+          summary: insight.summary,
+          keyTopics: insight.keyTopics,
+          breakthroughMoments: insight.breakthroughMoments,
+          clientCommitments: insight.clientCommitments,
+          suggestedFocusAreas: insight.suggestedFocusAreas,
+          clientMoodStart: insight.clientMoodStart,
+          clientMoodEnd: insight.clientMoodEnd,
+          session: {
+            startedAt: insight.session.startedAt.toISOString(),
+            endedAt: insight.session.endedAt?.toISOString() || null,
+            durationMinutes: insight.session.durationMinutes,
+            sessionType: insight.session.sessionType
+          },
+          generatedAt: insight.generatedAt.toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('[API] Failed to fetch session summary:', error);
+      return jsonResponse({ 
+        success: false, 
+        error: 'Failed to fetch session summary' 
+      }, { status: 500 });
+    }
+  }
+
+  // GET /api/client/sessions/latest - Get latest session summary for dashboard
+  if (path === '/api/client/sessions/latest' && method === 'GET') {
+    try {
+      console.log(`[API] Fetching latest session for userId: ${user.id}`);
+      
+      // Find most recent completed session for this user
+      const latestSession = await prisma.session.findFirst({
+        where: {
+          userId: user.id,
+          status: 'completed'
+        },
+        orderBy: { endedAt: 'desc' },
+        include: {
+          insight: true
+        }
+      });
+
+      console.log(`[API] Found session:`, latestSession ? {
+        id: latestSession.id,
+        userId: latestSession.userId,
+        status: latestSession.status,
+        hasInsight: !!latestSession.insight
+      } : 'null');
+
+      if (!latestSession) {
+        console.log(`[API] No completed sessions found for user ${user.id}`);
+        return jsonResponse({
+          success: true,
+          data: null
+        });
+      }
+
+      if (!latestSession.insight) {
+        console.log(`[API] Session ${latestSession.id} has no insight relation`);
+        return jsonResponse({
+          success: true,
+          data: null
+        });
+      }
+
+      return jsonResponse({
+        success: true,
+        data: {
+          sessionId: latestSession.id,
+          summary: latestSession.insight.summary,
+          keyTopics: latestSession.insight.keyTopics,
+          breakthroughMoments: latestSession.insight.breakthroughMoments,
+          startedAt: latestSession.startedAt.toISOString(),
+          endedAt: latestSession.endedAt?.toISOString() || null,
+          durationMinutes: latestSession.durationMinutes
+        }
+      });
+    } catch (error) {
+      console.error('[API] Failed to fetch latest session:', error);
+      return jsonResponse({ 
+        success: false, 
+        error: 'Failed to fetch latest session' 
+      }, { status: 500 });
+    }
   }
 
   return jsonResponse({ success: false, error: 'Not Found' }, { status: 404 });

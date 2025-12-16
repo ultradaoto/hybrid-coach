@@ -187,6 +187,16 @@ export function CallRoomPage() {
           return;
         }
 
+        // Extract user ID from JWT token
+        let userId = 'unknown';
+        try {
+          const payload = JSON.parse(atob(authToken.split('.')[1]));
+          userId = payload.sub || payload.userId || payload.id || 'unknown';
+          log('👤 User ID from token:', userId);
+        } catch (e) {
+          logError('Failed to decode auth token:', e);
+        }
+
         const apiUrl = getApiUrl();
         log('🔑 Fetching LiveKit token from:', apiUrl || '(proxy)');
         log('📍 Room ID:', roomId);
@@ -200,7 +210,7 @@ export function CallRoomPage() {
           body: JSON.stringify({
             roomName: roomId,
             participantName: 'Client',
-            participantIdentity: `client-${crypto.randomUUID().slice(0, 8)}`,
+            participantIdentity: `client-${userId}`,  // Use actual user ID from JWT
             role: 'client',
             spawnAgent: true, // Request AI agent to be spawned for this room
           }),

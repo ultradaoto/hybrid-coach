@@ -80,31 +80,45 @@ export async function createAgentSession(params: CreateSessionParams): Promise<s
       }
     }
 
-    // Create session - build data object explicitly to satisfy TypeScript
-    const sessionData: {
-      roomId: string;
-      userId: string;
-      appointmentId?: string;
-      status: string;
-      startedAt: Date;
-      durationMinutes: number;
-      warningsSent: number;
-    } = {
+    // We need at least a userId (appointmentId is now optional for ad-hoc sessions)
+    if (!clientUserId) {
+      console.log(`[DB] Cannot create session without userId`);
+      return null;
+    }
+
+    // Determine session type
+    const sessionType = appointmentId ? 'scheduled' : 'adhoc';
+
+    // Create session data - use connectOrCreate to auto-create users if they don't exist
+    const sessionData: any = {
       roomId: params.roomId,
-      userId: clientUserId || 'ai-session', // Fallback for ad-hoc sessions
       status: 'active',
       startedAt: new Date(),
       durationMinutes: 30, // Expected duration, will be updated on completion
       warningsSent: 0,
+      sessionType,
+      user: {
+        connectOrCreate: {
+          where: { id: clientUserId },
+          create: {
+            id: clientUserId,
+            email: `auto-${clientUserId}@myultra.coach`,
+            role: 'client',
+            displayName: `Client ${clientUserId.slice(0, 8)}`,
+          }
+        }
+      }
     };
-    
-    // Only add appointmentId if it exists
+
+    // Add appointment relation if available (for scheduled sessions)
     if (appointmentId) {
-      sessionData.appointmentId = appointmentId;
+      sessionData.appointment = {
+        connect: { id: appointmentId }
+      };
     }
-    
+
     const session = await prisma.session.create({
-      data: sessionData as any, // Type assertion needed due to Prisma's strict typing
+      data: sessionData,
     });
 
     console.log(`[DB] ✅ Session created: ${session.id} for room: ${params.roomId}`);
@@ -122,24 +136,30 @@ export async function createAgentSession(params: CreateSessionParams): Promise<s
  */
 export async function storeMessage(params: MessageParams): Promise<boolean> {
   try {
-    // Build message data explicitly to satisfy TypeScript
-    const messageData: {
-      sessionId: string;
-      userId?: string;
-      sender: 'client' | 'coach' | 'ai';
-      content: string;
-    } = {
-      sessionId: params.sessionId,
-      sender: params.sender,
-      content: params.content,
-    };
-    
-    if (params.userId) {
-      messageData.userId = params.userId;
+    // Get session to find userId if not provided
+    let userId = params.userId;
+    if (!userId) {
+      const session = await prisma.session.findUnique({
+        where: { id: params.sessionId },
+        select: { userId: true }
+      });
+      
+      if (!session) {
+        console.warn(`[DB] Session not found: ${params.sessionId}`);
+        return false;
+      }
+      
+      userId = session.userId;
     }
     
+    // Message model has NO user relation - just use direct userId field
     await prisma.message.create({
-      data: messageData as any, // Type assertion needed due to Prisma's strict typing
+      data: {
+        sessionId: params.sessionId,
+        sender: params.sender,
+        content: params.content,
+        userId: userId || null,  // Direct field assignment
+      },
     });
 
     // Log sparingly to avoid spam
@@ -163,40 +183,58 @@ export async function completeSession(
   sessionId: string,
   options?: {
     generateTranscript?: boolean;
+    generateSummary?: boolean;
     aiSummary?: string;
   }
 ): Promise<boolean> {
   try {
+    console.log(`[DB] 📊 Starting session completion for: ${sessionId}`);
+    console.log(`[DB] Options: transcript=${options?.generateTranscript}, summary=${options?.generateSummary}`);
+    
     // Get session start time for duration calculation
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { startedAt: true, roomId: true },
+      select: { startedAt: true, roomId: true, userId: true },
     });
 
     if (!session) {
-      console.warn(`[DB] Session not found: ${sessionId}`);
+      console.warn(`[DB] ⚠️ Session not found: ${sessionId}`);
       return false;
     }
+
+    console.log(`[DB] ✅ Found session for user: ${session.userId}`);
 
     // Calculate actual duration
     const durationMs = Date.now() - session.startedAt.getTime();
     const durationMinutes = Math.round(durationMs / 60000);
+    console.log(`[DB] ⏱️ Session duration: ${durationMinutes} minutes`);
 
-    // Optionally generate transcript from messages
+    // Generate clean transcript from messages (NO timestamps to save tokens)
     let transcript: string | undefined;
     if (options?.generateTranscript) {
+      console.log(`[DB] 📝 Fetching messages for transcript...`);
       const messages = await prisma.message.findMany({
         where: { sessionId },
         orderBy: { createdAt: 'asc' },
         select: { sender: true, content: true },
       });
 
+      console.log(`[DB] 💬 Found ${messages.length} messages`);
+
+      // Format: "AI: Hello\nClient: Hi there\n"
       transcript = messages
-        .map(m => `${m.sender}: ${m.content}`)
+        .map(m => {
+          const speaker = m.sender === 'ai' ? 'AI' : 
+                         m.sender === 'coach' ? 'Coach' : 'Client';
+          return `${speaker}: ${m.content}`;
+        })
         .join('\n');
+      
+      console.log(`[DB] 📄 Generated transcript: ${transcript.length} characters`);
     }
 
     // Update session as completed
+    console.log(`[DB] 💾 Updating session status to completed...`);
     await prisma.session.update({
       where: { id: sessionId },
       data: {
@@ -209,10 +247,35 @@ export async function completeSession(
     });
 
     console.log(`[DB] ✅ Session completed: ${sessionId} (${durationMinutes} min)`);
+
+    // Generate AI summary (AWAIT to ensure it completes before process exits)
+    if (options?.generateSummary && transcript) {
+      console.log(`[DB] 🤖 Generating AI summary (waiting for completion)...`);
+      
+      try {
+        // Import dynamically to avoid circular dependencies
+        const { generateSessionSummary } = await import('../services/summary-generator.js');
+        
+        // AWAIT the summary generation - process must wait for OpenAI to respond
+        await generateSessionSummary(sessionId, session.userId, transcript);
+        
+        console.log(`[DB] ✅ AI summary generation completed`);
+      } catch (err) {
+        console.error('[DB] ❌ Failed to generate summary:', err);
+      }
+    } else {
+      if (!options?.generateSummary) {
+        console.log(`[DB] ⏭️ Summary generation not requested`);
+      } else if (!transcript) {
+        console.log(`[DB] ⏭️ No transcript available for summary generation`);
+      }
+    }
+
     return true;
 
   } catch (error) {
     console.error('[DB] ❌ Failed to complete session:', error);
+    console.error('[DB] Error details:', error instanceof Error ? error.stack : error);
     return false;
   }
 }

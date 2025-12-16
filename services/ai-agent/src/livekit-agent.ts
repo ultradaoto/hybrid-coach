@@ -230,40 +230,12 @@ export class LiveKitAgent extends EventEmitter {
       // Set up audio publication
       await this.setupAudioPublication();
 
-      // ================================================
-      // DATABASE: Create session for this room
-      // ================================================
+      // Clean up any abandoned sessions for this room
       try {
-        // Clean up any abandoned sessions for this room first
         await cleanupAbandonedSessions(this.config.roomName);
-        
-        // Find the first non-AI participant to use as session owner
-        let primaryUserId: string | undefined;
-        for (const [identity, participant] of this.room.remoteParticipants) {
-          const parsed = parseParticipantIdentity(identity);
-          if (parsed.role !== 'ai' && parsed.userId) {
-            primaryUserId = parsed.userId;
-            break;
-          }
-        }
-        
-        // Create database session
-        this.dbSessionId = await createAgentSession({
-          roomId: this.config.roomName,
-          userId: primaryUserId,
-          // appointmentId will be auto-detected from room linkage
-        });
-        
-        if (this.dbSessionId) {
-          console.log(`[Agent] Database session initialized: ${this.dbSessionId}`);
-        } else {
-          console.warn('[Agent] Running without database session (messages will not be stored)');
-        }
       } catch (error) {
-        console.error('[Agent] Database session creation failed:', error);
-        // Continue anyway - agent should work even if DB fails
+        console.error('[Agent] Failed to cleanup abandoned sessions:', error);
       }
-      // ================================================
 
       this.emit('connected');
 
@@ -280,8 +252,9 @@ export class LiveKitAgent extends EventEmitter {
   private setupRoomEvents(): void {
     if (!this.room) return;
 
-    this.room.on(RoomEvent.ParticipantConnected, (participant: RemoteParticipant) => {
+    this.room.on(RoomEvent.ParticipantConnected, async (participant: RemoteParticipant) => {
       console.log(`[LiveKitAgent] 👤 Participant connected: ${participant.identity}`);
+      console.log(`[LiveKitAgent] 🔍 Current dbSessionId: ${this.dbSessionId || 'null'}`);
       
       // Determine role from identity prefix
       const role = participant.identity.startsWith('coach-') ? 'coach' : 'client';
@@ -291,6 +264,45 @@ export class LiveKitAgent extends EventEmitter {
       this.connectionManager?.registerParticipant(participant.identity, role, participant.name);
       
       this.emit('participant-joined', { identity: participant.identity, role });
+      
+      // ================================================
+      // DATABASE: Create session when first human joins
+      // ================================================
+      if (!this.dbSessionId) {
+        try {
+          console.log(`[Agent] 🗄️ First participant joined, creating database session...`);
+          console.log(`[Agent] 🔍 Parsing participant: ${participant.identity}`);
+          
+          const parsed = parseParticipantIdentity(participant.identity);
+          console.log(`[Agent] 📋 Parsed role: ${parsed.role}, userId: ${parsed.userId || 'none'}`);
+          
+          let primaryUserId = parsed.userId;
+          
+          if (!primaryUserId) {
+            console.warn('[Agent] ⚠️ No valid userId from participant, using fallback');
+            primaryUserId = 'anonymous-user';
+          }
+          
+          // Create database session
+          console.log(`[Agent] 📝 Creating session with userId: ${primaryUserId}, room: ${this.config.roomName}`);
+          this.dbSessionId = await createAgentSession({
+            roomId: this.config.roomName,
+            userId: primaryUserId,
+            // appointmentId will be auto-detected from room linkage
+          });
+          
+          if (this.dbSessionId) {
+            console.log(`[Agent] ✅ Database session initialized: ${this.dbSessionId}`);
+          } else {
+            console.warn('[Agent] ⚠️ Session creation returned null - running without database session');
+          }
+        } catch (error) {
+          console.error('[Agent] ❌ Database session creation failed:', error);
+          console.error('[Agent] Error details:', error instanceof Error ? error.stack : error);
+          // Continue anyway - agent should work even if DB fails
+        }
+      }
+      // ================================================
       
       // Check room status (may cancel grace period if humans joined)
       this.checkRoomStatus();
@@ -309,7 +321,7 @@ export class LiveKitAgent extends EventEmitter {
       this.checkRoomStatus();
     });
 
-    this.room.on(RoomEvent.TrackSubscribed, (
+    this.room.on(RoomEvent.TrackSubscribed, async (
       track: RemoteTrack,
       publication: RemoteTrackPublication,
       participant: RemoteParticipant
@@ -323,6 +335,45 @@ export class LiveKitAgent extends EventEmitter {
           this.participantRoles.set(participant.identity, role);
           this.connectionManager?.registerParticipant(participant.identity, role, participant.name);
         }
+        
+        // ================================================
+        // DATABASE: Create session when first human audio track subscribes
+        // ================================================
+        if (!this.dbSessionId) {
+          try {
+            console.log(`[Agent] 🗄️ First audio track subscribed, creating database session...`);
+            console.log(`[Agent] 🔍 Parsing participant: ${participant.identity}`);
+            
+            const parsed = parseParticipantIdentity(participant.identity);
+            console.log(`[Agent] 📋 Parsed role: ${parsed.role}, userId: ${parsed.userId || 'none'}`);
+            
+            let primaryUserId = parsed.userId;
+            
+            if (!primaryUserId) {
+              console.warn('[Agent] ⚠️ No valid userId from participant, using fallback');
+              primaryUserId = 'anonymous-user';
+            }
+            
+            // Create database session
+            console.log(`[Agent] 📝 Creating session with userId: ${primaryUserId}, room: ${this.config.roomName}`);
+            this.dbSessionId = await createAgentSession({
+              roomId: this.config.roomName,
+              userId: primaryUserId,
+              // appointmentId will be auto-detected from room linkage
+            });
+            
+            if (this.dbSessionId) {
+              console.log(`[Agent] ✅ Database session initialized: ${this.dbSessionId}`);
+            } else {
+              console.warn('[Agent] ⚠️ Session creation returned null - running without database session');
+            }
+          } catch (error) {
+            console.error('[Agent] ❌ Database session creation failed:', error);
+            console.error('[Agent] Error details:', error instanceof Error ? error.stack : error);
+            // Continue anyway - agent should work even if DB fails
+          }
+        }
+        // ================================================
         
         const isCoach = participant.identity.startsWith('coach-');
         
@@ -400,6 +451,13 @@ export class LiveKitAgent extends EventEmitter {
     this.room.on(RoomEvent.Disconnected, () => {
       console.log('[LiveKitAgent] 📴 Disconnected from room');
       this.emit('disconnected');
+    });
+
+    // Add error handler to prevent crashes from SDK race conditions
+    // Note: 'error' event may not be in TypeScript definitions but exists at runtime
+    (this.room as any).on('error', (error: Error) => {
+      // Log but don't crash - some errors like "local track publication not found" are SDK bugs
+      console.error('[LiveKitAgent] ⚠️ Room error (non-fatal):', error.message);
     });
   }
 
@@ -781,7 +839,16 @@ export class LiveKitAgent extends EventEmitter {
         // Calculate next frame time based on wall clock (self-correcting)
         const expectedTime = this.playbackStartTime + (this.framesPlayed * this.FRAME_DURATION_MS);
         const now = Date.now();
-        const delay = Math.max(1, expectedTime - now);
+        let delay = expectedTime - now;
+        
+        // Ensure delay is always positive and reasonable
+        if (delay < 1) {
+          // Behind schedule or exactly on time - use minimal delay
+          delay = 1;
+        } else if (delay > this.FRAME_DURATION_MS * 2) {
+          // Way ahead of schedule (shouldn't happen) - cap at 2x frame duration
+          delay = this.FRAME_DURATION_MS * 2;
+        }
         
         setTimeout(playNextFrame, delay);
       } else {
@@ -1220,8 +1287,12 @@ export class LiveKitAgent extends EventEmitter {
     // ================================================
     // DATABASE: Complete session
     // ================================================
+    console.log(`[Agent] 🗄️ Database session ID: ${this.dbSessionId || 'null'}`);
+    
     if (this.dbSessionId) {
       try {
+        console.log(`[Agent] 📝 Flushing ${this.messageBuffer.length} buffered messages...`);
+        
         // Flush any buffered messages first
         for (const msg of this.messageBuffer) {
           await storeMessage({
@@ -1233,18 +1304,23 @@ export class LiveKitAgent extends EventEmitter {
         }
         this.messageBuffer = [];
         
-        // Complete the session with transcript
+        console.log(`[Agent] 📊 Generating transcript and AI summary for session: ${this.dbSessionId}`);
+        
+        // Complete the session with transcript AND AI summary generation
         await completeSession(this.dbSessionId, {
           generateTranscript: true,
-          // aiSummary: await this.generateSessionSummary(), // Optional: add summary generation
+          generateSummary: true  // ✅ Enable AI-powered session summary
         });
         
-        console.log(`[Agent] Database session completed: ${this.dbSessionId}`);
+        console.log(`[Agent] ✅ Database session completed: ${this.dbSessionId}`);
       } catch (error) {
-        console.error('[Agent] Failed to complete database session:', error);
+        console.error('[Agent] ❌ Failed to complete database session:', error);
+        console.error('[Agent] Error details:', error instanceof Error ? error.stack : error);
       } finally {
         this.dbSessionId = null;
       }
+    } else {
+      console.warn('[Agent] ⚠️ No database session to complete');
     }
     // ================================================
 

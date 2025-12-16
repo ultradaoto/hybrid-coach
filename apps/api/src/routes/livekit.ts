@@ -134,18 +134,39 @@ async function spawnAgentForRoom(roomName: string): Promise<{ success: boolean; 
       }
     }
 
-    console.log(`[LiveKit]    Spawning: npx tsx src/index.ts ${roomName}`);
+    // CRITICAL: AI agent MUST use Node.js, not Bun
+    // @livekit/rtc-node has native bindings that only work with Node.js
+    
+    // Determine node executable path (cross-platform)
+    // On Windows: Use full path since Node.js may not be in PATH
+    // On Linux: Use 'node' from PATH (will be configured on server)
+    // Can be overridden via NODE_EXECUTABLE environment variable
+    const nodeExe = process.env.NODE_EXECUTABLE || 
+      (process.platform === 'win32' ? 'C:\\Program Files\\nodejs\\node.exe' : 'node');
+    
+    console.log(`[LiveKit]    Spawning: ${nodeExe} dist/index.js ${roomName}`);
 
-    // Spawn the AI agent process using npx to run tsx
-    const agentProcess = spawn('npx', ['tsx', 'src/index.ts', roomName], {
+    // Spawn the AI agent process using Node.js with compiled JS (dist/index.js)
+    // CRITICAL: Clean environment to prevent Bun from interfering
+    // When parent process runs under Bun, it can leak Bun runtime to child processes
+    const cleanEnv = { ...process.env };
+    
+    // Remove Bun-specific environment variables that could interfere
+    delete cleanEnv.BUN_INSTALL;
+    delete cleanEnv.BUN_RUNTIME;
+    
+    // Ensure Node.js is used (not Bun)
+    cleanEnv.NODE_OPTIONS = cleanEnv.NODE_OPTIONS || '';
+    
+    const agentProcess = spawn(nodeExe, ['dist/index.js', roomName], {
       cwd: agentPath,
       env: {
-        ...process.env,
+        ...cleanEnv,
         LIVEKIT_ROOM: roomName,
         VERBOSE: 'true',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true,
+      shell: false, // CRITICAL: false to avoid shell PATH picking up bun
       detached: false,
     });
 

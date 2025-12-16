@@ -400,9 +400,7 @@ export class VoiceAgentConnection extends EventEmitter {
     }
 
     // Binary audio data
-    if (buffer.length > 100) {
-      this.log(`🔊 Received audio: ${buffer.length} bytes`);
-    }
+    // Removed verbose logging to reduce console spam
     this.emit('audio', buffer);
   }
 
