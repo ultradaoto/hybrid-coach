@@ -28,13 +28,20 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Load .env from monorepo root (2 directories up from services/ai-agent/src/)
+// Load .env from monorepo root BEFORE any other imports
+// This MUST happen before importing modules that use process.env
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../../../.env');
 dotenv.config({ path: envPath });
 
-import { createLiveKitAgent, type LiveKitAgent } from './livekit-agent.js';
-import { cleanupAbandonedSessions } from './db/index.js';
+// Also try local .env as fallback (for when running from services/ai-agent directly)
+dotenv.config(); // loads from cwd
+
+// Dynamic imports AFTER dotenv is configured
+const { createLiveKitAgent } = await import('./livekit-agent.js');
+const { cleanupAbandonedSessions } = await import('./db/index.js');
+
+type LiveKitAgent = Awaited<ReturnType<typeof createLiveKitAgent>>;
 
 // =============================================================================
 // Banner
