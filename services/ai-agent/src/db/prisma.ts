@@ -223,14 +223,14 @@ export async function completeSession(
 
       // Format: "AI: Hello\nClient: Hi there\n"
       transcript = messages
-        .map(m => {
+        .map((m: { sender: string; content: string }) => {
           const speaker = m.sender === 'ai' ? 'AI' : 
                          m.sender === 'coach' ? 'Coach' : 'Client';
           return `${speaker}: ${m.content}`;
         })
         .join('\n');
       
-      console.log(`[DB] 📄 Generated transcript: ${transcript.length} characters`);
+      console.log(`[DB] 📄 Generated transcript: ${transcript?.length ?? 0} characters`);
     }
 
     // Update session as completed
