@@ -230,7 +230,16 @@ export async function clientRoutes(req: Request, user: AuthUser): Promise<Respon
   // GET /api/client/sessions/latest - Get latest session summary for dashboard
   if (path === '/api/client/sessions/latest' && method === 'GET') {
     try {
-      console.log(`[API] Fetching latest session for userId: ${user.id}`);
+      console.log(`[API] 🔍 Fetching latest session for userId: "${user.id}" (email: ${user.email})`);
+      
+      // Debug: List all completed sessions
+      const allSessions = await prisma.session.findMany({
+        where: { status: 'completed' },
+        orderBy: { endedAt: 'desc' },
+        take: 5,
+        select: { id: true, userId: true, roomId: true }
+      });
+      console.log(`[API] 📊 Recent completed sessions:`, allSessions.map(s => ({ id: s.id.slice(0,8), userId: s.userId, room: s.roomId.slice(0,8) })));
       
       // Find most recent completed session for this user
       const latestSession = await prisma.session.findFirst({
